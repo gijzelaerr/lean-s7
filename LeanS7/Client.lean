@@ -1,5 +1,5 @@
 import LeanS7.Transport
-import LeanS7.Management
+import LeanS7.Advanced
 import LeanS7.Value
 
 namespace LeanS7
@@ -150,6 +150,14 @@ private def Client.exchange (client : Client) (reference : UInt16)
     (request : ByteArray) : IO S7.Response :=
   client.serialized <| client.exchangeWithRetries reference request client.config.reconnectRetries
 
+/-- Exchange an already encoded S7 PDU. The caller supplies the PDU reference
+    embedded in `request`; the response is returned without service decoding. -/
+def Client.rawExchange (client : Client) (reference : UInt16) (request : ByteArray) : IO ByteArray := do
+  let pduLength ← client.negotiatedPduLength
+  if request.size > pduLength.toNat then
+    throw <| IO.userError s!"raw request exceeds negotiated PDU length {pduLength}"
+  client.serialized <| client.exchangeBytesWithRetries reference request client.config.reconnectRetries
+
 private def Client.exchangeUserData (client : Client) (reference : UInt16) (group subfunction : UInt8)
     (request : ByteArray) : IO S7.UserDataResponse :=
   client.serialized do
@@ -254,6 +262,172 @@ def Client.clearSessionPassword (client : Client) : IO Unit := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeClearPassword reference
   discard <| client.exchangeUserData reference S7.securityGroup S7.clearPasswordSubfunction request
+
+private partial def Client.userDataFragments (client : Client) (group subfunction : UInt8)
+    (firstRequest : UInt16 → Except S7.EncodeError ByteArray) (fragmentNumber : Nat)
+    (sequence : UInt8) (payload : ByteArray) : IO ByteArray := do
+  if fragmentNumber >= 256 then
+    throw <| IO.userError "USER_DATA response exceeded the 256-fragment safety limit"
+  let reference ← client.freshReference
+  let request ← if fragmentNumber == 0 then orThrow <| firstRequest reference
+    else orThrow <| S7.encodeUserDataContinuation reference group subfunction sequence
+  let raw ← client.exchangeBytesWithRetries reference request
+    (if fragmentNumber == 0 then client.config.reconnectRetries else 0)
+  let response ← orThrow <| S7.decodeUserDataResponse reference group subfunction raw
+  let accumulated := payload ++ response.payload
+  if accumulated.size > 16 * 1024 * 1024 then
+    throw <| IO.userError "USER_DATA response exceeded the 16 MiB safety limit"
+  if response.hasMoreData then
+    client.userDataFragments group subfunction firstRequest (fragmentNumber + 1)
+      response.sequence accumulated
+  else return accumulated
+
+def Client.listBlocks (client : Client) : IO S7.BlockCounts := do
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeListBlocks reference
+  let response ← client.exchangeUserData reference S7.blocksInfoGroup
+    S7.listBlocksSubfunction request
+  orThrow <| S7.decodeBlockCounts response.payload
+
+def Client.listBlocksOfType (client : Client) (blockType : S7.BlockType) :
+    IO (Array S7.BlockEntry) :=
+  client.serialized do
+    let payload ← client.userDataFragments S7.blocksInfoGroup S7.listBlocksOfTypeSubfunction
+      (fun reference => S7.encodeListBlocksOfType reference blockType) 0 0 ByteArray.empty
+    orThrow <| S7.decodeBlockEntries payload
+
+def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : Nat) :
+    IO S7.BlockInfo := do
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeGetBlockInfo reference blockType number
+  let response ← client.exchangeUserData reference S7.blocksInfoGroup S7.blockInfoSubfunction request
+  orThrow <| S7.decodeBlockInfo response.payload
+
+private partial def Client.uploadFragments (client : Client) (uploadId : UInt8)
+    (fragmentNumber : Nat) (payload : ByteArray) : IO ByteArray := do
+  if fragmentNumber >= 65536 then
+    throw <| IO.userError "block upload exceeded the 65536-fragment safety limit"
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeUpload reference uploadId
+  let response ← client.exchangeWithRetries reference request 0
+  let fragment ← orThrow <| S7.decodeUploadFragment reference response
+  let accumulated := payload ++ fragment.data
+  if accumulated.size > 64 * 1024 * 1024 then
+    throw <| IO.userError "block upload exceeded the 64 MiB safety limit"
+  if fragment.isLast then return accumulated
+  client.uploadFragments uploadId (fragmentNumber + 1) accumulated
+
+private def Client.uploadBlockData (client : Client) (blockType : S7.BlockType)
+    (number : Nat) : IO ByteArray :=
+  client.serialized do
+    let startReference ← client.freshReference
+    let startRequest ← orThrow <| S7.encodeStartUpload startReference blockType number
+    let startResponse ← client.exchangeWithRetries startReference startRequest client.config.reconnectRetries
+    let upload ← orThrow <| S7.decodeStartUpload startReference startResponse
+    let payload ← try client.uploadFragments upload.uploadId 0 ByteArray.empty
+      catch error =>
+        let endReference ← client.freshReference
+        try
+          let endRequest ← orThrow <| S7.encodeEndUpload endReference upload.uploadId
+          discard <| client.exchangeWithRetries endReference endRequest 0
+        catch _ => pure ()
+        throw error
+    let endReference ← client.freshReference
+    let endRequest ← orThrow <| S7.encodeEndUpload endReference upload.uploadId
+    let endResponse ← client.exchangeWithRetries endReference endRequest 0
+    orThrow <| S7.decodeEndUpload endReference endResponse
+    return payload
+
+def Client.fullUpload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray :=
+  client.uploadBlockData blockType number
+
+def Client.upload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray := do
+  let full ← client.uploadBlockData blockType number
+  if full.size < 36 then
+    throw <| IO.userError "full block upload omitted its 36-byte compact header"
+  let (mc7Size, _) ← orThrow <| ({ data := full, offset := 34 } : Cursor).readUInt16BE
+  if full.size < 36 + mc7Size.toNat then
+    throw <| IO.userError s!"block upload contains fewer than {mc7Size} MC7 bytes"
+  return full.extract 36 (36 + mc7Size.toNat)
+
+private def Client.controlService (client : Client)
+    (encode : UInt16 → Except S7.EncodeError ByteArray) : IO Unit :=
+  client.plcControl S7.startFunction encode
+
+def Client.deleteBlock (client : Client) (blockType : S7.BlockType) (number : Nat) : IO Unit :=
+  client.controlService fun reference => S7.encodeDeleteBlock reference blockType number
+
+def Client.compress (client : Client) : IO Unit :=
+  client.controlService S7.encodeCompress
+
+def Client.copyRamToRom (client : Client) : IO Unit :=
+  client.controlService S7.encodeCopyRamToRom
+
+private def Client.receiveServerJob (client : Client) : IO S7.JobPdu := do
+  let some connection ← client.connection.get
+    | throw <| IO.userError "S7 client is disconnected"
+  orThrow <| S7.decodeJobPdu
+    (← Transport.receiveData connection.socket client.config.operationTimeoutMs)
+
+private def Client.sendServerResponse (client : Client) (response : ByteArray) : IO Unit := do
+  let some connection ← client.connection.get
+    | throw <| IO.userError "S7 client is disconnected"
+  Transport.sendData connection.socket response client.config.operationTimeoutMs
+
+private partial def Client.serveDownloadFragments (client : Client) (blockData : ByteArray)
+    (offset maxSlice fragmentNumber : Nat) : IO Unit := do
+  if fragmentNumber >= 65536 then
+    throw <| IO.userError "block download exceeded the 65536-fragment safety limit"
+  let job ← client.receiveServerJob
+  let (function, _) ← orThrow <| ({ data := job.parameters } : Cursor).readUInt8
+  if function != S7.downloadFunction then
+    throw <| IO.userError s!"expected PLC download request, got function {function}"
+  let remaining := blockData.size - offset
+  let size := min remaining maxSlice
+  let isLast := size == remaining
+  let response ← orThrow <| S7.encodeDownloadFragmentResponse job.reference isLast
+    (blockData.extract offset (offset + size))
+  client.sendServerResponse response
+  unless isLast do
+    client.serveDownloadFragments blockData (offset + size) maxSlice (fragmentNumber + 1)
+
+/-- Download a complete load-memory block returned by `fullUpload`. Classic S7
+    download is PLC-driven: after the initial request the PLC asks for each
+    fragment, then the client inserts the transferred block. -/
+def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : Nat)
+    (blockData : ByteArray) : IO Unit :=
+  client.serialized do
+    try
+      if blockData.size < 36 then
+        throw <| IO.userError "download data must contain a 36-byte compact block header"
+      let (mc7Size, _) ← orThrow <| ({ data := blockData, offset := 34 } : Cursor).readUInt16BE
+      if 36 + mc7Size.toNat > blockData.size then
+        throw <| IO.userError "compact block header declares more MC7 data than supplied"
+      let startReference ← client.freshReference
+      let startRequest ← orThrow <| S7.encodeRequestDownload startReference blockType number
+        blockData.size mc7Size.toNat
+      let startResponse ← client.exchangeWithRetries startReference startRequest
+        client.config.reconnectRetries
+      orThrow <| S7.validateResponse startResponse startReference S7.requestDownloadFunction
+      let pduLength ← client.negotiatedPduLength
+      if pduLength.toNat <= 18 then
+        throw <| IO.userError "negotiated PDU is too small for block download"
+      client.serveDownloadFragments blockData 0 (pduLength.toNat - 18) 0
+      let ended ← client.receiveServerJob
+      let (endedFunction, _) ← orThrow <| ({ data := ended.parameters } : Cursor).readUInt8
+      if endedFunction != S7.downloadEndedFunction then
+        throw <| IO.userError s!"expected PLC download-ended request, got function {endedFunction}"
+      client.sendServerResponse (← orThrow <| S7.encodeDownloadEndedResponse ended.reference)
+      let insertReference ← client.freshReference
+      let insertRequest ← orThrow <| S7.encodeInsertBlock insertReference blockType number
+      let insertResponse ← client.exchangeWithRetries insertReference insertRequest 0
+      orThrow <| S7.decodePlcControl insertReference S7.startFunction insertResponse
+    catch error =>
+      client.closeCurrent
+      throw error
+
+def Client.readForceTable (client : Client) : IO (Array S7.ForceEntry) := do
+  orThrow <| S7.decodeForceTable (← client.readSzl 0x0025 0)
 
 private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) : IO ByteArray := do
   let reference ← client.freshReference
@@ -539,6 +713,19 @@ def Client.dbReadWString (client : Client) (dbNumber : UInt16) (start : Nat) : I
 def Client.dbWriteWString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
     (value : String) : IO Unit := do
   client.dbWrite dbNumber start (← orThrow <| Value.encodeWString maximum value)
+
+/-- Write an input/output process-image bit. This is not a persistent CPU force
+    table operation; a PLC scan may overwrite it. -/
+def Client.forceBit (client : Client) (area : S7.Area) (byteOffset bit : Nat)
+    (value : Bool) : IO Unit := do
+  if area != .processInputs && area != .processOutputs then
+    throw <| IO.userError "process-image bit override only supports input and output areas"
+  let current ← client.readArea area 0 byteOffset 1
+  let updated ← orThrow <| Value.setBit current[0]! bit value
+  client.writeArea area 0 byteOffset (bytes #[updated])
+
+def Client.cancelForceBit (client : Client) (area : S7.Area) (byteOffset bit : Nat) : IO Unit :=
+  client.forceBit area byteOffset bit false
 
 def Client.disconnect (client : Client) : IO Unit :=
   client.serialized do

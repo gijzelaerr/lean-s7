@@ -31,7 +31,7 @@ structure UserDataResponse where
   payload : ByteArray
   deriving BEq
 
-private def encodeUserDataHeader (reference : UInt16) (parameters data : ByteArray) :
+def encodeUserDataHeader (reference : UInt16) (parameters data : ByteArray) :
     Except EncodeError ByteArray := do
   if parameters.size > maxSectionSize then
     throw (.parametersTooLarge parameters.size maxSectionSize)
@@ -41,7 +41,7 @@ private def encodeUserDataHeader (reference : UInt16) (parameters data : ByteArr
     uint16BE (UInt16.ofNat parameters.size) ++ uint16BE (UInt16.ofNat data.size) ++
     parameters ++ data
 
-private def userDataParameters (group subfunction sequence : UInt8)
+def userDataParameters (group subfunction sequence : UInt8)
     (continuation : Bool) : ByteArray :=
   if continuation then
     bytes #[0, 1, 0x12, 0x08, userDataResponseMethod,

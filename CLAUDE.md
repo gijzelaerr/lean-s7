@@ -16,6 +16,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/COTP.lean`: ISO 8073 connection and data TPDUs.
 - `LeanS7/S7.lean`: classic S7 PDU codecs and validation.
 - `LeanS7/Management.lean`: USER_DATA, SZL, clock, security, and CPU-control codecs.
+- `LeanS7/Advanced.lean`: block discovery, transfer, maintenance, and force-table codecs.
 - `LeanS7/Value.lean`: typed DB values, bits, STRING, and WSTRING codecs.
 - `LeanS7/Transport.lean`: TCP, TPKT, and COTP IO.
 - `LeanS7/Client.lean`: client lifecycle and public operations.

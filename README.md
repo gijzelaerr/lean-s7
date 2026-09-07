@@ -33,11 +33,16 @@ Implemented:
 - PLC clock get/set using validated S7 `DATE_AND_TIME` values
 - CPU hot start, cold start, and stop operations
 - classic S7 session-password enter/clear operations
+- block counts, block lists, and typed block metadata
+- fragmented MC7 and full load-memory block uploads
+- PLC-driven fragmented block downloads, insertion, and deletion
+- memory compression and RAM-to-ROM copy commands
+- force-table reads and input/output process-image bit overrides
+- a validated raw S7 PDU exchange escape hatch
 - protocol-vector and malformed-input tests
 - end-to-end tests against the python-snap7 emulator
 
-Next: block upload/download and the remaining advanced classic S7 services,
-followed by a Lean emulator server.
+Next: a native Lean emulator server and real-controller conformance testing.
 
 This is a classic S7comm client. S7comm Plus, including optimized symbolic
 access on newer controllers, is a different protocol and is not implemented.
@@ -123,6 +128,27 @@ Management methods include `readSzl`, `readSzlList`, `getOrderCode`,
 `setSessionPassword`, and `clearSessionPassword`. CPU control and clock-setting
 calls change PLC state; applications should apply their own authorization and
 safety interlocks before exposing them.
+
+Block methods include `listBlocks`, `listBlocksOfType`, `getBlockInfo`,
+`upload`, `fullUpload`, `downloadBlock`, `deleteBlock`, `compress`, and
+`copyRamToRom`. `downloadBlock` accepts the complete load-memory image returned
+by `fullUpload`; the PLC drives fragment requests as required by classic S7.
+`rawExchange` is available for services without a typed wrapper, but callers
+must provide the reference encoded in the request and decode the returned PDU.
+
+`readForceTable` reads the CPU force table where SZL `0x0025` is supported.
+`forceBit` and `cancelForceBit` only write the input/output process image; they
+do not create or remove persistent CPU force-table entries and the scan cycle
+may overwrite their values.
+
+## Hardware validation
+
+The deterministic suite covers golden wire vectors, malformed responses, the
+python-snap7 emulator, fragmented uploads, and a dedicated PLC-driven download
+peer. No real Siemens controller has been validated yet. In particular, block
+download/delete, CPU start/stop, clock setting, password sessions, compression,
+RAM-to-ROM copy, and process-image overrides must be validated on each target
+CPU family and firmware before operational use.
 
 ## Design
 

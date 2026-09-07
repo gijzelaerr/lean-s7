@@ -201,6 +201,46 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
     client.plcColdStart
     unless (← client.getCpuState) == .running do
       throw <| IO.userError "PLC cold start did not leave emulator in RUN"
+    let blockCounts ← client.listBlocks
+    unless blockCounts.dataBlocks == 1 do
+      throw <| IO.userError "block-count query did not find DB1"
+    let dbBlocks ← client.listBlocksOfType .dataBlock
+    unless dbBlocks.size == 1 && dbBlocks[0]!.number == 1 do
+      throw <| IO.userError "block-list query did not return DB1"
+    let blockInfo ← client.getBlockInfo .dataBlock 1
+    unless blockInfo.number == 1 && blockInfo.mc7Size == 4096 &&
+        blockInfo.author == "SNAP7EMU" do
+      throw <| IO.userError "block metadata parsing mismatch"
+    let fullBlock ← client.fullUpload .dataBlock 1
+    unless fullBlock.size == 4132 do
+      throw <| IO.userError "fragmented full upload returned the wrong size"
+    let mc7 ← client.upload .dataBlock 1
+    unless mc7.size == 4096 && mc7.extract 0 4 == bytes #[0xaa, 0xbb, 0xcc, 0xdd] do
+      throw <| IO.userError "fragmented MC7 upload returned the wrong data"
+    let forces ← client.readForceTable
+    unless forces.size == 2 && forces[0]!.areaCode == 0x81 && forces[0]!.value do
+      throw <| IO.userError "force-table parsing mismatch"
+    client.forceBit .processOutputs 8 3 true
+    unless (← client.outputsRead 8 1) == bytes #[8] do
+      throw <| IO.userError "process-image bit override failed"
+    client.cancelForceBit .processOutputs 8 3
+    unless (← client.outputsRead 8 1) == bytes #[0] do
+      throw <| IO.userError "process-image bit override cancellation failed"
+    client.compress
+    client.copyRamToRom
+    let rawReference : UInt16 := 0xf000
+    let rawRequest ← match S7.encodeDbRead rawReference { dbNumber := 1, start := 0, size := 4 } with
+      | .ok request => pure request
+      | .error error => throw <| IO.userError s!"raw request encoding failed: {repr error}"
+    let rawResponse ← client.rawExchange rawReference rawRequest
+    let rawPayload ← match S7.decodeResponse rawResponse with
+      | .ok response => match S7.decodeDbRead rawReference response with
+        | .ok payload => pure payload
+        | .error error => throw <| IO.userError s!"raw response data failed: {repr error}"
+      | .error error => throw <| IO.userError s!"raw response decoding failed: {repr error}"
+    unless rawPayload == bytes #[0xaa, 0xbb, 0xcc, 0xdd] do
+      throw <| IO.userError "raw ISO exchange returned the wrong payload"
+    client.deleteBlock .function 99999
     client.disconnect
     unless !(← client.isConnected) do
       throw <| IO.userError "client remained connected after disconnect"
@@ -232,10 +272,29 @@ def expectConnectFailure (host portString : String) : IO Unit := do
       client.disconnect
       throw <| IO.userError "connection unexpectedly succeeded"
 
+def runDownloadIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host
+    port := UInt16.ofNat portNat
+    operationTimeoutMs := some 1000
+  }
+  try
+    let mc7 := ByteArray.mk <| (Array.range 600).map fun index => UInt8.ofNat (index * 29 + 7)
+    let compact := ByteArray.mk (Array.replicate 34 0) ++ uint16BE (UInt16.ofNat mc7.size)
+    client.downloadBlock .dataBlock 7 (compact ++ mc7)
+    client.disconnect
+    IO.println s!"lean-s7 PLC-driven download integration passed against {host}:{portNat}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
   | ["integration-reconnect", host, port] => runIntegration host port true
+  | ["integration-download", host, port] => runDownloadIntegration host port
   | ["expect-connect-failure", host, port] => expectConnectFailure host port
   | [] => runDemo
   | _ => throw <| IO.userError "usage: lean-s7 [integration <host-or-address> <port>]"

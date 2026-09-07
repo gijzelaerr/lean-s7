@@ -350,6 +350,72 @@ def testS7ManagementVectors : IO Unit := do
     0x50, 0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d]))
     "unexpected PLC cold-start request encoding"
 
+def testS7AdvancedVectors : IO Unit := do
+  let listBlocks := bytes #[
+    0x32, 7, 0, 0, 0, 13, 0, 8, 0, 4,
+    0, 1, 0x12, 4, 0x11, 0x43, 1, 0, 0x0a, 0, 0, 0]
+  check (isOkEq (S7.encodeListBlocks 13) listBlocks)
+    "unexpected list-blocks request encoding"
+  check (isOkEq (S7.encodeUserDataContinuation 13 S7.blocksInfoGroup
+    S7.listBlocksOfTypeSubfunction 7) (bytes #[
+      0x32, 7, 0, 0, 0, 13, 0, 12, 0, 4,
+      0, 1, 0x12, 8, 0x11, 0x43, 2, 7, 0, 0, 0, 0,
+      0x0a, 0, 0, 0])) "unexpected block-list continuation encoding"
+  let countsPayload := bytes #[
+    0x30, 0x38, 0, 1, 0x30, 0x45, 0, 2, 0x30, 0x43, 0, 3,
+    0x30, 0x41, 0, 4, 0x30, 0x42, 0, 5, 0x30, 0x44, 0, 6,
+    0x30, 0x46, 0, 7]
+  match S7.decodeBlockCounts countsPayload with
+  | .error err => throw <| IO.userError s!"could not decode block counts: {repr err}"
+  | .ok counts =>
+      check (counts.organizationBlocks == 1 && counts.functionBlocks == 2 &&
+        counts.functions == 3 && counts.dataBlocks == 4 && counts.systemDataBlocks == 5 &&
+        counts.systemFunctions == 6 && counts.systemFunctionBlocks == 7)
+        "block counts were assigned to the wrong types"
+  let entries := bytes #[0, 1, 0x10, 2, 0x12, 0x34, 0x20, 3]
+  match S7.decodeBlockEntries entries with
+  | .error err => throw <| IO.userError s!"could not decode block entries: {repr err}"
+  | .ok decoded =>
+      check (decoded == #[
+        { number := 1, flags := 0x10, language := 2 },
+        { number := 0x1234, flags := 0x20, language := 3 }])
+        "block entries were decoded incorrectly"
+  check (isOkEq (S7.encodeStartUpload 14 .dataBlock 1) (bytes #[
+    0x32, 1, 0, 0, 0, 14, 0, 18, 0, 0,
+    0x1d, 0, 0, 0, 0, 0, 0, 0, 9, 0x5f, 0x30, 0x41,
+    0x30, 0x30, 0x30, 0x30, 0x31, 0x41]))
+    "unexpected start-upload encoding"
+  let uploadAck := bytes #[
+    0x32, 3, 0, 0, 0, 15, 0, 2, 0, 7, 0, 0,
+    0x1e, 0, 0, 3, 0, 0xfb, 0xde, 0xad, 0xbe]
+  match S7.decodeResponse uploadAck with
+  | .error err => throw <| IO.userError s!"could not decode upload ACK: {repr err}"
+  | .ok response =>
+      match S7.decodeUploadFragment 15 response with
+      | .error err => throw <| IO.userError s!"could not decode upload fragment: {repr err}"
+      | .ok fragment =>
+          check (fragment.isLast && fragment.data == bytes #[0xde, 0xad, 0xbe])
+            "upload fragment was decoded incorrectly"
+  let serverDownload := bytes #[
+    0x32, 1, 0, 0, 0x12, 0x34, 0, 1, 0, 0, 0x1b]
+  match S7.decodeJobPdu serverDownload with
+  | .error err => throw <| IO.userError s!"could not decode PLC download job: {repr err}"
+  | .ok job =>
+      check (job.reference == 0x1234 && job.parameters == bytes #[0x1b])
+        "PLC download job was decoded incorrectly"
+  check (isOkEq (S7.encodeDownloadFragmentResponse 0x1234 true (bytes #[1, 2, 3])) (bytes #[
+    0x32, 3, 0, 0, 0x12, 0x34, 0, 2, 0, 7, 0, 0,
+    0x1b, 0, 0, 3, 0, 0xfb, 1, 2, 3]))
+    "unexpected download-fragment response encoding"
+  let forceSzl : S7.Szl := {
+    id := 0x0025, index := 0, recordLength := 8, recordCount := 2,
+    data := bytes #[0, 0x81, 0, 12, 3, 1, 0, 0, 0, 0x82, 0, 20, 7, 0, 0, 0]
+  }
+  check (isOkEq (S7.decodeForceTable forceSzl) #[
+    { areaCode := 0x81, byteOffset := 12, bit := 3, value := true },
+    { areaCode := 0x82, byteOffset := 20, bit := 7, value := false }])
+    "force-table entries were decoded incorrectly"
+
 def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
@@ -363,4 +429,5 @@ def main : IO Unit := do
   testValues
   testS7MultiVectors
   testS7ManagementVectors
+  testS7AdvancedVectors
   IO.println "All lean-s7 tests passed."
