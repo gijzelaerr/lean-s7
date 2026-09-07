@@ -1,5 +1,5 @@
 import LeanS7.Transport
-import LeanS7.S7
+import LeanS7.Management
 import LeanS7.Value
 
 namespace LeanS7
@@ -90,17 +90,20 @@ private def Client.closeCurrent (client : Client) : IO Unit := do
   if let some connection := previous then
     try Transport.disconnect connection client.config.operationTimeoutMs catch _ => pure ()
 
-private def Client.exchangeCurrent (client : Client) (reference : UInt16)
-    (request : ByteArray) : IO S7.Response := do
+private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
+    (request : ByteArray) : IO ByteArray := do
   let some connection ← client.connection.get
     | throw <| IO.userError "S7 client is disconnected"
   Transport.sendData connection.socket request client.config.operationTimeoutMs
   for _ in [0:client.config.maxStaleResponses + 1] do
-    let response ← orThrow <| S7.decodeResponse
-      (← Transport.receiveData connection.socket client.config.operationTimeoutMs)
-    if response.reference == reference then
+    let response ← Transport.receiveData connection.socket client.config.operationTimeoutMs
+    if (← orThrow <| S7.decodePduReference response) == reference then
       return response
   throw <| IO.userError s!"too many stale S7 responses while waiting for reference {reference}"
+
+private def Client.exchangeCurrent (client : Client) (reference : UInt16)
+    (request : ByteArray) : IO S7.Response := do
+  orThrow <| S7.decodeResponse (← client.exchangeBytesCurrent reference request)
 
 private def Client.reconnect (client : Client) : IO Unit := do
   client.closeCurrent
@@ -120,6 +123,18 @@ private partial def Client.exchangeWithRetries (client : Client) (reference : UI
       throw error
     client.exchangeWithRetries reference request (remainingRetries - 1) true
 
+private partial def Client.exchangeBytesWithRetries (client : Client) (reference : UInt16)
+    (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false) : IO ByteArray := do
+  try
+    if reconnectFirst then
+      client.reconnect
+    client.exchangeBytesCurrent reference request
+  catch error =>
+    client.closeCurrent
+    if remainingRetries == 0 || (← client.closed.get) then
+      throw error
+    client.exchangeBytesWithRetries reference request (remainingRetries - 1) true
+
 private def Client.serialized (client : Client) (operation : IO α) : IO α := do
   let gate : IO.Promise Unit ← IO.Promise.new
   let previous ← client.requestTail.modifyGet fun previous => (previous, gate.result?)
@@ -134,6 +149,111 @@ private def Client.serialized (client : Client) (operation : IO α) : IO α := d
 private def Client.exchange (client : Client) (reference : UInt16)
     (request : ByteArray) : IO S7.Response :=
   client.serialized <| client.exchangeWithRetries reference request client.config.reconnectRetries
+
+private def Client.exchangeUserData (client : Client) (reference : UInt16) (group subfunction : UInt8)
+    (request : ByteArray) : IO S7.UserDataResponse :=
+  client.serialized do
+    let response ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries
+    orThrow <| S7.decodeUserDataResponse reference group subfunction response
+
+private partial def Client.readSzlFragments (client : Client) (id index : UInt16)
+    (fragmentNumber : Nat) (sequence : UInt8) (payload : ByteArray) : IO ByteArray := do
+  if fragmentNumber >= 256 then
+    throw <| IO.userError "SZL response exceeded the 256-fragment safety limit"
+  let reference ← client.freshReference
+  let request ← if fragmentNumber == 0 then
+    orThrow <| S7.encodeReadSzl reference id index
+  else
+    orThrow <| S7.encodeReadSzlContinuation reference sequence
+  let raw ← client.exchangeBytesWithRetries reference request
+    (if fragmentNumber == 0 then client.config.reconnectRetries else 0)
+  let response ← orThrow <| S7.decodeUserDataResponse reference S7.szlGroup
+    S7.readSzlSubfunction raw
+  let nextPayload ← if fragmentNumber == 0 then
+    let (actualId, actualIndex, firstPayload) ← orThrow <| S7.decodeSzlFirst response
+    if actualId != id || actualIndex != index then
+      throw <| IO.userError s!"PLC returned SZL {actualId}/{actualIndex}, expected {id}/{index}"
+    pure firstPayload
+  else
+    pure response.payload
+  let accumulated := payload ++ nextPayload
+  if accumulated.size > 16 * 1024 * 1024 then
+    throw <| IO.userError "SZL response exceeded the 16 MiB safety limit"
+  if response.hasMoreData then
+    client.readSzlFragments id index (fragmentNumber + 1) response.sequence accumulated
+  else
+    return accumulated
+
+def Client.readSzl (client : Client) (id : UInt16) (index : UInt16 := 0) : IO S7.Szl :=
+  client.serialized do
+    orThrow <| S7.decodeSzl id index (← client.readSzlFragments id index 0 0 ByteArray.empty)
+
+def Client.readSzlList (client : Client) : IO (Array UInt16) := do
+  let szl ← client.readSzl 0 0
+  if szl.recordLength != 2 then
+    throw <| IO.userError s!"SZL directory record length must be 2, got {szl.recordLength}"
+  let mut cursor : Cursor := { data := szl.data }
+  let mut result := #[]
+  for _ in [0:szl.recordCount.toNat] do
+    let (id, next) ← orThrow cursor.readUInt16BE
+    cursor := next
+    result := result.push id
+  orThrow cursor.finish
+  return result
+
+def Client.getOrderCode (client : Client) : IO S7.OrderCode := do
+  orThrow <| S7.parseOrderCode (← client.readSzl 0x0011 0)
+
+def Client.getCpuInfo (client : Client) : IO S7.CpuInfo := do
+  orThrow <| S7.parseCpuInfo (← client.readSzl 0x001c 0)
+
+def Client.getCpInfo (client : Client) : IO S7.CpInfo := do
+  orThrow <| S7.parseCpInfo (← client.readSzl 0x0131 1)
+
+def Client.getProtection (client : Client) : IO S7.Protection := do
+  orThrow <| S7.parseProtection (← client.readSzl 0x0232 4)
+
+def Client.getCpuState (client : Client) : IO S7.CpuState := do
+  orThrow <| S7.parseCpuState (← client.readSzl 0x0424 0)
+
+def Client.getPlcDateTime (client : Client) : IO S7.PlcDateTime := do
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeReadClock reference
+  let response ← client.exchangeUserData reference S7.clockGroup S7.readClockSubfunction request
+  orThrow <| S7.decodePlcDateTime response.payload
+
+def Client.setPlcDateTime (client : Client) (value : S7.PlcDateTime) : IO Unit := do
+  let reference ← client.freshReference
+  let payload ← orThrow <| S7.encodePlcDateTime value
+  let request ← orThrow <| S7.encodeSetClock reference payload
+  discard <| client.exchangeUserData reference S7.clockGroup S7.setClockSubfunction request
+
+private def Client.plcControl (client : Client) (function : UInt8)
+    (encode : UInt16 → Except S7.EncodeError ByteArray) : IO Unit := do
+  let reference ← client.freshReference
+  let request ← orThrow <| encode reference
+  let response ← client.exchange reference request
+  orThrow <| S7.decodePlcControl reference function response
+
+def Client.plcHotStart (client : Client) : IO Unit :=
+  client.plcControl S7.startFunction S7.encodePlcHotStart
+
+def Client.plcColdStart (client : Client) : IO Unit :=
+  client.plcControl S7.startFunction S7.encodePlcColdStart
+
+def Client.plcStop (client : Client) : IO Unit :=
+  client.plcControl S7.stopFunction S7.encodePlcStop
+
+def Client.setSessionPassword (client : Client) (password : String) : IO Unit := do
+  let reference ← client.freshReference
+  let encoded ← orThrow <| S7.encodePassword password
+  let request ← orThrow <| S7.encodeSetPassword reference encoded
+  discard <| client.exchangeUserData reference S7.securityGroup S7.enterPasswordSubfunction request
+
+def Client.clearSessionPassword (client : Client) : IO Unit := do
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeClearPassword reference
+  discard <| client.exchangeUserData reference S7.securityGroup S7.clearPasswordSubfunction request
 
 private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) : IO ByteArray := do
   let reference ← client.freshReference

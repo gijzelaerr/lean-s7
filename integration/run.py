@@ -19,6 +19,10 @@ class MultiItemServer(Server):
 
     stale_once = False
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._lean_szl_fragments: dict[tuple[str, int], list[bytes]] = {}
+
     def _parse_request(self, pdu: bytes) -> dict:
         request = super()._parse_request(pdu)
         _, _, _, _, parameter_length, data_length = struct.unpack(">BBHHHH", pdu[:10])
@@ -124,6 +128,120 @@ class MultiItemServer(Server):
         return self._response_header(
             request, S7Function.WRITE_AREA, count, bytes(results)
         )
+
+    @staticmethod
+    def _szl_record(record_length: int, records: list[bytes]) -> bytes:
+        assert all(len(record) == record_length for record in records)
+        return struct.pack(">HH", record_length, len(records)) + b"".join(records)
+
+    def _get_szl_data(self, szl_id: int, szl_index: int) -> bytes | None:
+        if szl_id == 0x0000:
+            ids = [0x0000, 0x0011, 0x001C, 0x0131, 0x0232, 0x0424]
+            return self._szl_record(2, [struct.pack(">H", value) for value in ids])
+        if szl_id == 0x0011:
+            code = b"6ES7 315-2EH14-0AB0"[:20].ljust(20, b"\x00")
+            return self._szl_record(
+                26, [struct.pack(">H", 1) + code + bytes([0, 3, 3, 0])]
+            )
+        if szl_id == 0x001C:
+            values = [
+                b"SNAP7-SERVER",
+                b"CPU 315-2 PN/DP",
+                b"unused",
+                b"Original Siemens Equipment",
+                b"S C-C2UR28922012",
+                b"CPU 315-2 PN/DP",
+            ]
+            records = [
+                struct.pack(">H", index + 1) + value[:32].ljust(32, b"\x00")
+                for index, value in enumerate(values)
+            ]
+            return self._szl_record(34, records)
+        if szl_id == 0x0131 and szl_index == 1:
+            return self._szl_record(
+                14, [struct.pack(">HHHII", 1, 480, 32, 12_000_000, 100_000_000)]
+            )
+        if szl_id == 0x0232 and szl_index == 4:
+            return self._szl_record(12, [struct.pack(">HHHHHH", 4, 1, 0, 0, 2, 0)])
+        if szl_id == 0x0424:
+            status = int(self.cpu_state)
+            return self._szl_record(4, [struct.pack(">HBB", 0, 0, status)])
+        return None
+
+    @staticmethod
+    def _userdata_fragment_response(
+        request: dict, sequence: int, has_more: bool, payload: bytes
+    ) -> bytes:
+        parameters = struct.pack(
+            ">BBBBBBBBBBBB",
+            0,
+            1,
+            0x12,
+            8,
+            0x12,
+            0x84,
+            1,
+            sequence,
+            1 if sequence else 0,
+            1 if has_more else 0,
+            0,
+            0,
+        )
+        data = struct.pack(">BBH", 0xFF, 9, len(payload)) + payload
+        return (
+            struct.pack(
+                ">BBHHHH",
+                0x32,
+                S7PDUType.USERDATA,
+                0,
+                request["sequence"],
+                len(parameters),
+                len(data),
+            )
+            + parameters
+            + data
+        )
+
+    def _handle_szl(
+        self,
+        request: dict,
+        userdata_params: dict,
+        client_address: tuple[str, int],
+    ) -> bytes:
+        sequence = userdata_params.get("sequence", 0)
+        if sequence:
+            fragments = self._lean_szl_fragments.get(client_address, [])
+            if not fragments:
+                return self._build_userdata_error_response(request, 0x8104)
+            payload = fragments.pop(0)
+            if not fragments:
+                self._lean_szl_fragments.pop(client_address, None)
+            return self._userdata_fragment_response(
+                request, sequence, bool(fragments), payload
+            )
+        raw_data = request.get("data", {}).get("data", b"")
+        if len(raw_data) < 4:
+            return self._build_userdata_error_response(request, 0x8104)
+        szl_id, szl_index = struct.unpack(">HH", raw_data[:4])
+        szl_data = self._get_szl_data(szl_id, szl_index)
+        if szl_data is None:
+            return self._build_userdata_error_response(request, 0x8104)
+        complete = struct.pack(">HH", szl_id, szl_index) + szl_data
+        chunks = [complete[index : index + 48] for index in range(0, len(complete), 48)]
+        first = chunks.pop(0)
+        if chunks:
+            self._lean_szl_fragments[client_address] = chunks
+        return self._userdata_fragment_response(request, 1, bool(chunks), first)
+
+    def _handle_get_clock(
+        self,
+        request: dict,
+        userdata_params: dict,
+        client_address: tuple[str, int],
+    ) -> bytes:
+        # Stable real-S7 layout: reserved, century marker, then DATE_AND_TIME.
+        payload = bytes([0, 0x19, 0x26, 0x09, 0x07, 0x14, 0x05, 0x59, 0, 1])
+        return self._build_userdata_success_response(request, userdata_params, payload)
 
 
 def free_port() -> int:

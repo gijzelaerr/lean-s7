@@ -28,10 +28,19 @@ Implemented:
 - multi-variable reads and writes with item-count and PDU-aware batching
 - IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
+- fragmented SZL reads and the SZL directory
+- typed order-code, CPU, communication-processor, protection, and CPU-state queries
+- PLC clock get/set using validated S7 `DATE_AND_TIME` values
+- CPU hot start, cold start, and stop operations
+- classic S7 session-password enter/clear operations
 - protocol-vector and malformed-input tests
 - end-to-end tests against the python-snap7 emulator
 
-Next: diagnostic, clock, control, and block services, followed by a Lean emulator server.
+Next: block upload/download and the remaining advanced classic S7 services,
+followed by a Lean emulator server.
+
+This is a classic S7comm client. S7comm Plus, including optimized symbolic
+access on newer controllers, is a different protocol and is not implemented.
 
 The current transport accepts IPv4, IPv6, and DNS hostnames. It supports one
 complete COTP data TPDU per S7 response; segmented COTP data is not yet implemented.
@@ -78,6 +87,9 @@ def readBytes : IO ByteArray := do
     let markers ← client.markersRead 0 16
     let temperature ← client.dbReadReal 1 32
     let label ← client.dbReadString 1 64
+    let cpu ← client.getCpuInfo
+    let state ← client.getCpuState
+    let clock ← client.getPlcDateTime
     client.disconnect
     return value
   catch error =>
@@ -104,6 +116,13 @@ wait. `Client.isConnected` reports lifecycle state, and `Client.disconnect`
 sends a COTP disconnect request before shutting down the socket. TSAPs, COTP
 references/class/TPDU size, deadlines, stale-response allowance, and bounded
 reconnect attempts are configurable through `ClientConfig`.
+
+Management methods include `readSzl`, `readSzlList`, `getOrderCode`,
+`getCpuInfo`, `getCpInfo`, `getProtection`, `getCpuState`, `getPlcDateTime`,
+`setPlcDateTime`, `plcHotStart`, `plcColdStart`, `plcStop`,
+`setSessionPassword`, and `clearSessionPassword`. CPU control and clock-setting
+calls change PLC state; applications should apply their own authorization and
+safety interlocks before exposing them.
 
 ## Design
 

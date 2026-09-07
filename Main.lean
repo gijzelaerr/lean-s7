@@ -165,6 +165,42 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
       | .ok payload => unless payload == bytes #[0xaa, 0xbb, 0xcc, 0xdd] do
           throw <| IO.userError "serialized concurrent read returned the wrong payload"
       | .error error => throw error
+    let szlIds ← client.readSzlList
+    unless szlIds.contains 0x001c && szlIds.contains 0x0424 do
+      throw <| IO.userError "SZL directory omitted expected entries"
+    let orderCode ← client.getOrderCode
+    unless orderCode.code == "6ES7 315-2EH14-0AB0" &&
+        orderCode.versionMajor == 3 && orderCode.versionMinor == 3 &&
+        orderCode.versionPatch == 0 do
+      throw <| IO.userError "order-code parsing mismatch"
+    let cpuInfo ← client.getCpuInfo
+    unless cpuInfo.asName == "SNAP7-SERVER" &&
+        cpuInfo.moduleTypeName == "CPU 315-2 PN/DP" do
+      throw <| IO.userError "CPU information parsing mismatch"
+    let cpInfo ← client.getCpInfo
+    unless cpInfo.maxPduLength == 480 && cpInfo.maxConnections == 32 &&
+        cpInfo.maxMpiRate == 12000000 && cpInfo.maxBusRate == 100000000 do
+      throw <| IO.userError "CP information parsing mismatch"
+    let protection ← client.getProtection
+    unless protection.selectorPosition == 1 && protection.modeSelector == 2 do
+      throw <| IO.userError "CPU protection parsing mismatch"
+    unless (← client.getCpuState) == .running do
+      throw <| IO.userError "CPU did not initially report RUN"
+    let clock ← client.getPlcDateTime
+    unless clock.year == 2026 && clock.month == 9 && clock.day == 7 do
+      throw <| IO.userError "PLC clock parsing mismatch"
+    client.setPlcDateTime clock
+    client.setSessionPassword "secret"
+    client.clearSessionPassword
+    client.plcStop
+    unless (← client.getCpuState) == .stopped do
+      throw <| IO.userError "PLC stop did not change emulator state"
+    client.plcHotStart
+    unless (← client.getCpuState) == .running do
+      throw <| IO.userError "PLC hot start did not change emulator state"
+    client.plcColdStart
+    unless (← client.getCpuState) == .running do
+      throw <| IO.userError "PLC cold start did not leave emulator in RUN"
     client.disconnect
     unless !(← client.isConnected) do
       throw <| IO.userError "client remained connected after disconnect"

@@ -292,6 +292,64 @@ def testS7MultiVectors : IO Unit := do
   check (match S7.encodeAreaReadMany 9 tooMany with
     | .error (.invalidSize 21) => true | _ => false) "more than 20 read items were accepted"
 
+def testS7ManagementVectors : IO Unit := do
+  let readSzl := bytes #[
+    0x32, 0x07, 0, 0, 0, 9, 0, 8, 0, 8,
+    0, 1, 0x12, 4, 0x11, 0x44, 1, 0,
+    0xff, 9, 0, 4, 0x04, 0x24, 0, 0]
+  check (isOkEq (S7.encodeReadSzl 9 0x0424 0) readSzl)
+    "unexpected read-SZL request encoding"
+  let responsePdu := bytes #[
+    0x32, 0x07, 0, 0, 0, 9, 0, 12, 0, 16,
+    0, 1, 0x12, 8, 0x12, 0x84, 1, 3, 0x22, 1, 0, 0,
+    0xff, 9, 0, 12, 0x04, 0x24, 0, 0, 0, 4, 0, 1, 0, 0, 0, 8]
+  match S7.decodeUserDataResponse 9 S7.szlGroup S7.readSzlSubfunction responsePdu with
+  | .error err => throw <| IO.userError s!"could not decode USER_DATA response: {repr err}"
+  | .ok response =>
+      check response.hasMoreData "fragment continuation flag was lost"
+      check (response.sequence == 3 && response.dataUnitReference == 0x22)
+        "fragment sequence metadata was decoded incorrectly"
+      let (id, index, payload) ← match S7.decodeSzlFirst response with
+        | .ok value => pure value
+        | .error err => throw <| IO.userError s!"could not decode first SZL fragment: {repr err}"
+      check (id == 0x0424 && index == 0) "SZL identity was decoded incorrectly"
+      match S7.decodeSzl id index payload with
+      | .error err => throw <| IO.userError s!"could not decode SZL records: {repr err}"
+      | .ok szl =>
+          check (szl.recordLength == 4 && szl.recordCount == 1)
+            "SZL record framing was decoded incorrectly"
+          check (isOkEq (S7.parseCpuState szl) .running) "CPU RUN state was not decoded"
+  let clock : S7.PlcDateTime := {
+    year := 2026, month := 9, day := 7, hour := 14, minute := 5, second := 59,
+    millisecond := 123, weekday := 1
+  }
+  match S7.encodePlcDateTime clock with
+  | .error err => throw <| IO.userError s!"could not encode PLC clock: {repr err}"
+  | .ok encoded =>
+      check (encoded == bytes #[0, 0x19, 0x26, 0x09, 0x07, 0x14, 0x05, 0x59, 0x12, 0x31])
+        "unexpected PLC DATE_AND_TIME encoding"
+      check (isOkEq (S7.decodePlcDateTime encoded) clock) "PLC clock round trip failed"
+  check (match S7.decodePlcDateTime (bytes #[0, 0x19, 0x26, 0x1a, 7, 0, 0, 0, 0, 1]) with
+    | .error _ => true | _ => false) "invalid BCD clock value was accepted"
+  check (isOkEq (S7.encodePassword "secret") (bytes #[0x26, 0x30, 0x10, 0x17, 0x20, 0x36, 0x55, 0x43]))
+    "unexpected S7 password encoding"
+  check (match S7.encodePassword "" with | .error _ => true | _ => false)
+    "empty session password was accepted"
+  check (isOkEq (S7.encodePlcStop 10) (bytes #[
+    0x32, 1, 0, 0, 0, 10, 0, 16, 0, 0,
+    0x29, 0, 0, 0, 0, 0, 9, 0x50, 0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d]))
+    "unexpected PLC stop request encoding"
+  check (isOkEq (S7.encodePlcHotStart 11) (bytes #[
+    0x32, 1, 0, 0, 0, 11, 0, 20, 0, 0,
+    0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 0, 9,
+    0x50, 0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d]))
+    "unexpected PLC hot-start request encoding"
+  check (isOkEq (S7.encodePlcColdStart 12) (bytes #[
+    0x32, 1, 0, 0, 0, 12, 0, 22, 0, 0,
+    0x28, 0, 0, 0, 0, 0, 0, 0xfd, 0, 2, 0x43, 0x20, 9,
+    0x50, 0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d]))
+    "unexpected PLC cold-start request encoding"
+
 def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
@@ -304,4 +362,5 @@ def main : IO Unit := do
   testS7AreaVectors
   testValues
   testS7MultiVectors
+  testS7ManagementVectors
   IO.println "All lean-s7 tests passed."
