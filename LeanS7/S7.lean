@@ -17,6 +17,7 @@ def octetTransportSize : UInt8 := 0x09
 def jobHeaderSize : Nat := 10
 def responseHeaderSize : Nat := 12
 def maxSectionSize : Nat := 65535
+def maxItemCount : Nat := 20
 
 inductive EncodeError where
   | parametersTooLarge (size maximum : Nat)
@@ -155,6 +156,21 @@ structure MemoryRange where
   count : Nat
   deriving Repr, BEq
 
+inductive ReadItemResult where
+  | success (payload : ByteArray)
+  | failure (returnCode : UInt8)
+  deriving BEq
+
+structure WriteItem where
+  range : MemoryRange
+  payload : ByteArray
+  deriving BEq
+
+inductive WriteItemResult where
+  | success
+  | failure (returnCode : UInt8)
+  deriving Repr, BEq
+
 def encodeMemoryAddress (range : MemoryRange) : Except EncodeError ByteArray := do
   if range.count == 0 || range.count > maxSectionSize then
     throw (.invalidSize range.count)
@@ -178,6 +194,14 @@ def encodeAreaRead (reference : UInt16) (range : MemoryRange) : Except EncodeErr
   let address ← encodeMemoryAddress range
   encodeJob { reference, parameters := bytes #[readFunction, 1] ++ address }
 
+def encodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange) : Except EncodeError ByteArray := do
+  if ranges.isEmpty || ranges.size > maxItemCount then
+    throw (.invalidSize ranges.size)
+  let mut parameters := bytes #[readFunction, UInt8.ofNat ranges.size]
+  for range in ranges do
+    parameters := parameters ++ (← encodeMemoryAddress range)
+  encodeJob { reference, parameters }
+
 def encodeAreaWrite (reference : UInt16) (range : MemoryRange)
     (payload : ByteArray) : Except EncodeError ByteArray := do
   let address ← encodeMemoryAddress range
@@ -193,6 +217,31 @@ def encodeAreaWrite (reference : UInt16) (range : MemoryRange)
   let data := bytes #[0, range.area.dataTransportSize] ++
     uint16BE (UInt16.ofNat dataLength) ++ payload
   encodeJob { reference, parameters := bytes #[writeFunction, 1] ++ address, data }
+
+def encodeAreaWriteMany (reference : UInt16) (items : Array WriteItem) : Except EncodeError ByteArray := do
+  if items.isEmpty || items.size > maxItemCount then
+    throw (.invalidSize items.size)
+  let mut parameters := bytes #[writeFunction, UInt8.ofNat items.size]
+  let mut data := ByteArray.empty
+  let mut index := 0
+  for item in items do
+    let address ← encodeMemoryAddress item.range
+    parameters := parameters ++ address
+    let expectedSize := item.range.count * item.range.area.elementSize
+    if item.payload.size != expectedSize then
+      throw (.invalidPayloadSize item.payload.size expectedSize)
+    let dataLength := if item.range.area.dataTransportSize == octetTransportSize then
+      item.payload.size
+    else
+      item.payload.size * 8
+    if dataLength > maxSectionSize then
+      throw (.invalidSize item.payload.size)
+    data := data ++ bytes #[0, item.range.area.dataTransportSize] ++
+      uint16BE (UInt16.ofNat dataLength) ++ item.payload
+    if index + 1 < items.size && item.payload.size % 2 != 0 then
+      data := data ++ bytes #[0]
+    index := index + 1
+  encodeJob { reference, parameters, data }
 
 structure DbRange where
   dbNumber : UInt16
@@ -250,6 +299,80 @@ def decodeAreaRead (reference : UInt16) (area : Area) (expectedSize : Nat)
   let (payload, cursor) ← cursor.readBytes payloadSize
   cursor.finish
   return payload
+
+private def validateItemParameters (response : Response) (reference : UInt16)
+    (function : UInt8) (expectedCount : Nat) : Except DecodeError Unit := do
+  validateResponse response reference function
+  if response.parameters.size != 2 then
+    throw (.invalidField responseHeaderSize "expected two-byte item response parameters")
+  let cursor : Cursor := { data := response.parameters, offset := 1 }
+  let (actualCount, cursor) ← cursor.readUInt8
+  cursor.finish
+  if actualCount.toNat != expectedCount then
+    throw (.invalidField (responseHeaderSize + 1)
+      s!"expected {expectedCount} response items, got {actualCount}")
+
+private def responsePayloadSize (transportSize : UInt8) (encodedLength : UInt16)
+    (offset : Nat) : Except DecodeError Nat := do
+  if transportSize == octetTransportSize then
+    return encodedLength.toNat
+  if encodedLength.toNat % 8 != 0 then
+    throw (.invalidField offset "response bit length is not byte aligned")
+  return encodedLength.toNat / 8
+
+private def decodeReadItems : List MemoryRange → Cursor → Except DecodeError (List ReadItemResult × Cursor)
+  | [], cursor => pure ([], cursor)
+  | range :: rest, cursor => do
+      let itemOffset := responseHeaderSize + 2 + cursor.offset
+      let (returnCode, cursor) ← cursor.readUInt8
+      let (transportSize, cursor) ← cursor.readUInt8
+      let (encodedLength, cursor) ← cursor.readUInt16BE
+      let payloadSize ← responsePayloadSize transportSize encodedLength (itemOffset + 2)
+      let (payload, cursor) ← cursor.readBytes payloadSize
+      let cursor ← if !rest.isEmpty && payloadSize % 2 != 0 then
+        let (_, cursor) ← cursor.readUInt8
+        pure cursor
+      else
+        pure cursor
+      let result ← if returnCode == 0xff then
+        let compatibleByteEncoding := range.area.usesElementAddress && transportSize == byteTransportSize
+        if transportSize != range.area.dataTransportSize && !compatibleByteEncoding then
+          throw (.invalidField (itemOffset + 1) s!"unexpected read transport size {transportSize}")
+        let expectedSize := range.count * range.area.elementSize
+        if payloadSize != expectedSize then
+          throw (.invalidField (itemOffset + 2)
+            s!"expected {expectedSize} response bytes, got {payloadSize}")
+        pure (.success payload)
+      else
+        pure (.failure returnCode)
+      let (results, cursor) ← decodeReadItems rest cursor
+      return (result :: results, cursor)
+
+def decodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange)
+    (response : Response) : Except DecodeError (Array ReadItemResult) := do
+  if ranges.isEmpty || ranges.size > maxItemCount then
+    throw (.invalidField responseHeaderSize s!"invalid expected item count {ranges.size}")
+  validateItemParameters response reference readFunction ranges.size
+  let (results, cursor) ← decodeReadItems ranges.toList { data := response.data }
+  cursor.finish
+  return results.toArray
+
+private def decodeWriteItems : Nat → Cursor → Except DecodeError (List WriteItemResult × Cursor)
+  | 0, cursor => pure ([], cursor)
+  | count + 1, cursor => do
+      let (returnCode, cursor) ← cursor.readUInt8
+      let result := if returnCode == 0xff then WriteItemResult.success else .failure returnCode
+      let (results, cursor) ← decodeWriteItems count cursor
+      return (result :: results, cursor)
+
+def decodeAreaWriteMany (reference : UInt16) (expectedCount : Nat)
+    (response : Response) : Except DecodeError (Array WriteItemResult) := do
+  if expectedCount == 0 || expectedCount > maxItemCount then
+    throw (.invalidField responseHeaderSize s!"invalid expected item count {expectedCount}")
+  validateItemParameters response reference writeFunction expectedCount
+  let (results, cursor) ← decodeWriteItems expectedCount { data := response.data }
+  cursor.finish
+  return results.toArray
 
 def decodeDbRead (reference : UInt16) (response : Response) : Except DecodeError ByteArray := do
   validateResponse response reference readFunction

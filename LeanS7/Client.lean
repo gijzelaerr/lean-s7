@@ -159,6 +159,89 @@ def Client.timersRead (client : Client) (start count : Nat) : IO ByteArray :=
 def Client.timersWrite (client : Client) (start : Nat) (payload : ByteArray) : IO Unit :=
   client.writeArea .timers 0 start payload
 
+private def readResponseContribution (range : S7.MemoryRange) : Nat :=
+  let size := range.count * range.area.elementSize
+  4 + size + size % 2
+
+private def takeReadBatch (pduLength : Nat) : List S7.MemoryRange →
+    Nat → Nat → Nat → List S7.MemoryRange → List S7.MemoryRange × List S7.MemoryRange
+  | [], _, _, _, selected => (selected.reverse, [])
+  | pending@(range :: rest), count, requestSize, responseSize, selected =>
+      let nextRequestSize := requestSize + 12
+      let nextResponseSize := responseSize + readResponseContribution range
+      if range.count > 0 && count < S7.maxItemCount &&
+          nextRequestSize ≤ pduLength && nextResponseSize ≤ pduLength then
+        takeReadBatch pduLength rest (count + 1) nextRequestSize nextResponseSize (range :: selected)
+      else
+        (selected.reverse, pending)
+
+private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeAreaReadMany reference ranges
+  if request.size > client.pduLength.toNat then
+    throw <| IO.userError s!"multi-read request exceeds negotiated PDU length {client.pduLength}"
+  let response ← exchange client.socket request
+  orThrow <| S7.decodeAreaReadMany reference ranges response
+
+private partial def Client.readMultiLoop (client : Client) (pending : List S7.MemoryRange)
+    (results : Array S7.ReadItemResult) : IO (Array S7.ReadItemResult) := do
+  match pending with
+  | [] => return results
+  | range :: rest =>
+      let (batch, remaining) := takeReadBatch client.pduLength.toNat pending 0 12 14 []
+      if batch.isEmpty then
+        let payload ← client.readArea range.area range.dbNumber range.start range.count
+        client.readMultiLoop rest (results.push (.success payload))
+      else
+        let batchResults ← client.readMultiBatch batch.toArray
+        client.readMultiLoop remaining (results ++ batchResults)
+
+def Client.readMulti (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) :=
+  client.readMultiLoop ranges.toList #[]
+
+private def writeRequestContribution (item : S7.WriteItem) : Nat :=
+  12 + 4 + item.payload.size + item.payload.size % 2
+
+private def takeWriteBatch (pduLength : Nat) : List S7.WriteItem →
+    Nat → Nat → Nat → List S7.WriteItem → List S7.WriteItem × List S7.WriteItem
+  | [], _, _, _, selected => (selected.reverse, [])
+  | pending@(item :: rest), count, requestSize, responseSize, selected =>
+      let nextRequestSize := requestSize + writeRequestContribution item
+      let nextResponseSize := responseSize + 1
+      let expectedSize := item.range.count * item.range.area.elementSize
+      if item.range.count > 0 && item.payload.size == expectedSize &&
+          count < S7.maxItemCount && nextRequestSize ≤ pduLength && nextResponseSize ≤ pduLength then
+        takeWriteBatch pduLength rest (count + 1) nextRequestSize nextResponseSize (item :: selected)
+      else
+        (selected.reverse, pending)
+
+private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
+  let reference ← client.freshReference
+  let request ← orThrow <| S7.encodeAreaWriteMany reference items
+  if request.size > client.pduLength.toNat then
+    throw <| IO.userError s!"multi-write request exceeds negotiated PDU length {client.pduLength}"
+  let response ← exchange client.socket request
+  orThrow <| S7.decodeAreaWriteMany reference items.size response
+
+private partial def Client.writeMultiLoop (client : Client) (pending : List S7.WriteItem)
+    (results : Array S7.WriteItemResult) : IO (Array S7.WriteItemResult) := do
+  match pending with
+  | [] => return results
+  | item :: rest =>
+      let expectedSize := item.range.count * item.range.area.elementSize
+      if item.payload.size != expectedSize then
+        throw <| IO.userError s!"multi-write payload size {item.payload.size} does not match expected {expectedSize}"
+      let (batch, remaining) := takeWriteBatch client.pduLength.toNat pending 0 12 14 []
+      if batch.isEmpty then
+        client.writeArea item.range.area item.range.dbNumber item.range.start item.payload
+        client.writeMultiLoop rest (results.push .success)
+      else
+        let batchResults ← client.writeMultiBatch batch.toArray
+        client.writeMultiLoop remaining (results ++ batchResults)
+
+def Client.writeMulti (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) :=
+  client.writeMultiLoop items.toList #[]
+
 def Client.dbReadUInt8 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt8 := do
   orThrow <| Value.getUInt8 (← client.dbRead dbNumber start 1)
 

@@ -216,6 +216,75 @@ def testValues : IO Unit := do
   check (match Value.decodeWString (bytes #[0, 1, 0, 1, 0xd8, 0x00]) with
     | .error (.invalidUtf16 0 _) => true | _ => false) "invalid UTF-16 was accepted"
 
+def testS7MultiVectors : IO Unit := do
+  let dbRange : S7.MemoryRange :=
+    { area := .dataBlocks, dbNumber := 1, start := 0, count := 3 }
+  let markerRange : S7.MemoryRange :=
+    { area := .markers, dbNumber := 0, start := 4, count := 2 }
+  let ranges := #[dbRange, markerRange]
+  match S7.encodeAreaReadMany 7 ranges with
+  | .error err => throw <| IO.userError s!"could not encode multi-read: {repr err}"
+  | .ok request =>
+      let expected := bytes #[
+        0x32, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00, 0x1a, 0x00, 0x00,
+        0x04, 0x02,
+        0x12, 0x0a, 0x10, 0x02, 0x00, 0x03, 0x00, 0x01, 0x84, 0x00, 0x00, 0x00,
+        0x12, 0x0a, 0x10, 0x02, 0x00, 0x02, 0x00, 0x00, 0x83, 0x00, 0x00, 0x20]
+      check (request == expected) "unexpected multi-read request encoding"
+  let readAck := bytes #[
+    0x32, 0x03, 0x00, 0x00, 0x00, 0x07, 0x00, 0x02, 0x00, 0x0e, 0x00, 0x00,
+    0x04, 0x02,
+    0xff, 0x04, 0x00, 0x18, 0xaa, 0xbb, 0xcc, 0x00,
+    0xff, 0x04, 0x00, 0x10, 0x11, 0x22]
+  match S7.decodeResponse readAck with
+  | .error err => throw <| IO.userError s!"could not decode multi-read ACK: {repr err}"
+  | .ok response =>
+      let expected := #[
+        S7.ReadItemResult.success (bytes #[0xaa, 0xbb, 0xcc]),
+        S7.ReadItemResult.success (bytes #[0x11, 0x22])]
+      check (isOkEq (S7.decodeAreaReadMany 7 ranges response) expected)
+        "multi-read results or fill-byte handling were incorrect"
+  let partialReadAck := bytes #[
+    0x32, 0x03, 0x00, 0x00, 0x00, 0x07, 0x00, 0x02, 0x00, 0x0c, 0x00, 0x00,
+    0x04, 0x02,
+    0xff, 0x04, 0x00, 0x18, 0xaa, 0xbb, 0xcc, 0x00,
+    0x05, 0x00, 0x00, 0x00]
+  match S7.decodeResponse partialReadAck with
+  | .error err => throw <| IO.userError s!"could not decode partial multi-read ACK: {repr err}"
+  | .ok response =>
+      let expected := #[
+        S7.ReadItemResult.success (bytes #[0xaa, 0xbb, 0xcc]),
+        S7.ReadItemResult.failure 0x05]
+      check (isOkEq (S7.decodeAreaReadMany 7 ranges response) expected)
+        "multi-read item failure was not preserved"
+  let writes : Array S7.WriteItem := #[
+    { range := dbRange, payload := bytes #[0xaa, 0xbb, 0xcc] },
+    { range := markerRange, payload := bytes #[0x11, 0x22] }
+  ]
+  match S7.encodeAreaWriteMany 8 writes with
+  | .error err => throw <| IO.userError s!"could not encode multi-write: {repr err}"
+  | .ok request =>
+      let expected := bytes #[
+        0x32, 0x01, 0x00, 0x00, 0x00, 0x08, 0x00, 0x1a, 0x00, 0x0e,
+        0x05, 0x02,
+        0x12, 0x0a, 0x10, 0x02, 0x00, 0x03, 0x00, 0x01, 0x84, 0x00, 0x00, 0x00,
+        0x12, 0x0a, 0x10, 0x02, 0x00, 0x02, 0x00, 0x00, 0x83, 0x00, 0x00, 0x20,
+        0x00, 0x04, 0x00, 0x18, 0xaa, 0xbb, 0xcc, 0x00,
+        0x00, 0x04, 0x00, 0x10, 0x11, 0x22]
+      check (request == expected) "unexpected multi-write request encoding"
+  let writeAck := bytes #[
+    0x32, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00, 0x02, 0x00, 0x02, 0x00, 0x00,
+    0x05, 0x02, 0xff, 0x05]
+  match S7.decodeResponse writeAck with
+  | .error err => throw <| IO.userError s!"could not decode multi-write ACK: {repr err}"
+  | .ok response =>
+      let expected := #[S7.WriteItemResult.success, S7.WriteItemResult.failure 0x05]
+      check (isOkEq (S7.decodeAreaWriteMany 8 2 response) expected)
+        "multi-write item results were incorrect"
+  let tooMany := Array.replicate 21 dbRange
+  check (match S7.encodeAreaReadMany 9 tooMany with
+    | .error (.invalidSize 21) => true | _ => false) "more than 20 read items were accepted"
+
 def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
@@ -227,4 +296,5 @@ def main : IO Unit := do
   testS7DbVectors
   testS7AreaVectors
   testValues
+  testS7MultiVectors
   IO.println "All lean-s7 tests passed."

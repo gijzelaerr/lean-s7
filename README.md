@@ -25,10 +25,11 @@ Implemented:
 - PDU-aware, chunked `Client.readArea` and `Client.writeArea`
 - DB, process-input, process-output, marker, counter, and timer accessors
 - big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
+- multi-variable reads and writes with item-count and PDU-aware batching
 - protocol-vector and malformed-input tests
 - end-to-end tests against the python-snap7 emulator
 
-Next: multi-variable operations, connection hardening, and a Lean emulator server.
+Next: connection hardening, diagnostic services, and a Lean emulator server.
 
 The current transport accepts numeric IPv4 addresses and one complete COTP data
 TPDU per S7 response. DNS, IPv6, deadlines, and segmented COTP data are not yet
@@ -85,6 +86,10 @@ Typed DB methods cover signed and unsigned 8-, 16-, 32-, and 64-bit integers,
 32-bit REAL, 64-bit LREAL, individual bits, S7 STRING, and S7 WSTRING. Bit
 writes use a read-modify-write operation to preserve neighboring bits; callers
 must serialize concurrent writes to the same byte when that distinction matters.
+
+`Client.readMulti` and `Client.writeMulti` preserve caller item order, expose
+per-item PLC failures, enforce the classic 20-item limit per telegram, and split
+larger calls according to both request and response PDU budgets.
 
 ## Design
 

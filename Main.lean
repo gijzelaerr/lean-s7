@@ -2,6 +2,12 @@ import LeanS7
 
 open LeanS7 Std.Net
 
+def multiResultsMatch : List S7.ReadItemResult → List ByteArray → Bool
+  | [], [] => true
+  | .success payload :: results, expected :: rest =>
+      payload == expected && multiResultsMatch results rest
+  | _, _ => false
+
 def runDemo : IO Unit := do
   match S7.encodeSetupCommunication 1 with
   | .error err => throw <| IO.userError s!"could not encode S7 request: {repr err}"
@@ -97,6 +103,43 @@ def runIntegration (host portString : String) : IO Unit := do
     client.dbWriteWString 1 2080 20 "PLC 🚀"
     unless (← client.dbReadWString 1 2080) == "PLC 🚀" do
       throw <| IO.userError "S7 WSTRING DB access mismatch"
+    let multiItems : Array S7.WriteItem := (Array.range 25).map fun index =>
+      let area := match index % 3 with
+        | 0 => S7.Area.dataBlocks
+        | 1 => S7.Area.markers
+        | _ => S7.Area.processOutputs
+      {
+        range := {
+          area
+          dbNumber := if area == .dataBlocks then 1 else 0
+          start := 100 + index
+          count := 1
+        }
+        payload := bytes #[UInt8.ofNat (0x60 + index)]
+      }
+    let writeResults ← client.writeMulti multiItems
+    unless writeResults.size == multiItems.size && writeResults.all (· == .success) do
+      throw <| IO.userError "multi-write results were unsuccessful or out of order"
+    let ranges := multiItems.map (·.range)
+    let readResults ← client.readMulti ranges
+    let expected := (Array.range 25).toList.map fun index => bytes #[UInt8.ofNat (0x60 + index)]
+    unless multiResultsMatch readResults.toList expected do
+      throw <| IO.userError "multi-read results were incorrect or out of order"
+    let budgetItems : Array S7.WriteItem := (Array.range 8).map fun index =>
+      {
+        range := {
+          area := .dataBlocks
+          dbNumber := 1
+          start := 2200 + index * 100
+          count := 100
+        }
+        payload := ByteArray.mk <| Array.replicate 100 (UInt8.ofNat (0x90 + index))
+      }
+    unless (← client.writeMulti budgetItems).all (· == .success) do
+      throw <| IO.userError "PDU-budgeted multi-write failed"
+    let budgetResults ← client.readMulti (budgetItems.map (·.range))
+    unless multiResultsMatch budgetResults.toList (budgetItems.toList.map (·.payload)) do
+      throw <| IO.userError "PDU-budgeted multi-read failed"
     client.disconnect
     IO.println s!"lean-s7 integration passed against {host}:{portNat} (PDU {client.pduLength})"
   catch error =>
