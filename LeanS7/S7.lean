@@ -9,8 +9,11 @@ def ackDataType : UInt8 := 0x03
 def readFunction : UInt8 := 0x04
 def writeFunction : UInt8 := 0x05
 def setupCommunicationFunction : UInt8 := 0xf0
-def dbArea : UInt8 := 0x84
 def byteWordLength : UInt8 := 0x02
+def counterWordLength : UInt8 := 0x1c
+def timerWordLength : UInt8 := 0x1d
+def byteTransportSize : UInt8 := 0x04
+def octetTransportSize : UInt8 := 0x09
 def jobHeaderSize : Nat := 10
 def responseHeaderSize : Nat := 12
 def maxSectionSize : Nat := 65535
@@ -19,6 +22,9 @@ inductive EncodeError where
   | parametersTooLarge (size maximum : Nat)
   | dataTooLarge (size maximum : Nat)
   | invalidSize (size : Nat)
+  | invalidPayloadSize (actual expected : Nat)
+  | invalidDbNumber (dbNumber : UInt16)
+  | misalignedAddress (start alignment : Nat)
   | addressTooLarge (start : Nat)
   deriving Repr, BEq
 
@@ -106,35 +112,113 @@ def decodeSetupCommunication (reference : UInt16) (response : Response) : Except
     throw (.invalidField (responseHeaderSize + 6) s!"negotiated PDU length is too small: {pduLength}")
   return { maxAmqCaller, maxAmqCallee, pduLength }
 
+inductive Area where
+  | processInputs
+  | processOutputs
+  | markers
+  | dataBlocks
+  | counters
+  | timers
+  deriving Repr, BEq
+
+def Area.code : Area → UInt8
+  | .processInputs => 0x81
+  | .processOutputs => 0x82
+  | .markers => 0x83
+  | .dataBlocks => 0x84
+  | .counters => 0x1c
+  | .timers => 0x1d
+
+def Area.wordLength : Area → UInt8
+  | .counters => counterWordLength
+  | .timers => timerWordLength
+  | _ => byteWordLength
+
+def Area.elementSize : Area → Nat
+  | .counters | .timers => 2
+  | _ => 1
+
+def Area.usesElementAddress : Area → Bool
+  | .counters | .timers => true
+  | _ => false
+
+def Area.dataTransportSize : Area → UInt8
+  | .counters | .timers => octetTransportSize
+  | _ => byteTransportSize
+
+/-- A memory-area range. `start` is a byte offset; timers and counters require
+    two-byte alignment, while `count` is the number of timer/counter elements. -/
+structure MemoryRange where
+  area : Area
+  dbNumber : UInt16
+  start : Nat
+  count : Nat
+  deriving Repr, BEq
+
+def encodeMemoryAddress (range : MemoryRange) : Except EncodeError ByteArray := do
+  if range.count == 0 || range.count > maxSectionSize then
+    throw (.invalidSize range.count)
+  if range.area != .dataBlocks && range.dbNumber != 0 then
+    throw (.invalidDbNumber range.dbNumber)
+  if range.area.usesElementAddress && range.start % range.area.elementSize != 0 then
+    throw (.misalignedAddress range.start range.area.elementSize)
+  let address := if range.area.usesElementAddress then range.start else range.start * 8
+  let lastAddress := if range.area.usesElementAddress then
+    range.start + (range.count - 1) * range.area.elementSize
+  else
+    (range.start + range.count * range.area.elementSize - 1) * 8
+  if address > 0xffffff || lastAddress > 0xffffff then
+    throw (.addressTooLarge range.start)
+  let dbNumber := if range.area == .dataBlocks then range.dbNumber else 0
+  return bytes #[0x12, 0x0a, 0x10, range.area.wordLength] ++
+    uint16BE (UInt16.ofNat range.count) ++ uint16BE dbNumber ++
+    bytes #[range.area.code] ++ uint24BE (UInt32.ofNat address)
+
+def encodeAreaRead (reference : UInt16) (range : MemoryRange) : Except EncodeError ByteArray := do
+  let address ← encodeMemoryAddress range
+  encodeJob { reference, parameters := bytes #[readFunction, 1] ++ address }
+
+def encodeAreaWrite (reference : UInt16) (range : MemoryRange)
+    (payload : ByteArray) : Except EncodeError ByteArray := do
+  let address ← encodeMemoryAddress range
+  let expectedSize := range.count * range.area.elementSize
+  if payload.size != expectedSize then
+    throw (.invalidPayloadSize payload.size expectedSize)
+  let dataLength := if range.area.dataTransportSize == octetTransportSize then
+    payload.size
+  else
+    payload.size * 8
+  if dataLength > maxSectionSize then
+    throw (.invalidSize payload.size)
+  let data := bytes #[0, range.area.dataTransportSize] ++
+    uint16BE (UInt16.ofNat dataLength) ++ payload
+  encodeJob { reference, parameters := bytes #[writeFunction, 1] ++ address, data }
+
 structure DbRange where
   dbNumber : UInt16
   start : Nat
   size : Nat
   deriving Repr, BEq
 
-def encodeDbAddress (range : DbRange) : Except EncodeError ByteArray := do
-  if range.size == 0 || range.size > maxSectionSize then
-    throw (.invalidSize range.size)
-  let bitAddress := range.start * 8
-  if bitAddress > 0xffffff then
-    throw (.addressTooLarge range.start)
-  return bytes #[0x12, 0x0a, 0x10, byteWordLength] ++
-    uint16BE (UInt16.ofNat range.size) ++ uint16BE range.dbNumber ++
-    bytes #[dbArea] ++ uint24BE (UInt32.ofNat bitAddress)
-
 def encodeDbRead (reference : UInt16) (range : DbRange) : Except EncodeError ByteArray := do
-  let address ← encodeDbAddress range
-  encodeJob { reference, parameters := bytes #[readFunction, 1] ++ address }
+  encodeAreaRead reference {
+    area := .dataBlocks
+    dbNumber := range.dbNumber
+    start := range.start
+    count := range.size
+  }
 
 def encodeDbWrite (reference : UInt16) (dbNumber : UInt16) (start : Nat)
     (payload : ByteArray) : Except EncodeError ByteArray := do
-  let address ← encodeDbAddress { dbNumber, start, size := payload.size }
-  if payload.size * 8 > maxSectionSize then
-    throw (.invalidSize payload.size)
-  let data := bytes #[0, 0x04] ++ uint16BE (UInt16.ofNat (payload.size * 8)) ++ payload
-  encodeJob { reference, parameters := bytes #[writeFunction, 1] ++ address, data }
+  encodeAreaWrite reference {
+    area := .dataBlocks
+    dbNumber
+    start
+    count := payload.size
+  } payload
 
-def decodeDbRead (reference : UInt16) (response : Response) : Except DecodeError ByteArray := do
+def decodeAreaRead (reference : UInt16) (area : Area) (expectedSize : Nat)
+    (response : Response) : Except DecodeError ByteArray := do
   validateResponse response reference readFunction
   if response.parameters.size != 2 then
     throw (.invalidField responseHeaderSize "expected one read response item")
@@ -150,14 +234,32 @@ def decodeDbRead (reference : UInt16) (response : Response) : Except DecodeError
   if returnCode != 0xff then
     throw (.invalidField (responseHeaderSize + 2) s!"read item failed with code {returnCode}")
   let (transportSize, cursor) ← cursor.readUInt8
-  if transportSize != 0x04 then
+  let compatibleByteEncoding := area.usesElementAddress && transportSize == byteTransportSize
+  if transportSize != area.dataTransportSize && !compatibleByteEncoding then
     throw (.invalidField (responseHeaderSize + 3) s!"unexpected read transport size {transportSize}")
-  let (bitLength, cursor) ← cursor.readUInt16BE
-  if bitLength.toNat % 8 != 0 then
+  let (encodedLength, cursor) ← cursor.readUInt16BE
+  let payloadSize ← if transportSize == octetTransportSize then
+    pure encodedLength.toNat
+  else if encodedLength.toNat % 8 != 0 then
     throw (.invalidField (responseHeaderSize + 4) "read response bit length is not byte aligned")
-  let (payload, cursor) ← cursor.readBytes (bitLength.toNat / 8)
+  else
+    pure (encodedLength.toNat / 8)
+  if payloadSize != expectedSize then
+    throw (.invalidField (responseHeaderSize + 4)
+      s!"expected {expectedSize} response bytes, got {payloadSize}")
+  let (payload, cursor) ← cursor.readBytes payloadSize
   cursor.finish
   return payload
+
+def decodeDbRead (reference : UInt16) (response : Response) : Except DecodeError ByteArray := do
+  validateResponse response reference readFunction
+  if response.data.size < 4 then
+    throw (.unexpectedEnd (responseHeaderSize + 2) 4 response.data.size)
+  let lengthCursor : Cursor := { data := response.data, offset := 2 }
+  let (bitLength, _) ← lengthCursor.readUInt16BE
+  if bitLength.toNat % 8 != 0 then
+    throw (.invalidField (responseHeaderSize + 4) "read response bit length is not byte aligned")
+  decodeAreaRead reference .dataBlocks (bitLength.toNat / 8) response
 
 def decodeDbWrite (reference : UInt16) (response : Response) : Except DecodeError Unit := do
   validateResponse response reference writeFunction

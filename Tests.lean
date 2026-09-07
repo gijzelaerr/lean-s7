@@ -109,6 +109,61 @@ def testS7DbVectors : IO Unit := do
       | .ok () => pure ()
       | .error err => throw <| IO.userError s!"could not validate DB write ACK: {repr err}"
 
+def testS7AreaVectors : IO Unit := do
+  let counterRange : S7.MemoryRange := {
+    area := .counters
+    dbNumber := 0
+    start := 4
+    count := 2
+  }
+  match S7.encodeAreaRead 4 counterRange with
+  | .error err => throw <| IO.userError s!"could not encode counter read: {repr err}"
+  | .ok request =>
+      let expected := bytes #[
+        0x32, 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x0e, 0x00, 0x00,
+        0x04, 0x01, 0x12, 0x0a, 0x10, 0x1c, 0x00, 0x02, 0x00, 0x00,
+        0x1c, 0x00, 0x00, 0x04]
+      check (request == expected) "unexpected counter read request encoding"
+  let timerPayload := bytes #[0x12, 0x34, 0x56, 0x78]
+  let timerRange : S7.MemoryRange := {
+    area := .timers
+    dbNumber := 0
+    start := 4
+    count := 2
+  }
+  match S7.encodeAreaWrite 5 timerRange timerPayload with
+  | .error err => throw <| IO.userError s!"could not encode timer write: {repr err}"
+  | .ok request =>
+      let expected := bytes #[
+        0x32, 0x01, 0x00, 0x00, 0x00, 0x05, 0x00, 0x0e, 0x00, 0x08,
+        0x05, 0x01, 0x12, 0x0a, 0x10, 0x1d, 0x00, 0x02, 0x00, 0x00,
+        0x1d, 0x00, 0x00, 0x04, 0x00, 0x09, 0x00, 0x04, 0x12, 0x34,
+        0x56, 0x78]
+      check (request == expected) "unexpected timer write request encoding"
+  let timerAck := bytes #[
+    0x32, 0x03, 0x00, 0x00, 0x00, 0x05, 0x00, 0x02, 0x00, 0x08, 0x00, 0x00,
+    0x04, 0x01, 0xff, 0x09, 0x00, 0x04, 0x12, 0x34, 0x56, 0x78]
+  match S7.decodeResponse timerAck with
+  | .error err => throw <| IO.userError s!"could not decode timer ACK: {repr err}"
+  | .ok response =>
+      match S7.decodeAreaRead 5 .timers 4 response with
+      | .ok payload => check (payload == timerPayload) "wrong timer read payload"
+      | .error err => throw <| IO.userError s!"could not extract timer payload: {repr err}"
+  check (match S7.encodeAreaRead 6 {
+      area := .markers, dbNumber := 1, start := 0, count := 1
+    } with | .error (.invalidDbNumber 1) => true | _ => false)
+    "non-DB area accepted a DB number"
+  check (match S7.encodeAreaWrite 6 timerRange (bytes #[0]) with
+    | .error (.invalidPayloadSize 1 4) => true | _ => false)
+    "mis-sized timer payload was accepted"
+  check (match S7.encodeAreaRead 6 { counterRange with start := 3 } with
+    | .error (.misalignedAddress 3 2) => true | _ => false)
+    "misaligned counter address was accepted"
+  check (match S7.encodeAreaRead 6 {
+      area := .dataBlocks, dbNumber := 1, start := 0x200000, count := 1
+    } with | .error (.addressTooLarge _) => true | _ => false)
+    "out-of-range byte address was accepted"
+
 def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
@@ -118,4 +173,5 @@ def main : IO Unit := do
   testS7SetupCommunication
   testS7ResponseDecoding
   testS7DbVectors
+  testS7AreaVectors
   IO.println "All lean-s7 tests passed."

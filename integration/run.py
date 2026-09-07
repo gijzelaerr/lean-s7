@@ -19,10 +19,19 @@ def free_port() -> int:
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
     port = free_port()
-    data = bytearray(256)
-    data[:4] = b"\xaa\xbb\xcc\xdd"
+    areas = {
+        (SrvArea.DB, 1): bytearray(4096),
+        (SrvArea.PE, 0): bytearray(256),
+        (SrvArea.PA, 0): bytearray(256),
+        (SrvArea.MK, 0): bytearray(256),
+        (SrvArea.CT, 0): bytearray(256),
+        (SrvArea.TM, 0): bytearray(256),
+    }
+    areas[(SrvArea.DB, 1)][:4] = b"\xaa\xbb\xcc\xdd"
+    areas[(SrvArea.PE, 0)][:4] = b"\x11\x12\x13\x14"
     server = Server()
-    server.register_area(SrvArea.DB, 1, data)
+    for (area, index), data in areas.items():
+        server.register_area(area, index, data)
     server.start_to("127.0.0.1", port)
     try:
         subprocess.run(

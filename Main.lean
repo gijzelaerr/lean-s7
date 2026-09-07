@@ -30,6 +30,30 @@ def runIntegration (host portString : String) : IO Unit := do
     let readBack ← client.dbRead 1 16 written.size
     unless readBack == written do
       throw <| IO.userError "DB write/read-back mismatch"
+    let large := ByteArray.mk <| (Array.range 1200).map fun index => UInt8.ofNat (index * 37 + 11)
+    client.dbWrite 1 512 large
+    let largeReadBack ← client.dbRead 1 512 large.size
+    unless largeReadBack == large do
+      throw <| IO.userError "chunked DB write/read-back mismatch"
+    let inputs ← client.inputsRead 0 4
+    unless inputs == bytes #[0x11, 0x12, 0x13, 0x14] do
+      throw <| IO.userError "process-input read mismatch"
+    let outputValue := bytes #[0x21, 0x22, 0x23, 0x24]
+    client.outputsWrite 0 outputValue
+    unless (← client.outputsRead 0 outputValue.size) == outputValue do
+      throw <| IO.userError "process-output write/read-back mismatch"
+    let markerValue := bytes #[0x31, 0x32, 0x33, 0x34]
+    client.markersWrite 0 markerValue
+    unless (← client.markersRead 0 markerValue.size) == markerValue do
+      throw <| IO.userError "marker write/read-back mismatch"
+    let counterValue := bytes #[0x00, 0x41, 0x00, 0x42]
+    client.countersWrite 0 counterValue
+    unless (← client.countersRead 0 2) == counterValue do
+      throw <| IO.userError "counter write/read-back mismatch"
+    let timerValue := bytes #[0x00, 0x51, 0x00, 0x52]
+    client.timersWrite 0 timerValue
+    unless (← client.timersRead 0 2) == timerValue do
+      throw <| IO.userError "timer write/read-back mismatch"
     client.disconnect
     IO.println s!"lean-s7 integration passed against {host}:{portNat} (PDU {client.pduLength})"
   catch error =>
