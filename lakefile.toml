@@ -1,0 +1,14 @@
+name = "lean-s7"
+version = "0.1.0"
+defaultTargets = ["LeanS7", "lean-s7"]
+
+[[lean_lib]]
+name = "LeanS7"
+
+[[lean_exe]]
+name = "lean-s7"
+root = "Main"
+
+[[lean_exe]]
+name = "lean-s7-tests"
+root = "Tests"
