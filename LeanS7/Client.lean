@@ -7,15 +7,28 @@ namespace LeanS7
 open Std.Net
 
 structure ClientConfig where
-  address : IPv4Addr
+  endpoint : Transport.Endpoint
   port : UInt16 := 102
   rack : Nat := 0
   slot : Nat := 2
   localTsap : UInt16 := 0x0100
+  remoteTsap : Option UInt16 := none
+  destinationReference : UInt16 := 0
+  sourceReference : UInt16 := 1
+  classOption : UInt8 := 0
+  tpduSizeExponent : UInt8 := 0x0a
+  connectTimeoutMs : Option Nat := some 5000
+  operationTimeoutMs : Option Nat := some 5000
+  reconnectRetries : Nat := 0
+  maxStaleResponses : Nat := 4
 
 structure Client where
-  private socket : Transport.Socket
+  private connection : IO.Ref (Option Transport.Connection)
+  private requestTail : IO.Ref (Task (Option Unit))
+  private closed : IO.Ref Bool
+  private config : ClientConfig
   pduLength : UInt16
+  private currentPduLength : IO.Ref UInt16
   private nextReference : IO.Ref UInt16
 
 private def orThrow [Repr ε] (result : Except ε α) : IO α :=
@@ -30,50 +43,118 @@ private def remoteTsap (rack slot : Nat) : IO UInt16 := do
     throw <| IO.userError s!"slot must be between 0 and 31, got {slot}"
   return UInt16.ofNat (0x0100 + rack * 32 + slot)
 
-private def exchange (socket : Transport.Socket) (request : ByteArray) : IO S7.Response := do
-  Transport.sendData socket request
-  orThrow <| S7.decodeResponse (← Transport.receiveData socket)
-
-def Client.connect (config : ClientConfig) : IO Client := do
-  let calledTsap ← remoteTsap config.rack config.slot
-  let socket ← Transport.connect config.address config.port {
+private def connectSession (config : ClientConfig) : IO (Transport.Connection × S7.SetupCommunication) := do
+  let calledTsap ← match config.remoteTsap with
+    | some tsap => pure tsap
+    | none => remoteTsap config.rack config.slot
+  let connection ← Transport.connect config.endpoint config.port {
+    destinationReference := config.destinationReference
+    sourceReference := config.sourceReference
+    classOption := config.classOption
     callingTsap := config.localTsap
     calledTsap
-  }
+    tpduSizeExponent := config.tpduSizeExponent
+  } config.connectTimeoutMs
   try
     let reference : UInt16 := 1
     let request ← orThrow <| S7.encodeSetupCommunication reference
-    let response ← exchange socket request
+    Transport.sendData connection.socket request config.operationTimeoutMs
+    let response ← orThrow <| S7.decodeResponse
+      (← Transport.receiveData connection.socket config.operationTimeoutMs)
     let setup ← orThrow <| S7.decodeSetupCommunication reference response
-    let nextReference ← IO.mkRef 2
-    return { socket, pduLength := setup.pduLength, nextReference }
+    return (connection, setup)
   catch error =>
-    try Transport.shutdown socket catch _ => pure ()
+    try Transport.disconnect connection config.operationTimeoutMs catch _ => pure ()
     throw error
 
+def Client.connect (config : ClientConfig) : IO Client := do
+  let (session, setup) ← connectSession config
+  let connection ← IO.mkRef (some session)
+  let requestTail ← IO.mkRef (Task.pure (some ()))
+  let closed ← IO.mkRef false
+  let currentPduLength ← IO.mkRef setup.pduLength
+  let nextReference ← IO.mkRef 2
+  return { connection, requestTail, closed, config, pduLength := setup.pduLength, currentPduLength, nextReference }
+
 private def Client.freshReference (client : Client) : IO UInt16 := do
-  let reference ← client.nextReference.get
-  client.nextReference.set (reference + 1)
-  return reference
+  client.nextReference.modifyGet fun reference => (reference, reference + 1)
+
+def Client.isConnected (client : Client) : IO Bool :=
+  return (← client.connection.get).isSome
+
+def Client.negotiatedPduLength (client : Client) : IO UInt16 :=
+  client.currentPduLength.get
+
+private def Client.closeCurrent (client : Client) : IO Unit := do
+  let previous ← client.connection.modifyGet fun connection => (connection, none)
+  if let some connection := previous then
+    try Transport.disconnect connection client.config.operationTimeoutMs catch _ => pure ()
+
+private def Client.exchangeCurrent (client : Client) (reference : UInt16)
+    (request : ByteArray) : IO S7.Response := do
+  let some connection ← client.connection.get
+    | throw <| IO.userError "S7 client is disconnected"
+  Transport.sendData connection.socket request client.config.operationTimeoutMs
+  for _ in [0:client.config.maxStaleResponses + 1] do
+    let response ← orThrow <| S7.decodeResponse
+      (← Transport.receiveData connection.socket client.config.operationTimeoutMs)
+    if response.reference == reference then
+      return response
+  throw <| IO.userError s!"too many stale S7 responses while waiting for reference {reference}"
+
+private def Client.reconnect (client : Client) : IO Unit := do
+  client.closeCurrent
+  let (connection, setup) ← connectSession client.config
+  client.connection.set (some connection)
+  client.currentPduLength.set setup.pduLength
+
+private partial def Client.exchangeWithRetries (client : Client) (reference : UInt16)
+    (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false) : IO S7.Response := do
+  try
+    if reconnectFirst then
+      client.reconnect
+    client.exchangeCurrent reference request
+  catch error =>
+    client.closeCurrent
+    if remainingRetries == 0 || (← client.closed.get) then
+      throw error
+    client.exchangeWithRetries reference request (remainingRetries - 1) true
+
+private def Client.serialized (client : Client) (operation : IO α) : IO α := do
+  let gate : IO.Promise Unit ← IO.Promise.new
+  let previous ← client.requestTail.modifyGet fun previous => (previous, gate.result?)
+  let task ← IO.bindTask previous fun _ =>
+    IO.asTask do
+      try operation
+      finally gate.resolve ()
+  match ← IO.wait task with
+  | .ok value => return value
+  | .error error => throw error
+
+private def Client.exchange (client : Client) (reference : UInt16)
+    (request : ByteArray) : IO S7.Response :=
+  client.serialized <| client.exchangeWithRetries reference request client.config.reconnectRetries
 
 private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) : IO ByteArray := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeAreaRead reference range
-  if request.size > client.pduLength.toNat then
-    throw <| IO.userError s!"request exceeds negotiated PDU length {client.pduLength}"
+  let pduLength ← client.negotiatedPduLength
+  if request.size > pduLength.toNat then
+    throw <| IO.userError s!"request exceeds negotiated PDU length {pduLength}"
   let expectedSize := range.count * range.area.elementSize
-  if expectedSize + 18 > client.pduLength.toNat then
-    throw <| IO.userError s!"response would exceed negotiated PDU length {client.pduLength}"
-  let response ← exchange client.socket request
+  if expectedSize + 18 > pduLength.toNat then
+    throw <| IO.userError s!"response would exceed negotiated PDU length {pduLength}"
+  let response ← client.exchange reference request
   orThrow <| S7.decodeAreaRead reference range.area expectedSize response
 
 private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
     (payload : ByteArray) : IO Unit := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeAreaWrite reference range payload
-  if request.size > client.pduLength.toNat then
-    throw <| IO.userError s!"request exceeds negotiated PDU length {client.pduLength}"
-  let response ← exchange client.socket request
+  let pduLength ← client.negotiatedPduLength
+  if request.size > pduLength.toNat then
+    throw <| IO.userError s!"request exceeds negotiated PDU length {pduLength}"
+  let response ← client.exchange reference request
   orThrow <| S7.decodeDbWrite reference response
 
 private partial def Client.readAreaLoop (client : Client) (area : S7.Area)
@@ -89,10 +170,11 @@ def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start count : Nat) : IO ByteArray := do
   if count == 0 then
     return ByteArray.empty
-  let availableBytes := client.pduLength.toNat - 18
+  let pduLength ← client.negotiatedPduLength
+  let availableBytes := pduLength.toNat - 18
   let maxCount := min S7.maxSectionSize (availableBytes / area.elementSize)
   if maxCount == 0 then
-    throw <| IO.userError s!"negotiated PDU length {client.pduLength} cannot hold a read item"
+    throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a read item"
   client.readAreaLoop area dbNumber start count maxCount ByteArray.empty
 
 private partial def Client.writeAreaLoop (client : Client) (area : S7.Area)
@@ -112,7 +194,8 @@ def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     return
   if payload.size % area.elementSize != 0 then
     throw <| IO.userError s!"payload size {payload.size} is not aligned to {area.elementSize}-byte elements"
-  let availableBytes := client.pduLength.toNat - 28
+  let pduLength ← client.negotiatedPduLength
+  let availableBytes := pduLength.toNat - 28
   let lengthLimitedBytes := if area.dataTransportSize == S7.octetTransportSize then
     S7.maxSectionSize
   else
@@ -120,7 +203,7 @@ def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
   let maxCount := min S7.maxSectionSize
     (min availableBytes lengthLimitedBytes / area.elementSize)
   if maxCount == 0 then
-    throw <| IO.userError s!"negotiated PDU length {client.pduLength} cannot hold a write item"
+    throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a write item"
   client.writeAreaLoop area dbNumber start (payload.size / area.elementSize) maxCount 0 payload
 
 def Client.dbRead (client : Client) (dbNumber : UInt16) (start size : Nat) : IO ByteArray :=
@@ -178,9 +261,10 @@ private def takeReadBatch (pduLength : Nat) : List S7.MemoryRange →
 private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeAreaReadMany reference ranges
-  if request.size > client.pduLength.toNat then
-    throw <| IO.userError s!"multi-read request exceeds negotiated PDU length {client.pduLength}"
-  let response ← exchange client.socket request
+  let pduLength ← client.negotiatedPduLength
+  if request.size > pduLength.toNat then
+    throw <| IO.userError s!"multi-read request exceeds negotiated PDU length {pduLength}"
+  let response ← client.exchange reference request
   orThrow <| S7.decodeAreaReadMany reference ranges response
 
 private partial def Client.readMultiLoop (client : Client) (pending : List S7.MemoryRange)
@@ -188,7 +272,8 @@ private partial def Client.readMultiLoop (client : Client) (pending : List S7.Me
   match pending with
   | [] => return results
   | range :: rest =>
-      let (batch, remaining) := takeReadBatch client.pduLength.toNat pending 0 12 14 []
+      let pduLength ← client.negotiatedPduLength
+      let (batch, remaining) := takeReadBatch pduLength.toNat pending 0 12 14 []
       if batch.isEmpty then
         let payload ← client.readArea range.area range.dbNumber range.start range.count
         client.readMultiLoop rest (results.push (.success payload))
@@ -218,9 +303,10 @@ private def takeWriteBatch (pduLength : Nat) : List S7.WriteItem →
 private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeAreaWriteMany reference items
-  if request.size > client.pduLength.toNat then
-    throw <| IO.userError s!"multi-write request exceeds negotiated PDU length {client.pduLength}"
-  let response ← exchange client.socket request
+  let pduLength ← client.negotiatedPduLength
+  if request.size > pduLength.toNat then
+    throw <| IO.userError s!"multi-write request exceeds negotiated PDU length {pduLength}"
+  let response ← client.exchange reference request
   orThrow <| S7.decodeAreaWriteMany reference items.size response
 
 private partial def Client.writeMultiLoop (client : Client) (pending : List S7.WriteItem)
@@ -231,7 +317,8 @@ private partial def Client.writeMultiLoop (client : Client) (pending : List S7.W
       let expectedSize := item.range.count * item.range.area.elementSize
       if item.payload.size != expectedSize then
         throw <| IO.userError s!"multi-write payload size {item.payload.size} does not match expected {expectedSize}"
-      let (batch, remaining) := takeWriteBatch client.pduLength.toNat pending 0 12 14 []
+      let pduLength ← client.negotiatedPduLength
+      let (batch, remaining) := takeWriteBatch pduLength.toNat pending 0 12 14 []
       if batch.isEmpty then
         client.writeArea item.range.area item.range.dbNumber item.range.start item.payload
         client.writeMultiLoop rest (results.push .success)
@@ -334,6 +421,8 @@ def Client.dbWriteWString (client : Client) (dbNumber : UInt16) (start maximum :
   client.dbWrite dbNumber start (← orThrow <| Value.encodeWString maximum value)
 
 def Client.disconnect (client : Client) : IO Unit :=
-  Transport.shutdown client.socket
+  client.serialized do
+    client.closed.set true
+    client.closeCurrent
 
 end LeanS7

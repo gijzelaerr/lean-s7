@@ -5,6 +5,8 @@ from __future__ import annotations
 import socket
 import struct
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 from snap7.s7protocol import S7Function, S7PDUType, S7WordLen
@@ -14,6 +16,8 @@ from snap7.type import SrvArea
 
 class MultiItemServer(Server):
     """Add multi-item handling missing from the python-snap7 3.0 emulator."""
+
+    stale_once = False
 
     def _parse_request(self, pdu: bytes) -> dict:
         request = super()._parse_request(pdu)
@@ -65,7 +69,13 @@ class MultiItemServer(Server):
     ) -> bytes:
         count = request["raw_parameters"][1]
         if count == 1:
-            return super()._handle_read_area(request, client_address)
+            response = super()._handle_read_area(request, client_address)
+            if self.stale_once:
+                self.stale_once = False
+                stale = bytearray(response)
+                stale[4:6] = struct.pack(">H", (request["sequence"] + 1) & 0xFFFF)
+                return bytes(stale)
+            return response
         data = bytearray()
         specs = self._multi_specs(request)
         for index, spec in enumerate(specs):
@@ -122,6 +132,12 @@ def free_port() -> int:
         return int(probe.getsockname()[1])
 
 
+def hold_connection(listener: socket.socket) -> None:
+    connection, _ = listener.accept()
+    with connection:
+        time.sleep(1)
+
+
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
     port = free_port()
@@ -145,6 +161,54 @@ def main() -> None:
                 str(root / ".lake/build/bin/lean-s7"),
                 "integration",
                 "127.0.0.1",
+                str(port),
+            ],
+            cwd=root,
+            check=True,
+        )
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            stalled_port = int(listener.getsockname()[1])
+            thread = threading.Thread(target=hold_connection, args=(listener,))
+            thread.start()
+            subprocess.run(
+                [
+                    str(root / ".lake/build/bin/lean-s7"),
+                    "expect-connect-failure",
+                    "localhost",
+                    str(stalled_port),
+                ],
+                cwd=root,
+                check=True,
+            )
+            thread.join(timeout=2)
+        try:
+            with socket.socket(socket.AF_INET6) as listener:
+                listener.bind(("::1", 0))
+                listener.listen(1)
+                stalled_port = int(listener.getsockname()[1])
+                thread = threading.Thread(target=hold_connection, args=(listener,))
+                thread.start()
+                subprocess.run(
+                    [
+                        str(root / ".lake/build/bin/lean-s7"),
+                        "expect-connect-failure",
+                        "::1",
+                        str(stalled_port),
+                    ],
+                    cwd=root,
+                    check=True,
+                )
+                thread.join(timeout=2)
+        except OSError:
+            pass
+        server.stale_once = True
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-reconnect",
+                "localhost",
                 str(port),
             ],
             cwd=root,

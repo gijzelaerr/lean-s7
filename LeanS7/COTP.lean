@@ -4,6 +4,7 @@ namespace LeanS7.COTP
 
 def connectionRequestCode : UInt8 := 0xe0
 def connectionConfirmCode : UInt8 := 0xd0
+def disconnectRequestCode : UInt8 := 0x80
 def dataCode : UInt8 := 0xf0
 def pduSizeParameter : UInt8 := 0xc0
 def callingTsapParameter : UInt8 := 0xc1
@@ -36,6 +37,16 @@ structure ConnectionConfirm where
   classOption : UInt8
   parameters : ByteArray
   deriving BEq
+
+structure DisconnectRequest where
+  destinationReference : UInt16
+  sourceReference : UInt16 := 1
+  reason : UInt8 := 0
+  deriving Repr, BEq
+
+def encodeDisconnectRequest (request : DisconnectRequest) : ByteArray :=
+  bytes #[6, disconnectRequestCode] ++ uint16BE request.destinationReference ++
+    uint16BE request.sourceReference ++ bytes #[request.reason]
 
 /-- Decode a COTP connection confirmation while retaining negotiation parameters. -/
 def decodeConnectionConfirm (data : ByteArray) : Except DecodeError ConnectionConfirm := do

@@ -41,6 +41,13 @@ def testCOTPConnectionRequest : IO Unit := do
     0xc2, 0x02, 0x01, 0x02,
     0xc0, 0x01, 0x0a]
   check (encoded == expected) "unexpected COTP connection request encoding"
+  let disconnect := COTP.encodeDisconnectRequest {
+    destinationReference := 0x1234
+    sourceReference := 0x5678
+    reason := 0
+  }
+  check (disconnect == bytes #[0x06, 0x80, 0x12, 0x34, 0x56, 0x78, 0x00])
+    "unexpected COTP disconnect request encoding"
 
 def testCOTPDataRoundTrip : IO Unit := do
   let pdu : COTP.Data := { payload := bytes #[0x32, 0x01, 0x00] }

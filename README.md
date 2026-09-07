@@ -26,14 +26,15 @@ Implemented:
 - DB, process-input, process-output, marker, counter, and timer accessors
 - big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
 - multi-variable reads and writes with item-count and PDU-aware batching
+- IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
+- serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
 - protocol-vector and malformed-input tests
 - end-to-end tests against the python-snap7 emulator
 
-Next: connection hardening, diagnostic services, and a Lean emulator server.
+Next: diagnostic, clock, control, and block services, followed by a Lean emulator server.
 
-The current transport accepts numeric IPv4 addresses and one complete COTP data
-TPDU per S7 response. DNS, IPv6, deadlines, and segmented COTP data are not yet
-implemented.
+The current transport accepts IPv4, IPv6, and DNS hostnames. It supports one
+complete COTP data TPDU per S7 response; segmented COTP data is not yet implemented.
 
 ## Build and test
 
@@ -64,7 +65,14 @@ open LeanS7 Std.Net
 def readBytes : IO ByteArray := do
   let some address := IPv4Addr.ofString "192.168.1.10"
     | throw <| IO.userError "invalid PLC address"
-  let client ← Client.connect { address, rack := 0, slot := 2 }
+  let client ← Client.connect {
+    endpoint := .ipv4 address
+    rack := 0
+    slot := 2
+    connectTimeoutMs := some 5000
+    operationTimeoutMs := some 5000
+    reconnectRetries := 2
+  }
   try
     let value ← client.dbRead 1 0 4
     let markers ← client.markersRead 0 16
@@ -90,6 +98,12 @@ must serialize concurrent writes to the same byte when that distinction matters.
 `Client.readMulti` and `Client.writeMulti` preserve caller item order, expose
 per-item PLC failures, enforce the classic 20-item limit per telegram, and split
 larger calls according to both request and response PDU budgets.
+
+Requests on a client are serialized without occupying worker threads while they
+wait. `Client.isConnected` reports lifecycle state, and `Client.disconnect`
+sends a COTP disconnect request before shutting down the socket. TSAPs, COTP
+references/class/TPDU size, deadlines, stale-response allowance, and bounded
+reconnect attempts are configurable through `ClientConfig`.
 
 ## Design
 
