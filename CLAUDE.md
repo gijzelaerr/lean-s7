@@ -15,6 +15,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/TPKT.lean`: RFC 1006 framing and framing properties.
 - `LeanS7/COTP.lean`: ISO 8073 connection and data TPDUs.
 - `LeanS7/S7.lean`: classic S7 PDU codecs and validation.
+- `LeanS7/Value.lean`: typed DB values, bits, STRING, and WSTRING codecs.
 - `LeanS7/Transport.lean`: TCP, TPKT, and COTP IO.
 - `LeanS7/Client.lean`: client lifecycle and public operations.
 - `Tests.lean`: deterministic unit and golden-packet tests.

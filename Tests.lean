@@ -5,6 +5,11 @@ open LeanS7
 def check (condition : Bool) (message : String) : IO Unit :=
   unless condition do throw <| IO.userError message
 
+def isOkEq [BEq α] (result : Except ε α) (expected : α) : Bool :=
+  match result with
+  | .ok value => value == expected
+  | .error _ => false
+
 def testBinary : IO Unit := do
   let cursor : Cursor := { data := bytes #[0x12, 0x34, 0x56] }
   match cursor.readUInt16BE with
@@ -164,6 +169,53 @@ def testS7AreaVectors : IO Unit := do
     } with | .error (.addressTooLarge _) => true | _ => false)
     "out-of-range byte address was accepted"
 
+def testValues : IO Unit := do
+  let numeric := bytes #[
+    0x80, 0x12, 0x34, 0x89, 0xab, 0xcd, 0xef,
+    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]
+  check (isOkEq (Value.getUInt8 numeric 0) 0x80) "UInt8 decoding failed"
+  check (isOkEq (Value.getInt8 numeric 0) (UInt8.toInt8 0x80)) "Int8 decoding failed"
+  check (isOkEq (Value.getUInt16 numeric 1) 0x1234) "UInt16 decoding failed"
+  check (isOkEq (Value.getInt16 (Value.putInt16 (UInt16.toInt16 0x8123))) (UInt16.toInt16 0x8123))
+    "Int16 round trip failed"
+  check (isOkEq (Value.getUInt32 numeric 3) 0x89abcdef) "UInt32 decoding failed"
+  check (isOkEq (Value.getInt32 (Value.putInt32 (UInt32.toInt32 0x89abcdef)))
+    (UInt32.toInt32 0x89abcdef)) "Int32 round trip failed"
+  check (isOkEq (Value.getUInt64 numeric 7) 0x0123456789abcdef) "UInt64 decoding failed"
+  check (isOkEq (Value.getInt64 (Value.putInt64 (UInt64.toInt64 0x8123456789abcdef)))
+    (UInt64.toInt64 0x8123456789abcdef)) "Int64 round trip failed"
+  let real := Float32.ofBits 0x41480000
+  match Value.getReal (Value.putReal real) with
+  | .ok decoded => check (decoded.toBits == real.toBits) "REAL round trip failed"
+  | .error err => throw <| IO.userError s!"REAL decoding failed: {repr err}"
+  let lreal := Float.ofBits 0x400921fb54442d18
+  match Value.getLReal (Value.putLReal lreal) with
+  | .ok decoded => check (decoded.toBits == lreal.toBits) "LREAL round trip failed"
+  | .error err => throw <| IO.userError s!"LREAL decoding failed: {repr err}"
+  check (isOkEq (Value.setBit 0xa0 0 true) 0xa1) "setting a bit changed neighboring bits"
+  check (isOkEq (Value.setBit 0xa1 5 false) 0x81) "clearing a bit changed neighboring bits"
+  check (isOkEq (Value.getBit (bytes #[0x81]) 0 7) true) "bit decoding failed"
+  check (match Value.getBit (bytes #[0]) 0 8 with
+    | .error (.invalidBitIndex 8) => true | _ => false) "invalid bit index was accepted"
+  match Value.encodeString 8 "S7 café" with
+  | .error err => throw <| IO.userError s!"STRING encoding failed: {repr err}"
+  | .ok encoded =>
+      check (encoded.size == 10) "STRING field has the wrong size"
+      check (isOkEq (Value.decodeString encoded) "S7 café") "STRING round trip failed"
+  check (match Value.encodeString 4 "hello" with
+    | .error (.valueTooLong 5 4) => true | _ => false) "oversized STRING was accepted"
+  check (match Value.decodeString (bytes #[4, 5, 0, 0, 0, 0]) with
+    | .error (.invalidStringHeader 5 4) => true | _ => false) "invalid STRING length was accepted"
+  check (match Value.encodeString 4 "λ" with
+    | .error (.invalidCharacter _) => true | _ => false) "non-Latin-1 STRING character was accepted"
+  match Value.encodeWString 8 "PLC 🚀" with
+  | .error err => throw <| IO.userError s!"WSTRING encoding failed: {repr err}"
+  | .ok encoded =>
+      check (encoded.size == 20) "WSTRING field has the wrong size"
+      check (isOkEq (Value.decodeWString encoded) "PLC 🚀") "WSTRING round trip failed"
+  check (match Value.decodeWString (bytes #[0, 1, 0, 1, 0xd8, 0x00]) with
+    | .error (.invalidUtf16 0 _) => true | _ => false) "invalid UTF-16 was accepted"
+
 def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
@@ -174,4 +226,5 @@ def main : IO Unit := do
   testS7ResponseDecoding
   testS7DbVectors
   testS7AreaVectors
+  testValues
   IO.println "All lean-s7 tests passed."

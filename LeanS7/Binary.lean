@@ -35,6 +35,16 @@ def readUInt24BE (cursor : Cursor) : Except DecodeError (UInt32 × Cursor) := do
   let (c, cursor) ← cursor.readUInt8
   return (UInt32.ofNat (a.toNat * 65536 + b.toNat * 256 + c.toNat), cursor)
 
+def readUInt32BE (cursor : Cursor) : Except DecodeError (UInt32 × Cursor) := do
+  let (high, cursor) ← cursor.readUInt16BE
+  let (low, cursor) ← cursor.readUInt16BE
+  return (UInt32.ofNat (high.toNat * 65536 + low.toNat), cursor)
+
+def readUInt64BE (cursor : Cursor) : Except DecodeError (UInt64 × Cursor) := do
+  let (high, cursor) ← cursor.readUInt32BE
+  let (low, cursor) ← cursor.readUInt32BE
+  return (UInt64.ofNat (high.toNat * 4294967296 + low.toNat), cursor)
+
 def readBytes (cursor : Cursor) (count : Nat) : Except DecodeError (ByteArray × Cursor) :=
   if count ≤ cursor.remaining then
     let next := cursor.offset + count
@@ -57,6 +67,20 @@ def uint16BE (value : UInt16) : ByteArray :=
 def uint24BE (value : UInt32) : ByteArray :=
   let n := value.toNat
   ByteArray.mk #[UInt8.ofNat (n / 65536), UInt8.ofNat (n / 256), UInt8.ofNat n]
+
+def uint32BE (value : UInt32) : ByteArray :=
+  let n := value.toNat
+  ByteArray.mk #[
+    UInt8.ofNat (n / 16777216), UInt8.ofNat (n / 65536),
+    UInt8.ofNat (n / 256), UInt8.ofNat n]
+
+def uint64BE (value : UInt64) : ByteArray :=
+  let n := value.toNat
+  ByteArray.mk #[
+    UInt8.ofNat (n / 72057594037927936), UInt8.ofNat (n / 281474976710656),
+    UInt8.ofNat (n / 1099511627776), UInt8.ofNat (n / 4294967296),
+    UInt8.ofNat (n / 16777216), UInt8.ofNat (n / 65536),
+    UInt8.ofNat (n / 256), UInt8.ofNat n]
 
 def bytes (values : Array UInt8) : ByteArray :=
   ByteArray.mk values

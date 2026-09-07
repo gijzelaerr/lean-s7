@@ -54,6 +54,49 @@ def runIntegration (host portString : String) : IO Unit := do
     client.timersWrite 0 timerValue
     unless (← client.timersRead 0 2) == timerValue do
       throw <| IO.userError "timer write/read-back mismatch"
+    client.dbWriteUInt8 1 2000 0xa5
+    unless (← client.dbReadUInt8 1 2000) == 0xa5 do
+      throw <| IO.userError "typed UInt8 DB access mismatch"
+    client.dbWriteUInt16 1 2002 0x1234
+    unless (← client.dbReadUInt16 1 2002) == 0x1234 do
+      throw <| IO.userError "typed UInt16 DB access mismatch"
+    client.dbWriteUInt32 1 2004 0x89abcdef
+    unless (← client.dbReadUInt32 1 2004) == 0x89abcdef do
+      throw <| IO.userError "typed UInt32 DB access mismatch"
+    client.dbWriteUInt64 1 2008 0x0123456789abcdef
+    unless (← client.dbReadUInt64 1 2008) == 0x0123456789abcdef do
+      throw <| IO.userError "typed UInt64 DB access mismatch"
+    let int8 := UInt8.toInt8 0x81
+    let int16 := UInt16.toInt16 0x8123
+    let int32 := UInt32.toInt32 0x81234567
+    let int64 := UInt64.toInt64 0x8123456789abcdef
+    client.dbWriteInt8 1 2016 int8
+    client.dbWriteInt16 1 2018 int16
+    client.dbWriteInt32 1 2020 int32
+    client.dbWriteInt64 1 2024 int64
+    unless (← client.dbReadInt8 1 2016) == int8 &&
+        (← client.dbReadInt16 1 2018) == int16 &&
+        (← client.dbReadInt32 1 2020) == int32 &&
+        (← client.dbReadInt64 1 2024) == int64 do
+      throw <| IO.userError "typed signed DB access mismatch"
+    let real := Float32.ofBits 0x41480000
+    client.dbWriteReal 1 2032 real
+    unless (← client.dbReadReal 1 2032).toBits == real.toBits do
+      throw <| IO.userError "typed REAL DB access mismatch"
+    let lreal := Float.ofBits 0x400921fb54442d18
+    client.dbWriteLReal 1 2036 lreal
+    unless (← client.dbReadLReal 1 2036).toBits == lreal.toBits do
+      throw <| IO.userError "typed LREAL DB access mismatch"
+    client.dbWriteUInt8 1 2044 0xa0
+    client.dbWriteBit 1 2044 0 true
+    unless (← client.dbReadUInt8 1 2044) == 0xa1 && (← client.dbReadBit 1 2044 7) do
+      throw <| IO.userError "bit write did not preserve neighboring DB bits"
+    client.dbWriteString 1 2050 20 "lean-s7 café"
+    unless (← client.dbReadString 1 2050) == "lean-s7 café" do
+      throw <| IO.userError "S7 STRING DB access mismatch"
+    client.dbWriteWString 1 2080 20 "PLC 🚀"
+    unless (← client.dbReadWString 1 2080) == "PLC 🚀" do
+      throw <| IO.userError "S7 WSTRING DB access mismatch"
     client.disconnect
     IO.println s!"lean-s7 integration passed against {host}:{portNat} (PDU {client.pduLength})"
   catch error =>

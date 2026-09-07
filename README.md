@@ -24,10 +24,11 @@ Implemented:
 - classic S7 client connection and PDU-length negotiation
 - PDU-aware, chunked `Client.readArea` and `Client.writeArea`
 - DB, process-input, process-output, marker, counter, and timer accessors
+- big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
 - protocol-vector and malformed-input tests
 - end-to-end tests against the python-snap7 emulator
 
-Next: typed value codecs, multi-variable operations, timeouts, and a Lean emulator server.
+Next: multi-variable operations, connection hardening, and a Lean emulator server.
 
 The current transport accepts numeric IPv4 addresses and one complete COTP data
 TPDU per S7 response. DNS, IPv6, deadlines, and segmented COTP data are not yet
@@ -66,6 +67,8 @@ def readBytes : IO ByteArray := do
   try
     let value ← client.dbRead 1 0 4
     let markers ← client.markersRead 0 16
+    let temperature ← client.dbReadReal 1 32
+    let label ← client.dbReadString 1 64
     client.disconnect
     return value
   catch error =>
@@ -77,6 +80,11 @@ Large transfers are split automatically according to the negotiated PDU size.
 For DB, input, output, and marker operations, `start` and `size` are byte based.
 For timer and counter operations, `start` is a two-byte-aligned byte offset and
 `count` is the number of two-byte elements.
+
+Typed DB methods cover signed and unsigned 8-, 16-, 32-, and 64-bit integers,
+32-bit REAL, 64-bit LREAL, individual bits, S7 STRING, and S7 WSTRING. Bit
+writes use a read-modify-write operation to preserve neighboring bits; callers
+must serialize concurrent writes to the same byte when that distinction matters.
 
 ## Design
 

@@ -1,5 +1,6 @@
 import LeanS7.Transport
 import LeanS7.S7
+import LeanS7.Value
 
 namespace LeanS7
 
@@ -157,6 +158,97 @@ def Client.timersRead (client : Client) (start count : Nat) : IO ByteArray :=
 
 def Client.timersWrite (client : Client) (start : Nat) (payload : ByteArray) : IO Unit :=
   client.writeArea .timers 0 start payload
+
+def Client.dbReadUInt8 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt8 := do
+  orThrow <| Value.getUInt8 (← client.dbRead dbNumber start 1)
+
+def Client.dbReadUInt16 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt16 := do
+  orThrow <| Value.getUInt16 (← client.dbRead dbNumber start 2)
+
+def Client.dbReadUInt32 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt32 := do
+  orThrow <| Value.getUInt32 (← client.dbRead dbNumber start 4)
+
+def Client.dbReadUInt64 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt64 := do
+  orThrow <| Value.getUInt64 (← client.dbRead dbNumber start 8)
+
+def Client.dbReadInt8 (client : Client) (dbNumber : UInt16) (start : Nat) : IO Int8 := do
+  orThrow <| Value.getInt8 (← client.dbRead dbNumber start 1)
+
+def Client.dbReadInt16 (client : Client) (dbNumber : UInt16) (start : Nat) : IO Int16 := do
+  orThrow <| Value.getInt16 (← client.dbRead dbNumber start 2)
+
+def Client.dbReadInt32 (client : Client) (dbNumber : UInt16) (start : Nat) : IO Int32 := do
+  orThrow <| Value.getInt32 (← client.dbRead dbNumber start 4)
+
+def Client.dbReadInt64 (client : Client) (dbNumber : UInt16) (start : Nat) : IO Int64 := do
+  orThrow <| Value.getInt64 (← client.dbRead dbNumber start 8)
+
+def Client.dbReadReal (client : Client) (dbNumber : UInt16) (start : Nat) : IO Float32 := do
+  orThrow <| Value.getReal (← client.dbRead dbNumber start 4)
+
+def Client.dbReadLReal (client : Client) (dbNumber : UInt16) (start : Nat) : IO Float := do
+  orThrow <| Value.getLReal (← client.dbRead dbNumber start 8)
+
+def Client.dbReadBit (client : Client) (dbNumber : UInt16) (byteOffset bitIndex : Nat) : IO Bool := do
+  orThrow <| Value.getBit (← client.dbRead dbNumber byteOffset 1) 0 bitIndex
+
+def Client.dbWriteUInt8 (client : Client) (dbNumber : UInt16) (start : Nat) (value : UInt8) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putUInt8 value)
+
+def Client.dbWriteUInt16 (client : Client) (dbNumber : UInt16) (start : Nat) (value : UInt16) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putUInt16 value)
+
+def Client.dbWriteUInt32 (client : Client) (dbNumber : UInt16) (start : Nat) (value : UInt32) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putUInt32 value)
+
+def Client.dbWriteUInt64 (client : Client) (dbNumber : UInt16) (start : Nat) (value : UInt64) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putUInt64 value)
+
+def Client.dbWriteInt8 (client : Client) (dbNumber : UInt16) (start : Nat) (value : Int8) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putInt8 value)
+
+def Client.dbWriteInt16 (client : Client) (dbNumber : UInt16) (start : Nat) (value : Int16) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putInt16 value)
+
+def Client.dbWriteInt32 (client : Client) (dbNumber : UInt16) (start : Nat) (value : Int32) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putInt32 value)
+
+def Client.dbWriteInt64 (client : Client) (dbNumber : UInt16) (start : Nat) (value : Int64) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putInt64 value)
+
+def Client.dbWriteReal (client : Client) (dbNumber : UInt16) (start : Nat) (value : Float32) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putReal value)
+
+def Client.dbWriteLReal (client : Client) (dbNumber : UInt16) (start : Nat) (value : Float) : IO Unit :=
+  client.dbWrite dbNumber start (Value.putLReal value)
+
+def Client.dbWriteBit (client : Client) (dbNumber : UInt16) (byteOffset bitIndex : Nat)
+    (enabled : Bool) : IO Unit := do
+  let current ← client.dbReadUInt8 dbNumber byteOffset
+  let updated ← orThrow <| Value.setBit current bitIndex enabled
+  client.dbWriteUInt8 dbNumber byteOffset updated
+
+def Client.dbReadString (client : Client) (dbNumber : UInt16) (start : Nat) : IO String := do
+  let header ← client.dbRead dbNumber start 2
+  let maximum ← orThrow <| Value.getUInt8 header
+  if maximum.toNat > Value.maxStringLength then
+    throw <| IO.userError s!"invalid S7 STRING maximum length {maximum}"
+  orThrow <| Value.decodeString (← client.dbRead dbNumber start (maximum.toNat + 2))
+
+def Client.dbWriteString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
+    (value : String) : IO Unit := do
+  client.dbWrite dbNumber start (← orThrow <| Value.encodeString maximum value)
+
+def Client.dbReadWString (client : Client) (dbNumber : UInt16) (start : Nat) : IO String := do
+  let header ← client.dbRead dbNumber start 4
+  let maximum ← orThrow <| Value.getUInt16 header
+  if maximum.toNat > Value.maxWStringLength then
+    throw <| IO.userError s!"invalid S7 WSTRING maximum length {maximum}"
+  orThrow <| Value.decodeWString (← client.dbRead dbNumber start (maximum.toNat * 2 + 4))
+
+def Client.dbWriteWString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
+    (value : String) : IO Unit := do
+  client.dbWrite dbNumber start (← orThrow <| Value.encodeWString maximum value)
 
 def Client.disconnect (client : Client) : IO Unit :=
   Transport.shutdown client.socket
