@@ -1,11 +1,33 @@
 # lean-s7
 
-An independent Lean 4 implementation of Siemens S7 communication protocols.
+An exploratory Lean 4 implementation of Siemens S7 communication protocols.
 
 The initial foundation implements safe binary decoding, RFC 1006 TPKT framing,
 and the COTP connection and data TPDUs used by classic S7 over ISO-on-TCP. The
-long-term goal is an executable protocol implementation whose important framing
-and state-machine properties are checked by Lean.
+project is a way to build practical experience with Lean and formal proofs while
+investigating how an executable specification and machine-checked protocol
+properties can improve python-snap7 and other S7 implementations.
+
+## Purpose
+
+The primary goal is exploration and shared assurance, not merely another S7
+client. The executable Lean client lets us compare an independent implementation
+with python-snap7, protocol documentation, packet captures, other clients, and
+eventually real controllers. Differences expose ambiguous assumptions and useful
+conformance cases.
+
+Today, python-snap7 provides a compatibility reference and an emulator for
+end-to-end tests. That is differential testing, not a formal proof that either
+implementation is correct. As the Lean model matures, it should also generate a
+versioned, language-neutral corpus of valid packets, malformed packets, decoded
+values, and expected errors that python-snap7 and other implementations can run
+in their own test suites.
+
+Formal work will focus on high-value protocol boundaries: safe and total packet
+decoding, encode/decode round trips, exact length fields, negotiated PDU limits,
+gap-free chunking, order-preserving multi-item batching, response correlation,
+and legal connection-state transitions. Formal claims apply only to properties
+that have actually been stated and proved in Lean.
 
 ## Status
 
@@ -42,7 +64,9 @@ Implemented:
 - protocol-vector and malformed-input tests
 - end-to-end tests against the python-snap7 emulator
 
-Next: a native Lean emulator server and real-controller conformance testing.
+Next: prove core codec and chunking properties, define a shared conformance-vector
+format, and add real-controller evidence. A native Lean emulator remains useful
+where it supports those goals, but is not the primary outcome.
 
 This is a classic S7comm client. S7comm Plus, including optimized symbolic
 access on newer controllers, is a different protocol and is not implemented.
@@ -157,8 +181,13 @@ instead of indexing packet buffers unsafely. Protocol properties will be added
 next to the executable definitions they describe.
 
 The existing [python-snap7](https://github.com/gijzelaerr/python-snap7) test
-suite and packet behavior serve as a compatibility oracle; this project does
-not share its API and does not require Python at runtime.
+suite and packet behavior currently serve as compatibility evidence, but not as
+the protocol specification. The model must also be grounded in protocol
+documentation, independent implementations, packet captures, and real PLC
+behavior. Testing Python against a proved Lean model can provide much stronger
+assurance, but does not by itself constitute a formal proof of the Python code.
+This project does not share the python-snap7 API and does not require Python at
+runtime.
 
 ## License
 

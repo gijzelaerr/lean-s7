@@ -2,10 +2,13 @@
 
 ## Project
 
-lean-s7 is an independent Lean 4 implementation of Siemens classic S7
-communication over ISO-on-TCP. It is intended to become a production-usable
-client with machine-checked protocol properties. It does not preserve the
-python-snap7 API and does not require Python at runtime.
+lean-s7 is an independent, exploratory Lean 4 implementation of Siemens classic
+S7 communication over ISO-on-TCP. Its primary goals are to build practical
+experience with Lean and formal proofs, and to determine how an executable
+specification and machine-checked protocol properties can improve python-snap7
+and other S7 implementations. A usable client is an important validation vehicle,
+not the sole outcome. It does not preserve the python-snap7 API and does not
+require Python at runtime.
 
 The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 
@@ -54,6 +57,25 @@ Use several independent layers of evidence:
 5. Explicit real-PLC validation before claiming production compatibility.
 
 Do not treat python-snap7 behavior alone as the protocol specification.
+
+The long-term shared artifact should be a versioned, language-neutral
+conformance corpus generated from the Lean model. It should describe structured
+inputs, expected wire bytes, decoded values, and expected failures so that
+python-snap7 and independent S7 implementations can consume the same cases.
+
+Prioritize proofs at pure protocol boundaries:
+
+- bounded and total decoding of untrusted packets
+- encode/decode round trips and exact encoded lengths
+- adherence to negotiated PDU limits
+- complete, non-overlapping chunk coverage
+- order-preserving multi-item batching within count and size limits
+- request/response correlation and legal connection-state transitions
+
+Writing implementation code in Lean is not sufficient evidence for a formal
+claim. Describe a property as verified only when the corresponding theorem is
+present and checked. Likewise, conformance testing Python against a proved Lean
+model provides strong assurance but is not a formal proof of the Python source.
 
 ## Contributions
 
