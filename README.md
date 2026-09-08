@@ -29,6 +29,12 @@ gap-free chunking, order-preserving multi-item batching, response correlation,
 and legal connection-state transitions. Formal claims apply only to properties
 that have actually been stated and proved in Lean.
 
+`LeanS7.CoreProtocolAssurance` states the formal boundary for the implemented
+classic-S7 core in one auditable proposition. `LeanS7.coreProtocolAssurance`
+is its proof, composing the framing, codec, correlation, negotiation, memory,
+batching, chunking, segmentation, and lifecycle theorems. It deliberately does
+not claim S7comm Plus or controller-specific service semantics.
+
 ## Status
 
 Early development. Do not connect this software to production equipment.

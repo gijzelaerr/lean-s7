@@ -429,7 +429,7 @@ theorem decodeData_encodeData (pdu : Data) :
     rw [hfinish]
     rfl
   · rw [hremaining, hpayloadRead]
-    have hnumber : (0x80 : UInt8) &&& 0x7f = 0 := by native_decide
+    have hnumber : (0x80 : UInt8) &&& 0x7f = 0 := by decide
     simp [flag, hnumber]
     change (fun _ : Unit => ({ payload, endOfTransmission := true } : Data))
       <$> Cursor.finish ({ data, offset := 3 + payload.size } : Cursor) = _

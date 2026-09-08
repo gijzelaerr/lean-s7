@@ -11,3 +11,4 @@ import LeanS7.Advanced
 import LeanS7.Value
 import LeanS7.Transport
 import LeanS7.Client
+import LeanS7.Assurance

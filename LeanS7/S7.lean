@@ -124,7 +124,9 @@ theorem decodeJob_encodeJob (job : Job) (packet : ByteArray)
       .ok (0, { data := pdu, offset := 4 }) := by
     have hfixed : bytes #[protocolId, jobType, 0, 0] =
         bytes #[protocolId, jobType] ++ uint16BE 0 := by
-      native_decide
+      change ByteArray.mk #[protocolId, jobType, 0, 0] =
+        ByteArray.mk (#[protocolId, jobType] ++ #[0, 0])
+      rfl
     simpa [pdu, header, hfixed, ByteArray.append_assoc] using
       Cursor.readUInt16BE_append_uint16BE
         (bytes #[protocolId, jobType])
@@ -380,7 +382,9 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
       .ok (0, { data := pdu, offset := 4 }) := by
     have hfixed : bytes #[protocolId, ackDataType, 0, 0] =
         bytes #[protocolId, ackDataType] ++ uint16BE 0 := by
-      native_decide
+      change ByteArray.mk #[protocolId, ackDataType, 0, 0] =
+        ByteArray.mk (#[protocolId, ackDataType] ++ #[0, 0])
+      rfl
     simpa [pdu, header, hfixed, ByteArray.append_assoc] using
       Cursor.readUInt16BE_append_uint16BE
         (bytes #[protocolId, ackDataType])
