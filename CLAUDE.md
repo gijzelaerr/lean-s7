@@ -84,8 +84,10 @@ model provides strong assurance but is not a formal proof of the Python source.
 - Run all checks locally before committing or pushing.
 - Never force-push or rebase a published branch unless explicitly requested.
 - Never attribute commits or pull requests to Codex, Claude, OpenAI,
-  Anthropic, an AI assistant, or another tool. Do not add co-author trailers,
-  generated-by text, or AI signatures. Always use
+  Anthropic, an AI assistant, or any other agentic programming agent or tool.
+  Do not mention them in commit messages, commit trailers, pull-request titles,
+  or pull-request descriptions, and do not add co-author trailers, generated-by
+  text, or AI signatures. Always use
   `Gijs Molenaar <gijsmolenaar@gmail.com>` as the Git author and committer, and
   inspect full commit metadata before every push.
 - This library can control industrial equipment. Use conservative defaults,
