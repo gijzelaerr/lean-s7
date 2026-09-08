@@ -563,7 +563,7 @@ inductive Area where
   | dataBlocks
   | counters
   | timers
-  deriving Repr, BEq
+  deriving Repr, BEq, DecidableEq
 
 def Area.code : Area → UInt8
   | .processInputs => 0x81
@@ -614,24 +614,84 @@ inductive WriteItemResult where
   | failure (returnCode : UInt8)
   deriving Repr, BEq
 
-def encodeMemoryAddress (range : MemoryRange) : Except EncodeError ByteArray := do
-  if range.count == 0 || range.count > maxSectionSize then
-    throw (.invalidSize range.count)
-  if range.area != .dataBlocks && range.dbNumber != 0 then
-    throw (.invalidDbNumber range.dbNumber)
-  if range.area.usesElementAddress && range.start % range.area.elementSize != 0 then
-    throw (.misalignedAddress range.start range.area.elementSize)
-  let address := if range.area.usesElementAddress then range.start else range.start * 8
-  let lastAddress := if range.area.usesElementAddress then
+def MemoryRange.wireAddress (range : MemoryRange) : Nat :=
+  if range.area.usesElementAddress then range.start else range.start * 8
+
+def MemoryRange.lastWireAddress (range : MemoryRange) : Nat :=
+  if range.area.usesElementAddress then
     range.start + (range.count - 1) * range.area.elementSize
   else
     (range.start + range.count * range.area.elementSize - 1) * 8
-  if address > 0xffffff || lastAddress > 0xffffff then
+
+/-- Validate every range condition needed before truncating counts and addresses
+    to their fixed-width S7 wire fields. -/
+def validateMemoryRange (range : MemoryRange) : Except EncodeError Unit := do
+  if range.count = 0 ∨ range.count > maxSectionSize then
+    throw (.invalidSize range.count)
+  if range.area ≠ .dataBlocks ∧ range.dbNumber ≠ 0 then
+    throw (.invalidDbNumber range.dbNumber)
+  if range.area.usesElementAddress ∧ range.start % range.area.elementSize ≠ 0 then
+    throw (.misalignedAddress range.start range.area.elementSize)
+  if range.wireAddress > 0xffffff ∨ range.lastWireAddress > 0xffffff then
     throw (.addressTooLarge range.start)
+
+/-- Successful range validation proves that no count or address information is
+    truncated by the S7 memory-address wire representation. -/
+theorem validateMemoryRange_invariants (range : MemoryRange)
+    (hvalidate : validateMemoryRange range = .ok ()) :
+    range.count ≠ 0 ∧
+      range.count ≤ maxSectionSize ∧
+      (range.area ≠ .dataBlocks → range.dbNumber = 0) ∧
+      (range.area.usesElementAddress →
+        range.start % range.area.elementSize = 0) ∧
+      range.wireAddress ≤ 0xffffff ∧
+      range.lastWireAddress ≤ 0xffffff := by
+  simp only [validateMemoryRange] at hvalidate
+  split at hvalidate <;> rename_i hsize
+  · contradiction
+  split at hvalidate <;> rename_i hdb
+  · contradiction
+  split at hvalidate <;> rename_i halignment
+  · contradiction
+  split at hvalidate <;> rename_i haddress
+  · contradiction
+  rcases not_or.mp hsize with ⟨hcount, hcountMax⟩
+  rcases not_or.mp haddress with ⟨hwire, hlast⟩
+  refine ⟨hcount, Nat.le_of_not_lt hcountMax, ?_, ?_,
+    Nat.le_of_not_lt hwire, Nat.le_of_not_lt hlast⟩
+  · intro harea
+    by_cases hnumber : range.dbNumber = 0
+    · exact hnumber
+    · exact False.elim (hdb ⟨harea, hnumber⟩)
+  · intro helements
+    by_cases haligned : range.start % range.area.elementSize = 0
+    · exact haligned
+    · exact False.elim (halignment ⟨helements, haligned⟩)
+
+def encodeMemoryAddress (range : MemoryRange) : Except EncodeError ByteArray := do
+  validateMemoryRange range
   let dbNumber := if range.area == .dataBlocks then range.dbNumber else 0
   return bytes #[0x12, 0x0a, 0x10, range.area.wordLength] ++
     uint16BE (UInt16.ofNat range.count) ++ uint16BE dbNumber ++
-    bytes #[range.area.code] ++ uint24BE (UInt32.ofNat address)
+    bytes #[range.area.code] ++ uint24BE (UInt32.ofNat range.wireAddress)
+
+/-- Every successfully validated memory item occupies exactly twelve S7
+    parameter bytes, matching the batch-budget accounting. -/
+theorem encodedMemoryAddress_size (range : MemoryRange) (packet : ByteArray)
+    (hencode : encodeMemoryAddress range = .ok packet) :
+    packet.size = 12 := by
+  rw [encodeMemoryAddress] at hencode
+  cases hvalidate : validateMemoryRange range with
+  | error error =>
+      rw [hvalidate] at hencode
+      contradiction
+  | ok value =>
+      have hvalue : value = () := Subsingleton.elim _ _
+      subst value
+      rw [hvalidate] at hencode
+      injection hencode with hpacket
+      rw [← hpacket]
+      simp
 
 def encodeAreaRead (reference : UInt16) (range : MemoryRange) : Except EncodeError ByteArray := do
   let address ← encodeMemoryAddress range

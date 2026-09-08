@@ -52,6 +52,7 @@ Implemented:
 - PDU-aware, chunked `Client.readArea` and `Client.writeArea`
 - machine-checked gap-free chunk coverage and per-chunk size bounds used by those transfers
 - DB, process-input, process-output, marker, counter, and timer accessors
+- machine-checked memory-range count, area, alignment, and 24-bit address invariants
 - big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
 - machine-checked fixed-width signed and unsigned integer round trips and sizes
 - multi-variable reads and writes with item-count and PDU-aware batching
