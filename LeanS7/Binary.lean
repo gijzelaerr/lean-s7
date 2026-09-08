@@ -86,6 +86,24 @@ def uint16BE (value : UInt16) : ByteArray :=
   let n := value.toNat
   ByteArray.mk #[UInt8.ofNat (n / 256), UInt8.ofNat n]
 
+/-- Encoding then reading a big-endian word returns the original value. -/
+theorem readUInt16BE_uint16BE (value : UInt16) :
+    Cursor.readUInt16BE { data := uint16BE value } =
+      .ok (value, { data := uint16BE value, offset := 2 }) := by
+  rw [Cursor.readUInt16BE_of_available _ (by
+    change 2 ≤ (#[UInt8.ofNat (value.toNat / 256), UInt8.ofNat value.toNat] : Array UInt8).size
+    simp)]
+  change Except.ok (UInt16.ofNat (
+    (UInt8.ofNat (value.toNat / 256)).toNat * 256 +
+      (UInt8.ofNat value.toNat).toNat),
+    ({ data := uint16BE value, offset := 2 } : Cursor)) =
+    Except.ok (value, ({ data := uint16BE value, offset := 2 } : Cursor))
+  congr 2
+  apply UInt16.toNat_inj.mp
+  simp [UInt16.toNat_add, UInt16.toNat_mul, UInt8.toNat_ofNat']
+  have h := UInt16.toNat_lt value
+  omega
+
 def uint24BE (value : UInt32) : ByteArray :=
   let n := value.toNat
   ByteArray.mk #[UInt8.ofNat (n / 65536), UInt8.ofNat (n / 256), UInt8.ofNat n]
