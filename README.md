@@ -39,6 +39,7 @@ Implemented:
 - big-endian integer encoding and decoding
 - strict TPKT encoding and decoding
 - strict S7 job encoding and decoding
+- composed TPKT/COTP/S7 job packet encoding and decoding
 - COTP connection-request encoding
 - COTP connection-confirmation decoding
 - COTP data TPDU encoding and decoding
@@ -63,7 +64,8 @@ Implemented:
 - force-table reads and input/output process-image bit overrides
 - a validated raw S7 PDU exchange escape hatch
 - protocol-vector and malformed-input tests
-- machine-checked binary-word, TPKT, COTP data, and S7 job size/round-trip properties
+- machine-checked binary-word, TPKT, COTP data, S7 job, and complete outbound
+  packet size/round-trip properties
 - end-to-end tests against the python-snap7 emulator
 
 Next: prove core codec and chunking properties, define a shared conformance-vector

@@ -193,6 +193,23 @@ def testS7SetupCommunication : IO Unit := do
         "generic S7 job encoded length is incorrect"
       check (isOkEq (S7.decodeJob encoded) job) "generic S7 job round trip failed"
 
+  match Protocol.encodeJob job with
+  | .error err => throw <| IO.userError s!"could not encode complete S7 packet: {repr err}"
+  | .ok packet =>
+      check (isOkEq (Protocol.decodeJob packet) job)
+        "complete TPKT/COTP/S7 job round trip failed"
+
+  match TPKT.encode {
+    payload := COTP.encodeData {
+      payload := bytes #[0x32, 0x01, 0, 0, 0, 1, 0, 0, 0, 0]
+      endOfTransmission := false
+    }
+  } with
+  | .error err => throw <| IO.userError s!"could not frame segmented S7 test: {repr err}"
+  | .ok packet =>
+      check (match Protocol.decodeJob packet with | .error _ => true | .ok _ => false)
+        "segmented COTP data was accepted as a complete S7 job"
+
   check (match S7.decodeJob (bytes #[0x31, 0x01, 0, 0, 0, 1, 0, 0, 0, 0]) with
     | .error _ => true | .ok _ => false) "invalid S7 job protocol ID was accepted"
   check (match S7.decodeJob (bytes #[0x32, 0x03, 0, 0, 0, 1, 0, 0, 0, 0]) with

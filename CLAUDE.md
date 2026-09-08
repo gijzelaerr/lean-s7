@@ -18,6 +18,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/TPKT.lean`: RFC 1006 framing and framing properties.
 - `LeanS7/COTP.lean`: ISO 8073 connection and data TPDUs.
 - `LeanS7/S7.lean`: classic S7 PDU codecs and validation.
+- `LeanS7/Protocol.lean`: composed TPKT/COTP/S7 framing and stack-level proofs.
 - `LeanS7/Management.lean`: USER_DATA, SZL, clock, security, and CPU-control codecs.
 - `LeanS7/Advanced.lean`: block discovery, transfer, maintenance, and force-table codecs.
 - `LeanS7/Value.lean`: typed DB values, bits, STRING, and WSTRING codecs.
