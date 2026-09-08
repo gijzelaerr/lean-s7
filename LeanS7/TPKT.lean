@@ -42,6 +42,17 @@ def decode (data : ByteArray) : Except DecodeError Frame := do
   cursor.finish
   return { payload }
 
+theorem encode_succeeds_of_size (frame : Frame)
+    (h : headerSize + frame.payload.size ≤ maxFrameSize) :
+    ∃ packet, encode frame = .ok packet := by
+  simp [encode, h]
+
+theorem encode_rejects_oversize (frame : Frame)
+    (h : maxFrameSize < headerSize + frame.payload.size) :
+    encode frame = .error (.frameTooLarge
+      (headerSize + frame.payload.size) maxFrameSize) := by
+  simp [encode, Nat.not_le_of_gt h]
+
 theorem encoded_size (frame : Frame) (packet : ByteArray)
     (h : encode frame = .ok packet) : packet.size = headerSize + frame.payload.size := by
   by_cases hsize : headerSize + frame.payload.size ≤ maxFrameSize

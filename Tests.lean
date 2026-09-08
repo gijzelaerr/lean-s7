@@ -33,6 +33,25 @@ def testTPKTRejectsMalformedFrames : IO Unit := do
   check (match TPKT.decode (bytes #[3, 0, 0, 8, 0xaa]) with | .error _ => true | _ => false)
     "invalid TPKT length was accepted"
 
+def testTPKTSizeBoundary : IO Unit := do
+  let maximumPayloadSize := TPKT.maxFrameSize - TPKT.headerSize
+  let maximumFrame : TPKT.Frame := {
+    payload := ByteArray.mk (Array.replicate maximumPayloadSize 0xaa)
+  }
+  match TPKT.encode maximumFrame with
+  | .error err => throw <| IO.userError s!"maximum-size TPKT frame was rejected: {repr err}"
+  | .ok encoded =>
+      check (encoded.size == TPKT.maxFrameSize) "maximum-size TPKT frame has the wrong size"
+      check (isOkEq (TPKT.decode encoded) maximumFrame) "maximum-size TPKT round trip failed"
+
+  let oversizedFrame : TPKT.Frame := {
+    payload := ByteArray.mk (Array.replicate (maximumPayloadSize + 1) 0xaa)
+  }
+  check (match TPKT.encode oversizedFrame with
+    | .error (.frameTooLarge size maximum) =>
+        size == TPKT.maxFrameSize + 1 && maximum == TPKT.maxFrameSize
+    | .ok _ => false) "oversized TPKT frame was accepted"
+
 def testCOTPConnectionRequest : IO Unit := do
   let encoded := COTP.encodeConnectionRequest {}
   let expected := bytes #[
@@ -420,6 +439,7 @@ def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
   testTPKTRejectsMalformedFrames
+  testTPKTSizeBoundary
   testCOTPConnectionRequest
   testCOTPDataRoundTrip
   testS7SetupCommunication

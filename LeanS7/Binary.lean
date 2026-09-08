@@ -58,6 +58,28 @@ def finish (cursor : Cursor) : Except DecodeError Unit :=
   else
     .error (.trailingBytes cursor.offset cursor.remaining)
 
+/-- A byte read succeeds when the cursor points inside the input. -/
+theorem readUInt8_of_lt (cursor : Cursor) (h : cursor.offset < cursor.data.size) :
+    cursor.readUInt8 = .ok (cursor.data[cursor.offset],
+      { cursor with offset := cursor.offset + 1 }) := by
+  simp [readUInt8, h]
+
+/-- Two available bytes decode as a big-endian word and advance the cursor twice. -/
+theorem readUInt16BE_of_available (cursor : Cursor)
+    (h : cursor.offset + 2 ≤ cursor.data.size) :
+    cursor.readUInt16BE = .ok (
+      UInt16.ofNat (
+        cursor.data[cursor.offset].toNat * 256 +
+          cursor.data[cursor.offset + 1].toNat),
+      { cursor with offset := cursor.offset + 2 }) := by
+  rw [readUInt16BE, readUInt8_of_lt cursor (by omega)]
+  change (do
+    let result ← readUInt8 { cursor with offset := cursor.offset + 1 }
+    pure (UInt16.ofNat (
+      cursor.data[cursor.offset].toNat * 256 + result.fst.toNat), result.snd)) = _
+  rw [readUInt8_of_lt _ (by simp; omega)]
+  rfl
+
 end Cursor
 
 def uint16BE (value : UInt16) : ByteArray :=
