@@ -536,11 +536,11 @@ def Client.timersRead (client : Client) (start count : Nat) : IO ByteArray :=
 def Client.timersWrite (client : Client) (start : Nat) (payload : ByteArray) : IO Unit :=
   client.writeArea .timers 0 start payload
 
-private def readResponseContribution (range : S7.MemoryRange) : Nat :=
+def readResponseContribution (range : S7.MemoryRange) : Nat :=
   let size := range.count * range.area.elementSize
   4 + size + size % 2
 
-private def takeReadBatch (pduLength : Nat) : List S7.MemoryRange →
+def takeReadBatch (pduLength : Nat) : List S7.MemoryRange →
     Nat → Nat → Nat → List S7.MemoryRange → List S7.MemoryRange × List S7.MemoryRange
   | [], _, _, _, selected => (selected.reverse, [])
   | pending@(range :: rest), count, requestSize, responseSize, selected =>
@@ -551,6 +551,45 @@ private def takeReadBatch (pduLength : Nat) : List S7.MemoryRange →
         takeReadBatch pduLength rest (count + 1) nextRequestSize nextResponseSize (range :: selected)
       else
         (selected.reverse, pending)
+
+/-- Read batching returns an order-preserving prefix and suffix partition: no
+    requested range is lost, duplicated, or reordered. -/
+theorem takeReadBatch_preserves_order (pduLength : Nat)
+    (pending : List S7.MemoryRange) (count requestSize responseSize : Nat)
+    (selected : List S7.MemoryRange) :
+    let result := takeReadBatch pduLength pending count requestSize responseSize selected
+    result.1 ++ result.2 = selected.reverse ++ pending := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simp [takeReadBatch]
+  | cons range rest ih =>
+      simp only [takeReadBatch]
+      split
+      · simpa [List.reverse_cons, List.append_assoc] using
+          ih (count + 1) (requestSize + 12)
+            (responseSize + readResponseContribution range) (range :: selected)
+      · simp
+
+/-- A read batch never exceeds the classic S7 item-count limit. -/
+theorem takeReadBatch_count_le (pduLength : Nat)
+    (pending : List S7.MemoryRange) (count requestSize responseSize : Nat)
+    (selected : List S7.MemoryRange) (hselected : selected.length = count)
+    (hcount : count ≤ S7.maxItemCount) :
+    let result := takeReadBatch pduLength pending count requestSize responseSize selected
+    result.1.length ≤ S7.maxItemCount := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeReadBatch, hselected] using hcount
+  | cons range rest ih =>
+      simp only [takeReadBatch]
+      split
+      case isTrue hcondition =>
+        have hproperties := hcondition
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hproperties
+        apply ih (count + 1) (requestSize + 12)
+          (responseSize + readResponseContribution range) (range :: selected)
+        · simp [hselected]
+        · exact Nat.add_one_le_iff.mpr hproperties.1.1.2
+      case isFalse =>
+        simpa [hselected] using hcount
 
 private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
   let reference ← client.freshReference
@@ -578,10 +617,10 @@ private partial def Client.readMultiLoop (client : Client) (pending : List S7.Me
 def Client.readMulti (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) :=
   client.readMultiLoop ranges.toList #[]
 
-private def writeRequestContribution (item : S7.WriteItem) : Nat :=
+def writeRequestContribution (item : S7.WriteItem) : Nat :=
   12 + 4 + item.payload.size + item.payload.size % 2
 
-private def takeWriteBatch (pduLength : Nat) : List S7.WriteItem →
+def takeWriteBatch (pduLength : Nat) : List S7.WriteItem →
     Nat → Nat → Nat → List S7.WriteItem → List S7.WriteItem × List S7.WriteItem
   | [], _, _, _, selected => (selected.reverse, [])
   | pending@(item :: rest), count, requestSize, responseSize, selected =>
@@ -593,6 +632,45 @@ private def takeWriteBatch (pduLength : Nat) : List S7.WriteItem →
         takeWriteBatch pduLength rest (count + 1) nextRequestSize nextResponseSize (item :: selected)
       else
         (selected.reverse, pending)
+
+/-- Write batching returns an order-preserving prefix and suffix partition: no
+    requested item is lost, duplicated, or reordered. -/
+theorem takeWriteBatch_preserves_order (pduLength : Nat)
+    (pending : List S7.WriteItem) (count requestSize responseSize : Nat)
+    (selected : List S7.WriteItem) :
+    let result := takeWriteBatch pduLength pending count requestSize responseSize selected
+    result.1 ++ result.2 = selected.reverse ++ pending := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simp [takeWriteBatch]
+  | cons item rest ih =>
+      simp only [takeWriteBatch]
+      split
+      · simpa [List.reverse_cons, List.append_assoc] using
+          ih (count + 1) (requestSize + writeRequestContribution item)
+            (responseSize + 1) (item :: selected)
+      · simp
+
+/-- A write batch never exceeds the classic S7 item-count limit. -/
+theorem takeWriteBatch_count_le (pduLength : Nat)
+    (pending : List S7.WriteItem) (count requestSize responseSize : Nat)
+    (selected : List S7.WriteItem) (hselected : selected.length = count)
+    (hcount : count ≤ S7.maxItemCount) :
+    let result := takeWriteBatch pduLength pending count requestSize responseSize selected
+    result.1.length ≤ S7.maxItemCount := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeWriteBatch, hselected] using hcount
+  | cons item rest ih =>
+      simp only [takeWriteBatch]
+      split
+      case isTrue hcondition =>
+        have hproperties := hcondition
+        simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hproperties
+        apply ih (count + 1) (requestSize + writeRequestContribution item)
+          (responseSize + 1) (item :: selected)
+        · simp [hselected]
+        · exact Nat.add_one_le_iff.mpr hproperties.1.1.2
+      case isFalse =>
+        simpa [hselected] using hcount
 
 private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
