@@ -31,6 +31,10 @@ def encodeConnectionRequest (request : ConnectionRequest) : ByteArray :=
   let size := bytes #[pduSizeParameter, 1, request.tpduSizeExponent]
   fixed ++ calling ++ called ++ size
 
+@[simp] theorem encodedConnectionRequest_size (request : ConnectionRequest) :
+    (encodeConnectionRequest request).size = 18 := by
+  simp [encodeConnectionRequest]
+
 structure ConnectionConfirm where
   destinationReference : UInt16
   sourceReference : UInt16
@@ -47,6 +51,99 @@ structure DisconnectRequest where
 def encodeDisconnectRequest (request : DisconnectRequest) : ByteArray :=
   bytes #[6, disconnectRequestCode] ++ uint16BE request.destinationReference ++
     uint16BE request.sourceReference ++ bytes #[request.reason]
+
+@[simp] theorem encodedDisconnectRequest_size (request : DisconnectRequest) :
+    (encodeDisconnectRequest request).size = 7 := by
+  simp [encodeDisconnectRequest]
+
+/-- Strictly decode one complete COTP disconnect request. -/
+def decodeDisconnectRequest (data : ByteArray) : Except DecodeError DisconnectRequest := do
+  let cursor : Cursor := { data }
+  let (headerLength, cursor) ← cursor.readUInt8
+  if headerLength != 6 then
+    throw (.invalidField 0 s!"expected COTP disconnect header length 6, got {headerLength}")
+  let (code, cursor) ← cursor.readUInt8
+  if code != disconnectRequestCode then
+    throw (.invalidField 1 s!"expected COTP disconnect request 0x80, got {code}")
+  let (destinationReference, cursor) ← cursor.readUInt16BE
+  let (sourceReference, cursor) ← cursor.readUInt16BE
+  let (reason, cursor) ← cursor.readUInt8
+  cursor.finish
+  return { destinationReference, sourceReference, reason }
+
+/-- Encoding and then decoding a COTP disconnect request preserves both
+    references and the reason code. -/
+theorem decodeDisconnectRequest_encodeDisconnectRequest
+    (request : DisconnectRequest) :
+    decodeDisconnectRequest (encodeDisconnectRequest request) = .ok request := by
+  let data := encodeDisconnectRequest request
+  have hsize : data.size = 7 := by simp [data]
+  have hread0 : Cursor.readUInt8 { data } =
+      .ok (6, { data, offset := 1 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by
+      dsimp only [Cursor.offset, Cursor.data]
+      rw [hsize]
+      omega)]
+    congr 2 <;> simp [data, encodeDisconnectRequest, bytes]
+  have hread1 : Cursor.readUInt8 { data, offset := 1 } =
+      .ok (disconnectRequestCode, { data, offset := 2 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by
+      dsimp only [Cursor.offset, Cursor.data]
+      rw [hsize]
+      omega)]
+    congr 2 <;> simp [data, encodeDisconnectRequest, bytes]
+  have hdestination : Cursor.readUInt16BE { data, offset := 2 } =
+      .ok (request.destinationReference, { data, offset := 4 }) := by
+    simpa [data, encodeDisconnectRequest, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[6, disconnectRequestCode])
+        (uint16BE request.sourceReference ++ bytes #[request.reason])
+        request.destinationReference
+  have hsource : Cursor.readUInt16BE { data, offset := 4 } =
+      .ok (request.sourceReference, { data, offset := 6 }) := by
+    simpa [data, encodeDisconnectRequest, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[6, disconnectRequestCode] ++ uint16BE request.destinationReference)
+        (bytes #[request.reason]) request.sourceReference
+  have hreason : Cursor.readUInt8 { data, offset := 6 } =
+      .ok (request.reason, { data, offset := 7 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by
+      dsimp only [Cursor.offset, Cursor.data]
+      rw [hsize]
+      omega)]
+    congr 2 <;> simp [data, encodeDisconnectRequest, bytes]
+  change decodeDisconnectRequest data = .ok request
+  rw [decodeDisconnectRequest, hread0]
+  change Except.bind (Except.ok (6, ({ data, offset := 1 } : Cursor)))
+    (fun headerResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hread1]
+  change Except.bind (Except.ok
+      (disconnectRequestCode, ({ data, offset := 2 } : Cursor)))
+    (fun codeResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hdestination]
+  change Except.bind (Except.ok
+      (request.destinationReference, ({ data, offset := 4 } : Cursor)))
+    (fun destinationResult => _) = _
+  rw [Except.bind, hsource]
+  change Except.bind (Except.ok
+      (request.sourceReference, ({ data, offset := 6 } : Cursor)))
+    (fun sourceResult => _) = _
+  rw [Except.bind, hreason]
+  change Except.bind (Except.ok
+      (request.reason, ({ data, offset := 7 } : Cursor)))
+    (fun reasonResult => _) = _
+  rw [Except.bind]
+  have hfinish : Cursor.finish ({ data, offset := 7 } : Cursor) = .ok () := by
+    rw [Cursor.finish, if_pos (by
+      dsimp only [Cursor.offset, Cursor.data]
+      rw [hsize])]
+  rw [hfinish]
+  cases request
+  rfl
 
 /-- Decode a COTP connection confirmation while retaining negotiation parameters. -/
 def decodeConnectionConfirm (data : ByteArray) : Except DecodeError ConnectionConfirm := do

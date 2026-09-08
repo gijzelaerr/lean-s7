@@ -144,6 +144,14 @@ def testCOTPConnectionRequest : IO Unit := do
   }
   check (disconnect == bytes #[0x06, 0x80, 0x12, 0x34, 0x56, 0x78, 0x00])
     "unexpected COTP disconnect request encoding"
+  check (isOkEq (COTP.decodeDisconnectRequest disconnect) {
+    destinationReference := 0x1234
+    sourceReference := 0x5678
+    reason := 0
+  }) "COTP disconnect request round trip failed"
+  check (match COTP.decodeDisconnectRequest (disconnect ++ bytes #[0]) with
+    | .error _ => true
+    | .ok _ => false) "trailing COTP disconnect byte was accepted"
 
   let request : COTP.ConnectionRequest := { sourceReference := 0x1234, classOption := 0 }
   let confirmation : COTP.ConnectionConfirm := {
