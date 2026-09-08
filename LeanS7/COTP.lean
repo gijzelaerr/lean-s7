@@ -81,8 +81,89 @@ def decodeData (data : ByteArray) : Except DecodeError Data := do
   if code != dataCode then
     throw (.invalidField 1 s!"expected COTP data TPDU 0xf0, got {code}")
   let (flags, cursor) ← cursor.readUInt8
+  if flags &&& 0x7f != 0 then
+    throw (.invalidField 2 s!"COTP class 0 TPDU number must be zero, got {flags &&& 0x7f}")
   let (payload, cursor) ← cursor.readBytes cursor.remaining
   cursor.finish
   return { payload, endOfTransmission := flags &&& 0x80 != 0 }
+
+theorem encodedData_size (pdu : Data) :
+    (encodeData pdu).size = 3 + pdu.payload.size := by
+  rw [encodeData, ByteArray.size_append]
+  change 3 + pdu.payload.size = 3 + pdu.payload.size
+  rfl
+
+/-- Encoding and then decoding a COTP data TPDU returns the original value. -/
+theorem decodeData_encodeData (pdu : Data) :
+    decodeData (encodeData pdu) = .ok pdu := by
+  rcases pdu with ⟨payload, endOfTransmission⟩
+  let flag : UInt8 := if endOfTransmission then 0x80 else 0x00
+  let data := bytes #[2, dataCode, flag] ++ payload
+  have hsize : data.size = 3 + payload.size := by
+    dsimp only [data]
+    rw [ByteArray.size_append]
+    change 3 + payload.size = 3 + payload.size
+    rfl
+  have hread0 : Cursor.readUInt8 { data } =
+      .ok (2, { data, offset := 1 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by dsimp; rw [hsize]; omega)]
+    congr 2 <;> simp [data, bytes]
+  have hread1 : Cursor.readUInt8 { data, offset := 1 } =
+      .ok (dataCode, { data, offset := 2 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by dsimp; rw [hsize]; omega)]
+    congr 2 <;> simp [data, bytes]
+  have hread2 : Cursor.readUInt8 { data, offset := 2 } =
+      .ok (flag, { data, offset := 3 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by dsimp; rw [hsize]; omega)]
+    congr 2 <;> simp [data, bytes]
+  have hpayloadRead : Cursor.readBytes { data, offset := 3 } payload.size =
+      .ok (payload, { data, offset := 3 + payload.size }) := by
+    rw [Cursor.readBytes]
+    rw [if_pos (by simp [Cursor.remaining, hsize])]
+    have hextract : data.extract 3 (3 + payload.size) = payload := by
+      dsimp only [data]
+      apply ByteArray.extract_append_eq_right
+      · change 3 = (#[2, dataCode, flag] : Array UInt8).size
+        simp
+      · change 3 + payload.size = (#[2, dataCode, flag] : Array UInt8).size + payload.size
+        simp
+    change Except.ok
+      (data.extract 3 (3 + payload.size),
+        ({ data, offset := 3 + payload.size } : Cursor)) = _
+    rw [hextract]
+  have hremaining : ({ data, offset := 3 } : Cursor).remaining = payload.size := by
+    simp [Cursor.remaining, hsize]
+  have hfinish : Cursor.finish ({ data, offset := 3 + payload.size } : Cursor) = .ok () := by
+    rw [Cursor.finish, if_pos (by dsimp; rw [hsize])]
+  change decodeData data = .ok { payload, endOfTransmission }
+  rw [decodeData, hread0]
+  change Except.bind (Except.ok (2, ({ data, offset := 1 } : Cursor)))
+    (fun headerResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hread1]
+  change Except.bind (Except.ok (dataCode, ({ data, offset := 2 } : Cursor)))
+    (fun codeResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hread2]
+  change Except.bind (Except.ok (flag, ({ data, offset := 3 } : Cursor)))
+    (fun flagsResult => _) = _
+  rw [Except.bind]
+  simp
+  cases endOfTransmission
+  · rw [hremaining, hpayloadRead]
+    simp [flag]
+    change (fun _ : Unit => ({ payload, endOfTransmission := false } : Data))
+      <$> Cursor.finish ({ data, offset := 3 + payload.size } : Cursor) = _
+    rw [hfinish]
+    rfl
+  · rw [hremaining, hpayloadRead]
+    have hnumber : (0x80 : UInt8) &&& 0x7f = 0 := by native_decide
+    simp [flag, hnumber]
+    change (fun _ : Unit => ({ payload, endOfTransmission := true } : Data))
+      <$> Cursor.finish ({ data, offset := 3 + payload.size } : Cursor) = _
+    rw [hfinish]
+    rfl
 
 end LeanS7.COTP

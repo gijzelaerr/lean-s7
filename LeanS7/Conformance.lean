@@ -120,4 +120,90 @@ def decodeCases : Array DecodeCase := #[
 ]
 
 end TPKT
+
+namespace COTP
+
+structure EncodeCase where
+  id : String
+  payload : ByteSpec
+  endOfTransmission : Bool
+  expected : ByteSpec
+
+structure ExpectedData where
+  payload : ByteSpec
+  endOfTransmission : Bool
+
+inductive DecodeExpectation where
+  | accept (data : ExpectedData)
+  | reject (error : String)
+
+structure DecodeCase where
+  id : String
+  packet : ByteSpec
+  expected : DecodeExpectation
+
+private def literal (value : ByteArray) : ByteSpec :=
+  { chunks := #[.hex value] }
+
+def encodeCases : Array EncodeCase := #[
+  {
+    id := "complete-data"
+    payload := literal (LeanS7.bytes #[0x32, 0x01, 0x00])
+    endOfTransmission := true
+    expected := literal (LeanS7.bytes #[0x02, 0xf0, 0x80, 0x32, 0x01, 0x00])
+  },
+  {
+    id := "segmented-data"
+    payload := literal (LeanS7.bytes #[0x32, 0x01, 0x00])
+    endOfTransmission := false
+    expected := literal (LeanS7.bytes #[0x02, 0xf0, 0x00, 0x32, 0x01, 0x00])
+  },
+  {
+    id := "empty-data"
+    payload := literal ByteArray.empty
+    endOfTransmission := true
+    expected := literal (LeanS7.bytes #[0x02, 0xf0, 0x80])
+  }
+]
+
+def decodeCases : Array DecodeCase := #[
+  {
+    id := "complete-data"
+    packet := literal (LeanS7.bytes #[0x02, 0xf0, 0x80, 0x32, 0x01, 0x00])
+    expected := .accept {
+      payload := literal (LeanS7.bytes #[0x32, 0x01, 0x00])
+      endOfTransmission := true
+    }
+  },
+  {
+    id := "segmented-data"
+    packet := literal (LeanS7.bytes #[0x02, 0xf0, 0x00, 0x32, 0x01, 0x00])
+    expected := .accept {
+      payload := literal (LeanS7.bytes #[0x32, 0x01, 0x00])
+      endOfTransmission := false
+    }
+  },
+  {
+    id := "invalid-header-length"
+    packet := literal (LeanS7.bytes #[0x03, 0xf0, 0x80, 0x32])
+    expected := .reject "invalid-header-length"
+  },
+  {
+    id := "invalid-tpdu-code"
+    packet := literal (LeanS7.bytes #[0x02, 0xe0, 0x80, 0x32])
+    expected := .reject "invalid-tpdu-code"
+  },
+  {
+    id := "nonzero-tpdu-number"
+    packet := literal (LeanS7.bytes #[0x02, 0xf0, 0x81, 0x32])
+    expected := .reject "nonzero-tpdu-number"
+  },
+  {
+    id := "truncated-header"
+    packet := literal (LeanS7.bytes #[0x02, 0xf0])
+    expected := .reject "unexpected-end"
+  }
+]
+
+end COTP
 end LeanS7.Conformance

@@ -130,6 +130,39 @@ def testCOTPDataRoundTrip : IO Unit := do
   check (encoded == bytes #[2, 0xf0, 0x80, 0x32, 0x01, 0x00]) "unexpected COTP data encoding"
   check (match COTP.decodeData encoded with | .ok decoded => decoded == pdu | .error _ => false)
     "COTP data round trip failed"
+  let segment : COTP.Data := { payload := bytes #[0x32], endOfTransmission := false }
+  check (isOkEq (COTP.decodeData (COTP.encodeData segment)) segment)
+    "segmented COTP data round trip failed"
+  check (match COTP.decodeData (bytes #[3, 0xf0, 0x80, 0x32]) with
+    | .error _ => true | .ok _ => false) "invalid COTP data header length was accepted"
+  check (match COTP.decodeData (bytes #[2, 0xf0, 0x81, 0x32]) with
+    | .error _ => true | .ok _ => false) "nonzero COTP TPDU number was accepted"
+
+def cotpDecodeErrorName : DecodeError → String
+  | .unexpectedEnd _ _ _ => "unexpected-end"
+  | .invalidField 0 _ => "invalid-header-length"
+  | .invalidField 1 _ => "invalid-tpdu-code"
+  | .invalidField 2 _ => "nonzero-tpdu-number"
+  | .invalidField _ _ | .trailingBytes _ _ => "other-decode-error"
+
+def testCOTPConformanceCorpus : IO Unit := do
+  for test in Conformance.COTP.encodeCases do
+    let actual := COTP.encodeData {
+      payload := test.payload.materialize
+      endOfTransmission := test.endOfTransmission
+    }
+    check (actual == test.expected.materialize)
+      s!"COTP encode conformance case failed: {test.id}"
+
+  for test in Conformance.COTP.decodeCases do
+    let actual := COTP.decodeData test.packet.materialize
+    let conforms := match test.expected, actual with
+      | .accept expected, .ok data =>
+          data.payload == expected.payload.materialize &&
+            data.endOfTransmission == expected.endOfTransmission
+      | .reject expected, .error error => cotpDecodeErrorName error == expected
+      | _, _ => false
+    check conforms s!"COTP decode conformance case failed: {test.id}"
 
 def testS7SetupCommunication : IO Unit := do
   let expected := bytes #[
@@ -500,6 +533,7 @@ def main : IO Unit := do
   testTPKTConformanceCorpus
   testCOTPConnectionRequest
   testCOTPDataRoundTrip
+  testCOTPConformanceCorpus
   testS7SetupCommunication
   testS7ResponseDecoding
   testS7DbVectors

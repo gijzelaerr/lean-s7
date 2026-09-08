@@ -53,12 +53,45 @@ private def decodeCaseJson (test : TPKT.DecodeCase) : Json :=
     ("expected", decodeExpectationJson test.expected)
   ]
 
-private def corpus : Json := Json.mkObj [
+private def tpktCorpus : Json := Json.mkObj [
   ("schema_version", 1),
   ("protocol", "RFC 1006 TPKT"),
   ("encode_cases", Json.arr (TPKT.encodeCases.map encodeCaseJson)),
   ("decode_cases", Json.arr (TPKT.decodeCases.map decodeCaseJson))
 ]
 
-def main : IO Unit :=
-  IO.println (Json.pretty corpus 100)
+private def cotpEncodeCaseJson (test : COTP.EncodeCase) : Json :=
+  Json.mkObj [
+    ("id", test.id),
+    ("payload", byteSpecJson test.payload),
+    ("end_of_transmission", test.endOfTransmission),
+    ("expected", byteSpecJson test.expected)
+  ]
+
+private def cotpDecodeExpectationJson : COTP.DecodeExpectation → Json
+  | .accept data => Json.mkObj [
+      ("status", "accept"),
+      ("payload", byteSpecJson data.payload),
+      ("end_of_transmission", data.endOfTransmission)
+    ]
+  | .reject error => Json.mkObj [("status", "reject"), ("error", error)]
+
+private def cotpDecodeCaseJson (test : COTP.DecodeCase) : Json :=
+  Json.mkObj [
+    ("id", test.id),
+    ("packet", byteSpecJson test.packet),
+    ("expected", cotpDecodeExpectationJson test.expected)
+  ]
+
+private def cotpCorpus : Json := Json.mkObj [
+  ("schema_version", 1),
+  ("protocol", "RFC 2126 COTP class 0 data TPDU"),
+  ("encode_cases", Json.arr (COTP.encodeCases.map cotpEncodeCaseJson)),
+  ("decode_cases", Json.arr (COTP.decodeCases.map cotpDecodeCaseJson))
+]
+
+def main (args : List String) : IO Unit := do
+  match args with
+  | [] => IO.println (Json.pretty tpktCorpus 100)
+  | ["cotp"] => IO.println (Json.pretty cotpCorpus 100)
+  | _ => throw <| IO.userError "usage: lean-s7-conformance [cotp]"

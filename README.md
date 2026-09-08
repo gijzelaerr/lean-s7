@@ -96,6 +96,7 @@ at `conformance/v1/tpkt.json`. Verify that it is current with:
 
 ```console
 lake exe lean-s7-conformance | diff - conformance/v1/tpkt.json
+lake exe lean-s7-conformance cotp | diff - conformance/v1/cotp-data.json
 ```
 
 It can also expose framing differences in python-snap7 independently of the
@@ -104,6 +105,7 @@ divergences and exits nonzero:
 
 ```console
 python integration/tpkt_conformance.py
+python integration/cotp_conformance.py
 ```
 
 The project pins its Lean toolchain in `lean-toolchain`.
