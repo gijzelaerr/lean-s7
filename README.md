@@ -43,6 +43,7 @@ Implemented:
 - composed TPKT/COTP/S7 ACK_DATA packet encoding and response decoding
 - COTP connection-request encoding
 - COTP connection-confirmation decoding
+- machine-checked COTP connection-confirmation reference and class validation
 - COTP data TPDU encoding and decoding
 - S7 job framing and setup-communication request encoding
 - IPv4 TCP transport and ISO-on-TCP session negotiation

@@ -145,6 +145,24 @@ def testCOTPConnectionRequest : IO Unit := do
   check (disconnect == bytes #[0x06, 0x80, 0x12, 0x34, 0x56, 0x78, 0x00])
     "unexpected COTP disconnect request encoding"
 
+  let request : COTP.ConnectionRequest := { sourceReference := 0x1234, classOption := 0 }
+  let confirmation : COTP.ConnectionConfirm := {
+    destinationReference := 0x1234
+    sourceReference := 0x5678
+    classOption := 0
+    parameters := ByteArray.empty
+  }
+  check (isOkEq (COTP.validateConnectionConfirm request confirmation) ())
+    "matching COTP connection confirmation was rejected"
+  check (match COTP.validateConnectionConfirm request
+      { confirmation with destinationReference := 0x4321 } with
+    | .error _ => true
+    | .ok _ => false) "uncorrelated COTP connection confirmation was accepted"
+  check (match COTP.validateConnectionConfirm request
+      { confirmation with classOption := 1 } with
+    | .error _ => true
+    | .ok _ => false) "wrong COTP transport class was accepted"
+
 def testCOTPDataRoundTrip : IO Unit := do
   let pdu : COTP.Data := { payload := bytes #[0x32, 0x01, 0x00] }
   let encoded := COTP.encodeData pdu

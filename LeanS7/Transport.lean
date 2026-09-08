@@ -137,6 +137,7 @@ private def connectAddress (address : SocketAddress) (request : COTP.ConnectionR
     let connectionRequest := COTP.encodeConnectionRequest request
     sendFrame socket connectionRequest timeoutMs
     let confirmation ← orThrow <| COTP.decodeConnectionConfirm (← receiveFrame socket timeoutMs)
+    orThrow <| COTP.validateConnectionConfirm request confirmation
     return {
       socket
       localReference := request.sourceReference

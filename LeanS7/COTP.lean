@@ -64,6 +64,50 @@ def decodeConnectionConfirm (data : ByteArray) : Except DecodeError ConnectionCo
   cursor.finish
   return { destinationReference, sourceReference, classOption, parameters }
 
+/-- Validate that a connection confirmation belongs to the request and accepts
+    the requested transport class. -/
+def validateConnectionConfirm (request : ConnectionRequest)
+    (confirmation : ConnectionConfirm) : Except DecodeError Unit := do
+  if confirmation.destinationReference != request.sourceReference then
+    throw (.invalidField 2
+      s!"expected COTP destination reference {request.sourceReference}, got {confirmation.destinationReference}")
+  if confirmation.classOption != request.classOption then
+    throw (.invalidField 6
+      s!"expected COTP class option {request.classOption}, got {confirmation.classOption}")
+
+/-- A confirmation with the wrong destination reference is rejected. -/
+theorem validateConnectionConfirm_rejects_destination (request : ConnectionRequest)
+    (confirmation : ConnectionConfirm)
+    (hreference : confirmation.destinationReference ≠ request.sourceReference) :
+    validateConnectionConfirm request confirmation = .error (.invalidField 2
+      s!"expected COTP destination reference {request.sourceReference}, got {confirmation.destinationReference}") := by
+  rw [validateConnectionConfirm, if_pos (by simpa using hreference)]
+  rfl
+
+/-- A successfully validated confirmation is correlated to the initiating
+    connection request. -/
+theorem validateConnectionConfirm_destination_eq (request : ConnectionRequest)
+    (confirmation : ConnectionConfirm)
+    (h : validateConnectionConfirm request confirmation = .ok ()) :
+    confirmation.destinationReference = request.sourceReference := by
+  by_cases hreference : confirmation.destinationReference = request.sourceReference
+  · exact hreference
+  · rw [validateConnectionConfirm_rejects_destination request confirmation hreference] at h
+    contradiction
+
+/-- A successfully validated confirmation accepts the requested transport
+    class. -/
+theorem validateConnectionConfirm_class_eq (request : ConnectionRequest)
+    (confirmation : ConnectionConfirm)
+    (h : validateConnectionConfirm request confirmation = .ok ()) :
+    confirmation.classOption = request.classOption := by
+  by_cases hclass : confirmation.classOption = request.classOption
+  · exact hclass
+  · have hreference := validateConnectionConfirm_destination_eq request confirmation h
+    rw [validateConnectionConfirm, if_neg (by simp [hreference]),
+      if_pos (by simpa using hclass)] at h
+    contradiction
+
 structure Data where
   payload : ByteArray
   endOfTransmission : Bool := true
