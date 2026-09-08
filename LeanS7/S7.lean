@@ -272,6 +272,77 @@ def validateResponse (response : Response) (reference : UInt16) (function : UInt
   if actualFunction != function then
     throw (.invalidField responseHeaderSize "unexpected S7 response function")
 
+/-- A response with the wrong PDU reference is rejected before its PLC status
+    or function parameters can be accepted. -/
+theorem validateResponse_rejects_reference (response : Response)
+    (reference : UInt16) (function : UInt8)
+    (hreference : response.reference ≠ reference) :
+    validateResponse response reference function = .error
+      (.invalidField 4 s!"expected PDU reference {reference}, got {response.reference}") := by
+  rw [validateResponse, if_pos (by simpa using hreference)]
+  rfl
+
+/-- Successful response validation proves request/response correlation. -/
+theorem validateResponse_reference_eq (response : Response)
+    (reference : UInt16) (function : UInt8)
+    (hvalidate : validateResponse response reference function = .ok ()) :
+    response.reference = reference := by
+  by_cases hreference : response.reference = reference
+  · exact hreference
+  · rw [validateResponse_rejects_reference response reference function hreference]
+      at hvalidate
+    contradiction
+
+/-- Successful response validation proves that the PLC-level error status is
+    clear before any service-specific decoder exposes payload data. -/
+theorem validateResponse_error_free (response : Response)
+    (reference : UInt16) (function : UInt8)
+    (hvalidate : validateResponse response reference function = .ok ()) :
+    response.errorClass = 0 ∧ response.errorCode = 0 := by
+  have hreference := validateResponse_reference_eq response reference function hvalidate
+  constructor
+  · by_cases hclass : response.errorClass = 0
+    · exact hclass
+    · rw [validateResponse, if_neg (by simp [hreference]),
+        if_pos (by simp [hclass])] at hvalidate
+      contradiction
+  · by_cases hcode : response.errorCode = 0
+    · exact hcode
+    · by_cases hclass : response.errorClass = 0
+      · rw [validateResponse, if_neg (by simp [hreference]),
+          if_pos (by simp [hclass, hcode])] at hvalidate
+        contradiction
+      · rw [validateResponse, if_neg (by simp [hreference]),
+          if_pos (by simp [hclass])] at hvalidate
+        contradiction
+
+/-- Successful response validation proves that the first parameter byte is the
+    expected service discriminator. -/
+theorem validateResponse_function_eq (response : Response)
+    (reference : UInt16) (function : UInt8)
+    (hvalidate : validateResponse response reference function = .ok ()) :
+    ∃ cursor, Cursor.readUInt8 { data := response.parameters } =
+      .ok (function, cursor) := by
+  have hreference := validateResponse_reference_eq response reference function hvalidate
+  have herrors := validateResponse_error_free response reference function hvalidate
+  rw [validateResponse, if_neg (by simp [hreference]),
+    if_neg (by simp [herrors.1, herrors.2])] at hvalidate
+  cases hread : Cursor.readUInt8 { data := response.parameters } with
+  | error error =>
+      rw [hread] at hvalidate
+      contradiction
+  | ok result =>
+      rcases result with ⟨actualFunction, cursor⟩
+      rw [hread] at hvalidate
+      by_cases hfunction : actualFunction = function
+      · subst actualFunction
+        exact ⟨cursor, rfl⟩
+      · change (if actualFunction != function then
+          Except.error (DecodeError.invalidField responseHeaderSize
+            "unexpected S7 response function") else .ok ()) = .ok () at hvalidate
+        rw [if_pos (by simpa using hfunction)] at hvalidate
+        contradiction
+
 def decodeSetupCommunication (reference : UInt16) (response : Response) : Except DecodeError SetupCommunication := do
   validateResponse response reference setupCommunicationFunction
   if response.parameters.size != 8 then

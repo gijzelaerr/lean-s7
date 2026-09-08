@@ -226,6 +226,13 @@ def testS7ResponseDecoding : IO Unit := do
   match S7.decodeResponse setupAck with
   | .error err => throw <| IO.userError s!"could not decode setup ACK: {repr err}"
   | .ok response =>
+      check (match S7.validateResponse response 2 S7.setupCommunicationFunction with
+        | .error _ => true | .ok _ => false) "mismatched S7 response reference was accepted"
+      check (match S7.validateResponse { response with errorClass := 0x81 }
+          1 S7.setupCommunicationFunction with
+        | .error _ => true | .ok _ => false) "S7 PLC error status was accepted"
+      check (match S7.validateResponse response 1 S7.readFunction with
+        | .error _ => true | .ok _ => false) "wrong S7 response function was accepted"
       match S7.decodeSetupCommunication 1 response with
       | .ok setup => check (setup.pduLength == 480) "unexpected negotiated PDU length"
       | .error err => throw <| IO.userError s!"could not decode setup parameters: {repr err}"
