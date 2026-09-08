@@ -41,6 +41,25 @@ def encodeUserDataHeader (reference : UInt16) (parameters data : ByteArray) :
     uint16BE (UInt16.ofNat parameters.size) ++ uint16BE (UInt16.ofNat data.size) ++
     parameters ++ data
 
+/-- Every successfully encoded USER_DATA PDU has the common ten-byte header
+    and the exact encoded parameter and data section sizes. -/
+theorem encodedUserDataHeader_size (reference : UInt16)
+    (parameters data packet : ByteArray)
+    (hencode : encodeUserDataHeader reference parameters data = .ok packet) :
+    packet.size = jobHeaderSize + parameters.size + data.size := by
+  by_cases hp : parameters.size ≤ maxSectionSize
+  · by_cases hd : data.size ≤ maxSectionSize
+    · rw [encodeUserDataHeader, if_neg (Nat.not_lt.mpr hp),
+        if_neg (Nat.not_lt.mpr hd)] at hencode
+      injection hencode with hpacket
+      subst packet
+      simp [jobHeaderSize]
+    · rw [encodeUserDataHeader, if_neg (Nat.not_lt.mpr hp),
+        if_pos (Nat.lt_of_not_ge hd)] at hencode
+      contradiction
+  · rw [encodeUserDataHeader, if_pos (Nat.lt_of_not_ge hp)] at hencode
+    contradiction
+
 def userDataParameters (group subfunction sequence : UInt8)
     (continuation : Bool) : ByteArray :=
   if continuation then
@@ -219,6 +238,23 @@ theorem decodePduReference_header (kind : UInt8) (reference : UInt16)
     (fun reservedResult => _) = _
   rw [Except.bind, href]
   rfl
+
+/-- Correlation extraction from every successfully encoded USER_DATA request
+    returns the request's reference. -/
+theorem decodePduReference_encodeUserDataHeader (reference : UInt16)
+    (parameters data packet : ByteArray)
+    (hparameters : parameters.size ≤ maxSectionSize)
+    (hdata : data.size ≤ maxSectionSize)
+    (hencode : encodeUserDataHeader reference parameters data = .ok packet) :
+    decodePduReference packet = .ok reference := by
+  rw [encodeUserDataHeader, if_neg (Nat.not_lt.mpr hparameters),
+    if_neg (Nat.not_lt.mpr hdata)] at hencode
+  injection hencode with hpacket
+  subst packet
+  simpa [ByteArray.append_assoc] using
+    decodePduReference_header userDataType reference
+      (uint16BE (UInt16.ofNat parameters.size) ++
+        uint16BE (UInt16.ofNat data.size) ++ parameters ++ data)
 
 /-- Correlation extraction from every successfully encoded S7 job returns the
     job's reference. -/

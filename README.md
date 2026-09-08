@@ -66,6 +66,7 @@ Implemented:
 - machine-checked multi-item batching order, coverage, item-count bounds, and
   negotiated request/response PDU budgets
 - fragmented SZL reads and the SZL directory
+- machine-checked USER_DATA section sizes and request-reference encoding
 - typed order-code, CPU, communication-processor, protection, and CPU-state queries
 - PLC clock get/set using validated S7 `DATE_AND_TIME` values
 - CPU hot start, cold start, and stop operations
