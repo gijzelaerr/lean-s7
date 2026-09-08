@@ -738,6 +738,25 @@ def encodeAreaRead (reference : UInt16) (range : MemoryRange) : Except EncodeErr
   let address ← encodeMemoryAddress range
   encodeJob { reference, parameters := bytes #[readFunction, 1] ++ address }
 
+/-- Every successful single-area read request occupies exactly 24 S7 bytes. -/
+theorem encodedAreaRead_size (reference : UInt16) (range : MemoryRange)
+    (packet : ByteArray) (hencode : encodeAreaRead reference range = .ok packet) :
+    packet.size = 24 := by
+  rw [encodeAreaRead] at hencode
+  cases haddress : encodeMemoryAddress range with
+  | error error =>
+      rw [haddress] at hencode
+      contradiction
+  | ok address =>
+      rw [haddress] at hencode
+      have haddressSize := encodedMemoryAddress_size range address haddress
+      have hsize := encodedJob_size {
+        reference
+        parameters := bytes #[readFunction, 1] ++ address
+      } packet hencode
+      simp [haddressSize, jobHeaderSize] at hsize
+      omega
+
 def encodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange) : Except EncodeError ByteArray := do
   if ranges.isEmpty || ranges.size > maxItemCount then
     throw (.invalidSize ranges.size)
@@ -761,6 +780,51 @@ def encodeAreaWrite (reference : UInt16) (range : MemoryRange)
   let data := bytes #[0, range.area.dataTransportSize] ++
     uint16BE (UInt16.ofNat dataLength) ++ payload
   encodeJob { reference, parameters := bytes #[writeFunction, 1] ++ address, data }
+
+/-- Every successful single-area write request occupies its fixed 28-byte S7
+    overhead plus the payload, matching the client transfer budget. -/
+theorem encodedAreaWrite_size (reference : UInt16) (range : MemoryRange)
+    (payload packet : ByteArray)
+    (hencode : encodeAreaWrite reference range payload = .ok packet) :
+    packet.size = 28 + payload.size := by
+  rw [encodeAreaWrite] at hencode
+  cases haddress : encodeMemoryAddress range with
+  | error error =>
+      rw [haddress] at hencode
+      contradiction
+  | ok address =>
+      rw [haddress] at hencode
+      change Except.bind (Except.ok address) (fun address =>
+        if payload.size != range.count * range.area.elementSize then
+          throw (.invalidPayloadSize payload.size
+            (range.count * range.area.elementSize))
+        else
+          let dataLength := if range.area.dataTransportSize == octetTransportSize then
+            payload.size
+          else
+            payload.size * 8
+          if dataLength > maxSectionSize then
+            throw (.invalidSize payload.size)
+          else
+            let data := bytes #[0, range.area.dataTransportSize] ++
+              uint16BE (UInt16.ofNat dataLength) ++ payload
+            encodeJob {
+              reference
+              parameters := bytes #[writeFunction, 1] ++ address
+              data
+            }) = .ok packet at hencode
+      rw [Except.bind] at hencode
+      split at hencode
+      · contradiction
+      split at hencode
+      all_goals
+        dsimp only at hencode
+        split at hencode
+        · contradiction
+        · have haddressSize := encodedMemoryAddress_size range address haddress
+          have hsize := encodedJob_size _ packet hencode
+          simp [haddressSize, jobHeaderSize] at hsize
+          omega
 
 def encodeAreaWriteMany (reference : UInt16) (items : Array WriteItem) : Except EncodeError ByteArray := do
   if items.isEmpty || items.size > maxItemCount then
