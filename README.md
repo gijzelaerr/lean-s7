@@ -53,7 +53,8 @@ Implemented:
 - IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
 - machine-checked response-reference, PLC-status, and function validation invariants
-- machine-checked multi-item batching order, coverage, and item-count bounds
+- machine-checked multi-item batching order, coverage, item-count bounds, and
+  negotiated request/response PDU budgets
 - fragmented SZL reads and the SZL directory
 - typed order-code, CPU, communication-processor, protection, and CPU-state queries
 - PLC clock get/set using validated S7 `DATE_AND_TIME` values

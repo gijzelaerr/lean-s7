@@ -591,6 +591,77 @@ theorem takeReadBatch_count_le (pduLength : Nat)
       case isFalse =>
         simpa [hselected] using hcount
 
+/-- The request size represented by a selected read batch stays within the
+    negotiated PDU budget. -/
+theorem takeReadBatch_request_size_le (pduLength base : Nat)
+    (pending : List S7.MemoryRange) (count requestSize responseSize : Nat)
+    (selected : List S7.MemoryRange) (hselected : selected.length = count)
+    (hrequest : requestSize = base + 12 * count)
+    (hrequestLe : requestSize ≤ pduLength) :
+    let result := takeReadBatch pduLength pending count requestSize responseSize selected
+    base + 12 * result.1.length ≤ pduLength := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeReadBatch, hselected, hrequest] using hrequestLe
+  | cons range rest ih =>
+      simp only [takeReadBatch]
+      split
+      case isTrue hcondition =>
+        have hproperties := hcondition
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hproperties
+        apply ih (count + 1) (requestSize + 12)
+          (responseSize + readResponseContribution range) (range :: selected)
+        · simp [hselected]
+        · rw [hrequest]
+          omega
+        · exact hproperties.1.2
+      case isFalse =>
+        simpa [hselected, hrequest] using hrequestLe
+
+def readResponseContributions (ranges : List S7.MemoryRange) : Nat :=
+  (ranges.map readResponseContribution).sum
+
+@[simp] theorem readResponseContributions_reverse (ranges : List S7.MemoryRange) :
+    readResponseContributions ranges.reverse = readResponseContributions ranges := by
+  simp [readResponseContributions, List.map_reverse, List.sum_reverse]
+
+/-- The response size represented by a selected read batch stays within the
+    negotiated PDU budget. -/
+theorem takeReadBatch_response_size_le (pduLength base : Nat)
+    (pending : List S7.MemoryRange) (count requestSize responseSize : Nat)
+    (selected : List S7.MemoryRange)
+    (hresponse : responseSize = base + readResponseContributions selected)
+    (hresponseLe : responseSize ≤ pduLength) :
+    let result := takeReadBatch pduLength pending count requestSize responseSize selected
+    base + readResponseContributions result.1 ≤ pduLength := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeReadBatch, hresponse] using hresponseLe
+  | cons range rest ih =>
+      simp only [takeReadBatch]
+      split
+      case isTrue hcondition =>
+        have hproperties := hcondition
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hproperties
+        apply ih (count + 1) (requestSize + 12)
+          (responseSize + readResponseContribution range) (range :: selected)
+        · simp [readResponseContributions, hresponse]
+          omega
+        · exact hproperties.2
+      case isFalse =>
+        simpa [hresponse] using hresponseLe
+
+/-- The read batch selected by the client fits both negotiated request and
+    response budgets. -/
+theorem takeReadBatch_fits (pduLength : Nat) (pending : List S7.MemoryRange)
+    (hrequest : 12 ≤ pduLength) (hresponse : 14 ≤ pduLength) :
+    let result := takeReadBatch pduLength pending 0 12 14 []
+    12 + 12 * result.1.length ≤ pduLength ∧
+      14 + readResponseContributions result.1 ≤ pduLength := by
+  constructor
+  · exact takeReadBatch_request_size_le pduLength 12 pending 0 12 14 []
+      (by simp) (by simp) hrequest
+  · exact takeReadBatch_response_size_le pduLength 14 pending 0 12 14 []
+      (by simp [readResponseContributions]) hresponse
+
 private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeAreaReadMany reference ranges
@@ -671,6 +742,77 @@ theorem takeWriteBatch_count_le (pduLength : Nat)
         · exact Nat.add_one_le_iff.mpr hproperties.1.1.2
       case isFalse =>
         simpa [hselected] using hcount
+
+def writeRequestContributions (items : List S7.WriteItem) : Nat :=
+  (items.map writeRequestContribution).sum
+
+@[simp] theorem writeRequestContributions_reverse (items : List S7.WriteItem) :
+    writeRequestContributions items.reverse = writeRequestContributions items := by
+  simp [writeRequestContributions, List.map_reverse, List.sum_reverse]
+
+/-- The request size represented by a selected write batch stays within the
+    negotiated PDU budget. -/
+theorem takeWriteBatch_request_size_le (pduLength base : Nat)
+    (pending : List S7.WriteItem) (count requestSize responseSize : Nat)
+    (selected : List S7.WriteItem)
+    (hrequest : requestSize = base + writeRequestContributions selected)
+    (hrequestLe : requestSize ≤ pduLength) :
+    let result := takeWriteBatch pduLength pending count requestSize responseSize selected
+    base + writeRequestContributions result.1 ≤ pduLength := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeWriteBatch, hrequest] using hrequestLe
+  | cons item rest ih =>
+      simp only [takeWriteBatch]
+      split
+      case isTrue hcondition =>
+        have hproperties := hcondition
+        simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hproperties
+        apply ih (count + 1) (requestSize + writeRequestContribution item)
+          (responseSize + 1) (item :: selected)
+        · simp [writeRequestContributions, hrequest]
+          omega
+        · exact hproperties.1.2
+      case isFalse =>
+        simpa [hrequest] using hrequestLe
+
+/-- The response size represented by a selected write batch stays within the
+    negotiated PDU budget. -/
+theorem takeWriteBatch_response_size_le (pduLength base : Nat)
+    (pending : List S7.WriteItem) (count requestSize responseSize : Nat)
+    (selected : List S7.WriteItem) (hselected : selected.length = count)
+    (hresponse : responseSize = base + count)
+    (hresponseLe : responseSize ≤ pduLength) :
+    let result := takeWriteBatch pduLength pending count requestSize responseSize selected
+    base + result.1.length ≤ pduLength := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeWriteBatch, hselected, hresponse] using hresponseLe
+  | cons item rest ih =>
+      simp only [takeWriteBatch]
+      split
+      case isTrue hcondition =>
+        have hproperties := hcondition
+        simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hproperties
+        apply ih (count + 1) (requestSize + writeRequestContribution item)
+          (responseSize + 1) (item :: selected)
+        · simp [hselected]
+        · rw [hresponse]
+          omega
+        · exact hproperties.2
+      case isFalse =>
+        simpa [hselected, hresponse] using hresponseLe
+
+/-- The write batch selected by the client fits both negotiated request and
+    response budgets. -/
+theorem takeWriteBatch_fits (pduLength : Nat) (pending : List S7.WriteItem)
+    (hrequest : 12 ≤ pduLength) (hresponse : 14 ≤ pduLength) :
+    let result := takeWriteBatch pduLength pending 0 12 14 []
+    12 + writeRequestContributions result.1 ≤ pduLength ∧
+      14 + result.1.length ≤ pduLength := by
+  constructor
+  · exact takeWriteBatch_request_size_le pduLength 12 pending 0 12 14 []
+      (by simp [writeRequestContributions]) hrequest
+  · exact takeWriteBatch_response_size_le pduLength 14 pending 0 12 14 []
+      (by simp) (by simp) hresponse
 
 private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
