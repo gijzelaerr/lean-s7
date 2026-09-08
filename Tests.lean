@@ -245,6 +245,19 @@ def testS7ResponseDecoding : IO Unit := do
       | .error err => throw <| IO.userError s!"could not decode setup parameters: {repr err}"
   check (match S7.decodeResponse (setupAck.extract 0 15) with | .error _ => true | _ => false)
     "truncated S7 response was accepted"
+  let parameters := bytes #[S7.readFunction, 1]
+  let data := bytes #[0xff, S7.byteTransportSize, 0, 8, 0xaa]
+  match S7.encodeAckData 0x1234 parameters data with
+  | .error err => throw <| IO.userError s!"could not encode S7 ACK_DATA: {repr err}"
+  | .ok encoded =>
+      check (isOkEq (S7.decodeResponse encoded) {
+        pduType := S7.ackDataType
+        reference := 0x1234
+        parameters
+        data
+        errorClass := 0
+        errorCode := 0
+      }) "S7 ACK_DATA round trip failed"
 
 def testS7DbVectors : IO Unit := do
   let readRange : S7.DbRange := { dbNumber := 1, start := 10, size := 4 }
@@ -567,6 +580,10 @@ def testS7AdvancedVectors : IO Unit := do
   | .ok job =>
       check (job.reference == 0x1234 && job.parameters == bytes #[0x1b])
         "PLC download job was decoded incorrectly"
+  check (match S7.decodeJobPdu (bytes #[
+      0x32, 1, 0, 0, 0x12, 0x34, 0, 0, 0, 0, 0x1b]) with
+    | .error _ => true | .ok _ => false)
+    "PLC-driven job decoder accepted a trailing undeclared section byte"
   check (isOkEq (S7.encodeDownloadFragmentResponse 0x1234 true (bytes #[1, 2, 3])) (bytes #[
     0x32, 3, 0, 0, 0x12, 0x34, 0, 2, 0, 7, 0, 0,
     0x1b, 0, 0, 3, 0, 0xfb, 1, 2, 3]))

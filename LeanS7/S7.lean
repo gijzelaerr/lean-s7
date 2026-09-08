@@ -241,6 +241,36 @@ structure Response where
   errorCode : UInt8
   deriving BEq
 
+/-- Encode a successful S7 ACK_DATA response. This is used when the peer sends
+    a server-initiated job, such as a PLC-driven block download. -/
+def encodeAckData (reference : UInt16) (parameters data : ByteArray) :
+    Except EncodeError ByteArray := do
+  if parameters.size > maxSectionSize then
+    throw (.parametersTooLarge parameters.size maxSectionSize)
+  if data.size > maxSectionSize then
+    throw (.dataTooLarge data.size maxSectionSize)
+  return bytes #[protocolId, ackDataType, 0, 0] ++ uint16BE reference ++
+    uint16BE (UInt16.ofNat parameters.size) ++ uint16BE (UInt16.ofNat data.size) ++
+    bytes #[0, 0] ++ parameters ++ data
+
+/-- A successful ACK_DATA encoding has exactly the response header and section
+    sizes expected by the decoder. -/
+theorem encodedAckData_size (reference : UInt16) (parameters data packet : ByteArray)
+    (h : encodeAckData reference parameters data = .ok packet) :
+    packet.size = responseHeaderSize + parameters.size + data.size := by
+  by_cases hp : parameters.size ≤ maxSectionSize
+  · by_cases hd : data.size ≤ maxSectionSize
+    · rw [encodeAckData, if_neg (Nat.not_lt.mpr hp),
+        if_neg (Nat.not_lt.mpr hd)] at h
+      injection h with hpacket
+      subst packet
+      simp [responseHeaderSize]
+    · rw [encodeAckData, if_neg (Nat.not_lt.mpr hp),
+        if_pos (Nat.lt_of_not_ge hd)] at h
+      contradiction
+  · rw [encodeAckData, if_pos (Nat.lt_of_not_ge hp)] at h
+    contradiction
+
 def decodeResponse (pdu : ByteArray) : Except DecodeError Response := do
   let cursor : Cursor := { data := pdu }
   let (actualProtocolId, cursor) ← cursor.readUInt8
@@ -262,6 +292,158 @@ def decodeResponse (pdu : ByteArray) : Except DecodeError Response := do
   let (data, cursor) ← cursor.readBytes dataLength.toNat
   cursor.finish
   return { pduType, reference, parameters, data, errorClass, errorCode }
+
+/-- Encoding and then decoding a successful ACK_DATA response returns its
+    reference and sections with a clear PLC status. -/
+theorem decodeResponse_encodeAckData (reference : UInt16)
+    (parameters data packet : ByteArray)
+    (hparameters : parameters.size ≤ maxSectionSize)
+    (hdata : data.size ≤ maxSectionSize)
+    (hencode : encodeAckData reference parameters data = .ok packet) :
+    decodeResponse packet = .ok {
+      pduType := ackDataType
+      reference
+      parameters
+      data
+      errorClass := 0
+      errorCode := 0
+    } := by
+  let header := bytes #[protocolId, ackDataType, 0, 0] ++ uint16BE reference ++
+    uint16BE (UInt16.ofNat parameters.size) ++
+    uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0]
+  let pdu := header ++ parameters ++ data
+  have hpacket : packet = pdu := by
+    rw [encodeAckData, if_neg (Nat.not_lt.mpr hparameters),
+      if_neg (Nat.not_lt.mpr hdata)] at hencode
+    exact Except.ok.inj hencode.symm
+  rw [hpacket]
+  have hpLt : parameters.size < 65536 := by
+    simpa [maxSectionSize] using Nat.lt_succ_of_le hparameters
+  have hdLt : data.size < 65536 := by
+    simpa [maxSectionSize] using Nat.lt_succ_of_le hdata
+  have hpRound : (UInt16.ofNat parameters.size).toNat = parameters.size := by
+    simp [Nat.mod_eq_of_lt hpLt]
+  have hdRound : (UInt16.ofNat data.size).toNat = data.size := by
+    simp [Nat.mod_eq_of_lt hdLt]
+  have hpduSize : pdu.size = responseHeaderSize + parameters.size + data.size := by
+    simp [pdu, header, responseHeaderSize]
+  have hread0 : Cursor.readUInt8 { data := pdu } =
+      .ok (protocolId, { data := pdu, offset := 1 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by rw [hpduSize]; simp [responseHeaderSize]; omega)]
+    congr 2 <;> simp [pdu, header, bytes]
+  have hread1 : Cursor.readUInt8 { data := pdu, offset := 1 } =
+      .ok (ackDataType, { data := pdu, offset := 2 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by rw [hpduSize]; simp [responseHeaderSize]; omega)]
+    congr 2 <;> simp [pdu, header, bytes]
+  have hreserved : Cursor.readUInt16BE { data := pdu, offset := 2 } =
+      .ok (0, { data := pdu, offset := 4 }) := by
+    have hfixed : bytes #[protocolId, ackDataType, 0, 0] =
+        bytes #[protocolId, ackDataType] ++ uint16BE 0 := by
+      native_decide
+    simpa [pdu, header, hfixed, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, ackDataType])
+        (uint16BE reference ++ uint16BE (UInt16.ofNat parameters.size) ++
+          uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data) 0
+  have href : Cursor.readUInt16BE { data := pdu, offset := 4 } =
+      .ok (reference, { data := pdu, offset := 6 }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, ackDataType, 0, 0])
+        (uint16BE (UInt16.ofNat parameters.size) ++
+          uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data)
+        reference
+  have hpLength : Cursor.readUInt16BE { data := pdu, offset := 6 } =
+      .ok (UInt16.ofNat parameters.size, { data := pdu, offset := 8 }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, ackDataType, 0, 0] ++ uint16BE reference)
+        (uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data)
+        (UInt16.ofNat parameters.size)
+  have hdLength : Cursor.readUInt16BE { data := pdu, offset := 8 } =
+      .ok (UInt16.ofNat data.size, { data := pdu, offset := 10 }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, ackDataType, 0, 0] ++ uint16BE reference ++
+          uint16BE (UInt16.ofNat parameters.size))
+        (bytes #[0, 0] ++ parameters ++ data) (UInt16.ofNat data.size)
+  have herrorClass : Cursor.readUInt8 { data := pdu, offset := 10 } =
+      .ok (0, { data := pdu, offset := 11 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by rw [hpduSize]; simp [responseHeaderSize]; omega)]
+    congr 2 <;> simp [pdu, header, bytes, ByteArray.append_assoc]
+  have herrorCode : Cursor.readUInt8 { data := pdu, offset := 11 } =
+      .ok (0, { data := pdu, offset := 12 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by rw [hpduSize]; simp [responseHeaderSize]; omega)]
+    congr 2 <;> simp [pdu, header, bytes, ByteArray.append_assoc]
+  have hpRead : Cursor.readBytes { data := pdu, offset := 12 }
+      parameters.size = .ok
+        (parameters, { data := pdu, offset := 12 + parameters.size }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readBytes_append header parameters data
+  have hdRead : Cursor.readBytes
+      { data := pdu, offset := 12 + parameters.size } data.size = .ok
+        (data, { data := pdu, offset := 12 + parameters.size + data.size }) := by
+    have h := Cursor.readBytes_append (header ++ parameters) data ByteArray.empty
+    simp only [ByteArray.append_empty] at h
+    rw [show header ++ parameters ++ data = pdu by rfl] at h
+    have hheaderSize : header.size = 12 := by simp [header]
+    simpa [hheaderSize] using h
+  rw [decodeResponse, hread0]
+  change Except.bind (Except.ok
+      (protocolId, ({ data := pdu, offset := 1 } : Cursor)))
+    (fun protocolResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hread1]
+  change Except.bind (Except.ok
+      (ackDataType, ({ data := pdu, offset := 2 } : Cursor)))
+    (fun typeResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hreserved]
+  change Except.bind (Except.ok
+      (0, ({ data := pdu, offset := 4 } : Cursor)))
+    (fun reservedResult => _) = _
+  rw [Except.bind, href]
+  change Except.bind (Except.ok
+      (reference, ({ data := pdu, offset := 6 } : Cursor)))
+    (fun referenceResult => _) = _
+  rw [Except.bind, hpLength]
+  change Except.bind (Except.ok
+      (UInt16.ofNat parameters.size, ({ data := pdu, offset := 8 } : Cursor)))
+    (fun parameterLengthResult => _) = _
+  rw [Except.bind, hdLength]
+  change Except.bind (Except.ok
+      (UInt16.ofNat data.size, ({ data := pdu, offset := 10 } : Cursor)))
+    (fun dataLengthResult => _) = _
+  rw [Except.bind, herrorClass]
+  change Except.bind (Except.ok
+      (0, ({ data := pdu, offset := 11 } : Cursor)))
+    (fun errorClassResult => _) = _
+  rw [Except.bind, herrorCode]
+  change Except.bind (Except.ok
+      (0, ({ data := pdu, offset := 12 } : Cursor)))
+    (fun errorCodeResult => _) = _
+  rw [Except.bind]
+  simp [hpRound, hdRound, hpduSize, responseHeaderSize]
+  rw [hpRead]
+  change Except.bind (Except.ok
+      (parameters, ({ data := pdu, offset := 12 + parameters.size } : Cursor)))
+    (fun parametersResult => _) = _
+  rw [Except.bind, hdRead]
+  change Except.bind (Except.ok
+      (data, ({ data := pdu, offset := 12 + parameters.size + data.size } : Cursor)))
+    (fun dataResult => _) = _
+  rw [Except.bind]
+  have hfinish : Cursor.finish
+      ({ data := pdu, offset := 12 + parameters.size + data.size } : Cursor) =
+      .ok () := by
+    rw [Cursor.finish, if_pos (by
+      dsimp only [Cursor.offset, Cursor.data]
+      rw [hpduSize]
+      simp [responseHeaderSize])]
+  rw [hfinish]
+  rfl
 
 def validateResponse (response : Response) (reference : UInt16) (function : UInt8) : Except DecodeError Unit := do
   if response.reference != reference then

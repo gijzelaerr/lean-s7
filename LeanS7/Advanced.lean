@@ -303,33 +303,11 @@ def encodeCopyRamToRom (reference : UInt16) : Except EncodeError ByteArray :=
   encodeJob { reference, parameters :=
     (bytes #[startFunction, 0, 0, 0, 0, 0, 0, 0xfd, 0, 2, 0x45, 0x50, 5] ++ "_MODU".toUTF8) }
 
-structure JobPdu where
-  reference : UInt16
-  parameters : ByteArray
-  data : ByteArray
-  deriving BEq
+abbrev JobPdu := Job
 
-def decodeJobPdu (pdu : ByteArray) : Except DecodeError JobPdu := do
-  let cursor : Cursor := { data := pdu }
-  let (pid, cursor) ← cursor.readUInt8
-  if pid != protocolId then throw (.invalidField 0 "invalid S7 protocol ID")
-  let (kind, cursor) ← cursor.readUInt8
-  if kind != jobType then throw (.invalidField 1 "expected an S7 job PDU")
-  let (_, cursor) ← cursor.readUInt16BE
-  let (reference, cursor) ← cursor.readUInt16BE
-  let (parameterLength, cursor) ← cursor.readUInt16BE
-  let (dataLength, cursor) ← cursor.readUInt16BE
-  let (parameters, cursor) ← cursor.readBytes parameterLength.toNat
-  let (data, cursor) ← cursor.readBytes dataLength.toNat
-  cursor.finish
-  return { reference, parameters, data }
-
-def encodeAckData (reference : UInt16) (parameters data : ByteArray) : Except EncodeError ByteArray := do
-  if parameters.size > maxSectionSize then throw (.parametersTooLarge parameters.size maxSectionSize)
-  if data.size > maxSectionSize then throw (.dataTooLarge data.size maxSectionSize)
-  return bytes #[protocolId, ackDataType, 0, 0] ++ uint16BE reference ++
-    uint16BE (UInt16.ofNat parameters.size) ++ uint16BE (UInt16.ofNat data.size) ++
-    bytes #[0, 0] ++ parameters ++ data
+/-- Compatibility name for the proved, strict core S7 job decoder. -/
+def decodeJobPdu (pdu : ByteArray) : Except DecodeError JobPdu :=
+  decodeJob pdu
 
 def encodeRequestDownload (reference : UInt16) (blockType : BlockType) (number loadSize mc7Size : Nat) :
     Except EncodeError ByteArray := do
