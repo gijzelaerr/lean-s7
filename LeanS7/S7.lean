@@ -525,6 +525,25 @@ theorem validateResponse_function_eq (response : Response)
         rw [if_pos (by simpa using hfunction)] at hvalidate
         contradiction
 
+/-- Check the protocol minimum needed by all supported S7 request and response
+    headers before installing a negotiated PDU budget. -/
+def validateSetupPduLength (pduLength : UInt16) : Except DecodeError Unit := do
+  if pduLength < 240 then
+    throw (.invalidField (responseHeaderSize + 6)
+      s!"negotiated PDU length is too small: {pduLength}")
+
+/-- Every accepted setup PDU length is at least the protocol minimum used by
+    the client batching and chunking layers. -/
+theorem validateSetupPduLength_lower_bound (pduLength : UInt16)
+    (hvalidate : validateSetupPduLength pduLength = .ok ()) :
+    240 ≤ pduLength.toNat := by
+  by_cases hsmall : pduLength < 240
+  · rw [validateSetupPduLength, if_pos hsmall] at hvalidate
+    contradiction
+  · have hnotlt : ¬pduLength.toNat < 240 := by
+      simpa [UInt16.lt_iff_toNat_lt] using hsmall
+    omega
+
 def decodeSetupCommunication (reference : UInt16) (response : Response) : Except DecodeError SetupCommunication := do
   validateResponse response reference setupCommunicationFunction
   if response.parameters.size != 8 then
@@ -534,8 +553,7 @@ def decodeSetupCommunication (reference : UInt16) (response : Response) : Except
   let (maxAmqCallee, cursor) ← cursor.readUInt16BE
   let (pduLength, cursor) ← cursor.readUInt16BE
   cursor.finish
-  if pduLength < 240 then
-    throw (.invalidField (responseHeaderSize + 6) s!"negotiated PDU length is too small: {pduLength}")
+  validateSetupPduLength pduLength
   return { maxAmqCaller, maxAmqCallee, pduLength }
 
 inductive Area where

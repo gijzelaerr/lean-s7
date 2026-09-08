@@ -277,6 +277,13 @@ def testS7ResponseDecoding : IO Unit := do
       match S7.decodeSetupCommunication 1 response with
       | .ok setup => check (setup.pduLength == 480) "unexpected negotiated PDU length"
       | .error err => throw <| IO.userError s!"could not decode setup parameters: {repr err}"
+      let undersized := {
+        response with
+        parameters := bytes #[S7.setupCommunicationFunction, 0, 0, 1, 0, 1, 0, 239]
+      }
+      check (match S7.decodeSetupCommunication 1 undersized with
+        | .error _ => true
+        | .ok _ => false) "undersized negotiated S7 PDU length was accepted"
   check (match S7.decodeResponse (setupAck.extract 0 15) with | .error _ => true | _ => false)
     "truncated S7 response was accepted"
   let parameters := bytes #[S7.readFunction, 1]
