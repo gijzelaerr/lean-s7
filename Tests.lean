@@ -32,8 +32,33 @@ def testTPKTRejectsMalformedFrames : IO Unit := do
     "invalid TPKT version was accepted"
   check (match TPKT.decode (bytes #[3, 0, 0, 8, 0xaa]) with | .error _ => true | _ => false)
     "invalid TPKT length was accepted"
+  check (match TPKT.decode (bytes #[3, 0, 0, 6, 0xaa, 0xbb]) with
+    | .error _ => true | _ => false) "undersized TPKT frame was accepted"
+
+def testTPKTIgnoresReservedInput : IO Unit := do
+  let expected : TPKT.Frame := { payload := bytes #[2, 0xf0, 0x80] }
+  check (isOkEq (TPKT.decode (bytes #[3, 0xff, 0, 7, 2, 0xf0, 0x80])) expected)
+    "TPKT reserved byte was not ignored on input"
 
 def testTPKTSizeBoundary : IO Unit := do
+  let minimumPayloadSize := TPKT.minFrameSize - TPKT.headerSize
+  let minimumFrame : TPKT.Frame := {
+    payload := ByteArray.mk (Array.replicate minimumPayloadSize 0xaa)
+  }
+  match TPKT.encode minimumFrame with
+  | .error err => throw <| IO.userError s!"minimum-size TPKT frame was rejected: {repr err}"
+  | .ok encoded =>
+      check (encoded.size == TPKT.minFrameSize) "minimum-size TPKT frame has the wrong size"
+      check (isOkEq (TPKT.decode encoded) minimumFrame) "minimum-size TPKT round trip failed"
+
+  let undersizedFrame : TPKT.Frame := {
+    payload := ByteArray.mk (Array.replicate (minimumPayloadSize - 1) 0xaa)
+  }
+  check (match TPKT.encode undersizedFrame with
+    | .error (.frameTooSmall size minimum) =>
+        size == TPKT.minFrameSize - 1 && minimum == TPKT.minFrameSize
+    | .error _ | .ok _ => false) "undersized TPKT frame was encoded"
+
   let maximumPayloadSize := TPKT.maxFrameSize - TPKT.headerSize
   let maximumFrame : TPKT.Frame := {
     payload := ByteArray.mk (Array.replicate maximumPayloadSize 0xaa)
@@ -50,7 +75,38 @@ def testTPKTSizeBoundary : IO Unit := do
   check (match TPKT.encode oversizedFrame with
     | .error (.frameTooLarge size maximum) =>
         size == TPKT.maxFrameSize + 1 && maximum == TPKT.maxFrameSize
-    | .ok _ => false) "oversized TPKT frame was accepted"
+    | .error _ | .ok _ => false) "oversized TPKT frame was accepted"
+
+def tpktEncodeErrorName : TPKT.EncodeError → String
+  | .frameTooSmall _ _ => "frame-too-small"
+  | .frameTooLarge _ _ => "frame-too-large"
+
+def tpktDecodeErrorName : DecodeError → String
+  | .unexpectedEnd _ _ _ => "unexpected-end"
+  | .invalidField 0 _ => "invalid-version"
+  | .invalidField 2 message =>
+      if message.startsWith "invalid TPKT length" then
+        "length-below-minimum"
+      else
+        "length-mismatch"
+  | .invalidField _ _ | .trailingBytes _ _ => "other-decode-error"
+
+def testTPKTConformanceCorpus : IO Unit := do
+  for test in Conformance.TPKT.encodeCases do
+    let actual := TPKT.encode { payload := test.payload.materialize }
+    let conforms := match test.expected, actual with
+      | .accept expected, .ok packet => packet == expected.materialize
+      | .reject expected, .error error => tpktEncodeErrorName error == expected
+      | _, _ => false
+    check conforms s!"TPKT encode conformance case failed: {test.id}"
+
+  for test in Conformance.TPKT.decodeCases do
+    let actual := TPKT.decode test.packet.materialize
+    let conforms := match test.expected, actual with
+      | .accept expected, .ok frame => frame.payload == expected.materialize
+      | .reject expected, .error error => tpktDecodeErrorName error == expected
+      | _, _ => false
+    check conforms s!"TPKT decode conformance case failed: {test.id}"
 
 def testCOTPConnectionRequest : IO Unit := do
   let encoded := COTP.encodeConnectionRequest {}
@@ -439,7 +495,9 @@ def main : IO Unit := do
   testBinary
   testTPKTRoundTrip
   testTPKTRejectsMalformedFrames
+  testTPKTIgnoresReservedInput
   testTPKTSizeBoundary
+  testTPKTConformanceCorpus
   testCOTPConnectionRequest
   testCOTPDataRoundTrip
   testS7SetupCommunication

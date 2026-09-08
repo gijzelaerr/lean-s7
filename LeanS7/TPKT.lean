@@ -4,6 +4,7 @@ namespace LeanS7.TPKT
 
 def version : UInt8 := 3
 def headerSize : Nat := 4
+def minFrameSize : Nat := 7
 def maxFrameSize : Nat := 65535
 
 structure Frame where
@@ -11,17 +12,21 @@ structure Frame where
   deriving BEq
 
 inductive EncodeError where
+  | frameTooSmall (size minimum : Nat)
   | frameTooLarge (size maximum : Nat)
   deriving Repr, BEq
 
 /-- Encode an RFC 1006 TPKT frame. -/
 def encode (frame : Frame) : Except EncodeError ByteArray :=
   let length := headerSize + frame.payload.size
-  if length ≤ maxFrameSize then
-    let header := bytes #[version, 0] ++ uint16BE (UInt16.ofNat length)
-    .ok (header ++ frame.payload)
+  if minFrameSize ≤ length then
+    if length ≤ maxFrameSize then
+      let header := bytes #[version, 0] ++ uint16BE (UInt16.ofNat length)
+      .ok (header ++ frame.payload)
+    else
+      .error (.frameTooLarge length maxFrameSize)
   else
-    .error (.frameTooLarge length maxFrameSize)
+    .error (.frameTooSmall length minFrameSize)
 
 /-- Decode exactly one RFC 1006 TPKT frame. Trailing or truncated data is rejected. -/
 def decode (data : ByteArray) : Except DecodeError Frame := do
@@ -32,14 +37,11 @@ def decode (data : ByteArray) : Except DecodeError Frame := do
   if actualVersion != version then
     throw (.invalidField 0 s!"unsupported TPKT version {actualVersion}")
   let reservedResult ← cursor.readUInt8
-  let reserved := reservedResult.fst
   let cursor := reservedResult.snd
-  if reserved != 0 then
-    throw (.invalidField 1 "TPKT reserved byte must be zero")
   let lengthResult ← cursor.readUInt16BE
   let declaredLength := lengthResult.fst.toNat
   let cursor := lengthResult.snd
-  if declaredLength < headerSize then
+  if declaredLength < minFrameSize then
     throw (.invalidField 2 s!"invalid TPKT length {declaredLength}")
   if declaredLength != data.size then
     throw (.invalidField 2 s!"declared length {declaredLength} does not match {data.size} bytes")
@@ -50,35 +52,51 @@ def decode (data : ByteArray) : Except DecodeError Frame := do
   return { payload }
 
 theorem encode_succeeds_of_size (frame : Frame)
-    (h : headerSize + frame.payload.size ≤ maxFrameSize) :
+    (hmin : minFrameSize ≤ headerSize + frame.payload.size)
+    (hmax : headerSize + frame.payload.size ≤ maxFrameSize) :
     ∃ packet, encode frame = .ok packet := by
-  simp [encode, h]
+  simp [encode, hmin, hmax]
+
+theorem encode_rejects_undersize (frame : Frame)
+    (h : headerSize + frame.payload.size < minFrameSize) :
+    encode frame = .error (.frameTooSmall
+      (headerSize + frame.payload.size) minFrameSize) := by
+  simp [encode, Nat.not_le_of_gt h]
 
 theorem encode_rejects_oversize (frame : Frame)
     (h : maxFrameSize < headerSize + frame.payload.size) :
     encode frame = .error (.frameTooLarge
       (headerSize + frame.payload.size) maxFrameSize) := by
-  simp [encode, Nat.not_le_of_gt h]
+  have hmin : minFrameSize ≤ headerSize + frame.payload.size := by
+    simp [maxFrameSize, headerSize] at h
+    simp [minFrameSize, headerSize]
+    omega
+  simp [encode, hmin, Nat.not_le_of_gt h]
 
 theorem encoded_size (frame : Frame) (packet : ByteArray)
     (h : encode frame = .ok packet) : packet.size = headerSize + frame.payload.size := by
   by_cases hsize : headerSize + frame.payload.size ≤ maxFrameSize
-  · simp [encode, hsize] at h
-    subst packet
-    simp [bytes, uint16BE, headerSize]
-    change 2 + 2 = 4
-    rfl
-  · simp [encode, hsize] at h
+  · by_cases hmin : minFrameSize ≤ headerSize + frame.payload.size
+    · simp [encode, hmin, hsize] at h
+      subst packet
+      simp [bytes, uint16BE, headerSize]
+      change 2 + 2 = 4
+      rfl
+    · simp [encode, hmin] at h
+  · by_cases hmin : minFrameSize ≤ headerSize + frame.payload.size
+    · simp [encode, hmin, hsize] at h
+    · simp [encode, hmin] at h
 
 /-- Encoding and then decoding a frame returns the original frame. -/
 theorem decode_encode (frame : Frame) (packet : ByteArray)
+    (hmin : minFrameSize ≤ headerSize + frame.payload.size)
     (hsize : headerSize + frame.payload.size ≤ maxFrameSize)
     (hencode : encode frame = .ok packet) :
     decode packet = .ok frame := by
   let data := bytes #[version, 0] ++
     uint16BE (UInt16.ofNat (headerSize + frame.payload.size)) ++ frame.payload
   have hpacket : packet = data := by
-    simpa [encode, hsize, data] using hencode.symm
+    simpa [encode, hmin, hsize, data] using hencode.symm
   rw [hpacket]
   have hversionRead : Cursor.readUInt8 { data } =
       .ok (version, { data, offset := 1 }) := by
@@ -173,8 +191,9 @@ theorem decode_encode (frame : Frame) (packet : ByteArray)
         ({ data, offset := 4 } : Cursor)))
     (fun lengthResult => _) = .ok frame
   rw [Except.bind]
-  simp [hdataSize, Nat.mod_eq_of_lt hlengthLt4, headerSize]
-  rw [if_neg (by omega)]
+  simp [hdataSize, Nat.mod_eq_of_lt hlengthLt4, headerSize,
+    minFrameSize]
+  rw [if_neg (by simpa [headerSize, minFrameSize] using Nat.not_lt.mpr hmin)]
   rw [hpayloadRead]
   change Except.bind (Except.ok
       (frame.payload, ({ data, offset := 4 + frame.payload.size } : Cursor)))

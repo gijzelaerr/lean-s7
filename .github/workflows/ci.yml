@@ -14,8 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
         with:
-          build-args: lean-s7 lean-s7-tests
+          build-args: lean-s7 lean-s7-tests lean-s7-conformance
       - run: lake exe lean-s7-tests
+      - run: lake exe lean-s7-conformance | diff - conformance/v1/tpkt.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

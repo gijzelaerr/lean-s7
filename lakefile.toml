@@ -12,3 +12,7 @@ root = "Main"
 [[lean_exe]]
 name = "lean-s7-tests"
 root = "Tests"
+
+[[lean_exe]]
+name = "lean-s7-conformance"
+root = "ConformanceMain"
