@@ -46,6 +46,7 @@ Implemented:
 - machine-checked COTP connection-confirmation reference and class validation
 - COTP data TPDU encoding and decoding
 - S7 job framing and setup-communication request encoding
+- machine-checked setup-communication request size and codec round trip
 - machine-checked lower bound for accepted negotiated S7 PDU budgets
 - IPv4 TCP transport and ISO-on-TCP session negotiation
 - classic S7 client connection and PDU-length negotiation

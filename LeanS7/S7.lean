@@ -225,12 +225,53 @@ structure SetupCommunication where
   pduLength : UInt16 := 480
   deriving Repr, BEq
 
-def encodeSetupCommunication (reference : UInt16) (setup : SetupCommunication := {}) : Except EncodeError ByteArray :=
-  let parameters := bytes #[setupCommunicationFunction, 0] ++
+def SetupCommunication.parameters (setup : SetupCommunication) : ByteArray :=
+  bytes #[setupCommunicationFunction, 0] ++
     uint16BE setup.maxAmqCaller ++
     uint16BE setup.maxAmqCallee ++
     uint16BE setup.pduLength
-  encodeJob { reference, parameters }
+
+@[simp] theorem SetupCommunication.parameters_size (setup : SetupCommunication) :
+    setup.parameters.size = 8 := by
+  simp [SetupCommunication.parameters]
+
+def encodeSetupCommunication (reference : UInt16) (setup : SetupCommunication := {}) : Except EncodeError ByteArray :=
+  encodeJob { reference, parameters := setup.parameters }
+
+/-- A setup-communication request always encodes and occupies exactly eighteen
+    S7 bytes. -/
+theorem encodeSetupCommunication_size (reference : UInt16)
+    (setup : SetupCommunication) :
+    ∃ packet, encodeSetupCommunication reference setup = .ok packet ∧
+      packet.size = 18 := by
+  let job : Job := { reference, parameters := setup.parameters }
+  have hencode : encodeSetupCommunication reference setup = encodeJob job := by
+    rfl
+  have hsucceeds : ∃ packet, encodeJob job = .ok packet := by
+    let packet := bytes #[protocolId, jobType, 0, 0] ++
+      uint16BE reference ++ uint16BE 8 ++ uint16BE 0 ++ setup.parameters
+    refine ⟨packet, ?_⟩
+    rw [encodeJob, if_neg (by simp [job, maxSectionSize]),
+      if_neg (by simp [job])]
+    rfl
+  obtain ⟨packet, hpacket⟩ := hsucceeds
+  refine ⟨packet, hencode.trans hpacket, ?_⟩
+  have hsize := encodedJob_size job packet hpacket
+  simpa [job, jobHeaderSize] using hsize
+
+/-- Decoding an encoded setup request preserves its reference and all three
+    negotiation fields in the request parameters. -/
+theorem decodeJob_encodeSetupCommunication (reference : UInt16)
+    (setup : SetupCommunication) (packet : ByteArray)
+    (hencode : encodeSetupCommunication reference setup = .ok packet) :
+    decodeJob packet = .ok {
+      reference
+      parameters := setup.parameters
+      data := ByteArray.empty
+    } := by
+  let job : Job := { reference, parameters := setup.parameters }
+  apply decodeJob_encodeJob job packet (by simp [job, maxSectionSize]) (by simp [job])
+  exact hencode
 
 structure Response where
   pduType : UInt8
