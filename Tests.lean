@@ -172,10 +172,35 @@ def testS7SetupCommunication : IO Unit := do
   | .error err => throw <| IO.userError s!"could not encode S7 handshake: {repr err}"
   | .ok encoded =>
       check (encoded == expected) "unexpected S7 setup-communication encoding"
+      check (isOkEq (S7.decodeJob encoded) {
+        reference := 1
+        parameters := bytes #[0xf0, 0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0xe0]
+      }) "S7 setup-communication job round trip failed"
       let cotp := COTP.encodeData { payload := encoded }
       match TPKT.encode { payload := cotp } with
       | .ok packet => check (packet.size == 25) "unexpected complete handshake packet size"
       | .error err => throw <| IO.userError s!"could not frame S7 handshake: {repr err}"
+
+  let job : S7.Job := {
+    reference := 0x1234
+    parameters := bytes #[0x04, 0x01]
+    data := bytes #[0xaa, 0xbb, 0xcc]
+  }
+  match S7.encodeJob job with
+  | .error err => throw <| IO.userError s!"could not encode generic S7 job: {repr err}"
+  | .ok encoded =>
+      check (encoded.size == S7.jobHeaderSize + job.parameters.size + job.data.size)
+        "generic S7 job encoded length is incorrect"
+      check (isOkEq (S7.decodeJob encoded) job) "generic S7 job round trip failed"
+
+  check (match S7.decodeJob (bytes #[0x31, 0x01, 0, 0, 0, 1, 0, 0, 0, 0]) with
+    | .error _ => true | .ok _ => false) "invalid S7 job protocol ID was accepted"
+  check (match S7.decodeJob (bytes #[0x32, 0x03, 0, 0, 0, 1, 0, 0, 0, 0]) with
+    | .error _ => true | .ok _ => false) "non-job S7 PDU was accepted as a job"
+  check (match S7.decodeJob (bytes #[0x32, 0x01, 0, 0, 0, 1, 0, 1, 0, 0]) with
+    | .error _ => true | .ok _ => false) "truncated S7 job section was accepted"
+  check (match S7.decodeJob (bytes #[0x32, 0x01, 0, 0, 0, 1, 0, 0, 0, 0, 0]) with
+    | .error _ => true | .ok _ => false) "trailing S7 job byte was accepted"
 
 def testS7ResponseDecoding : IO Unit := do
   let setupAck := bytes #[

@@ -47,6 +47,178 @@ def encodeJob (job : Job) : Except EncodeError ByteArray := do
     uint16BE (UInt16.ofNat job.data.size)
   return header ++ job.parameters ++ job.data
 
+/-- Decode exactly one S7 job PDU. Trailing, truncated, and length-inconsistent
+    inputs are rejected before either section is returned. -/
+def decodeJob (pdu : ByteArray) : Except DecodeError Job := do
+  let cursor : Cursor := { data := pdu }
+  let (actualProtocolId, cursor) ← cursor.readUInt8
+  if actualProtocolId != protocolId then
+    throw (.invalidField 0 s!"expected S7 protocol ID 0x32, got {actualProtocolId}")
+  let (pduType, cursor) ← cursor.readUInt8
+  if pduType != jobType then
+    throw (.invalidField 1 s!"expected S7 job, got {pduType}")
+  let (_, cursor) ← cursor.readUInt16BE
+  let (reference, cursor) ← cursor.readUInt16BE
+  let (parameterLength, cursor) ← cursor.readUInt16BE
+  let (dataLength, cursor) ← cursor.readUInt16BE
+  let expected := jobHeaderSize + parameterLength.toNat + dataLength.toNat
+  if expected != pdu.size then
+    throw (.invalidField 6 s!"S7 section lengths require {expected} bytes, got {pdu.size}")
+  let (parameters, cursor) ← cursor.readBytes parameterLength.toNat
+  let (data, cursor) ← cursor.readBytes dataLength.toNat
+  cursor.finish
+  return { reference, parameters, data }
+
+/-- A successfully encoded S7 job has exactly its header and section sizes. -/
+theorem encodedJob_size (job : Job) (packet : ByteArray)
+    (h : encodeJob job = .ok packet) :
+    packet.size = jobHeaderSize + job.parameters.size + job.data.size := by
+  by_cases hp : job.parameters.size ≤ maxSectionSize
+  · by_cases hd : job.data.size ≤ maxSectionSize
+    · rw [encodeJob, if_neg (Nat.not_lt.mpr hp), if_neg (Nat.not_lt.mpr hd)] at h
+      injection h with hpacket
+      subst packet
+      simp [bytes, uint16BE, jobHeaderSize]
+      change 4 + 2 + 2 + 2 = 10
+      rfl
+    · rw [encodeJob, if_neg (Nat.not_lt.mpr hp), if_pos (Nat.lt_of_not_ge hd)] at h
+      contradiction
+  · rw [encodeJob, if_pos (Nat.lt_of_not_ge hp)] at h
+    contradiction
+
+/-- Encoding and then decoding an S7 job returns its reference and sections. -/
+theorem decodeJob_encodeJob (job : Job) (packet : ByteArray)
+    (hparameters : job.parameters.size ≤ maxSectionSize)
+    (hdata : job.data.size ≤ maxSectionSize)
+    (hencode : encodeJob job = .ok packet) :
+    decodeJob packet = .ok job := by
+  rcases job with ⟨reference, parameters, data⟩
+  let header := bytes #[protocolId, jobType, 0, 0] ++ uint16BE reference ++
+    uint16BE (UInt16.ofNat parameters.size) ++
+    uint16BE (UInt16.ofNat data.size)
+  let pdu := header ++ parameters ++ data
+  have hpacket : packet = pdu := by
+    rw [encodeJob, if_neg (Nat.not_lt.mpr hparameters),
+      if_neg (Nat.not_lt.mpr hdata)] at hencode
+    exact Except.ok.inj hencode.symm
+  rw [hpacket]
+  have hpLt : parameters.size < 65536 := by
+    simpa [maxSectionSize] using Nat.lt_succ_of_le hparameters
+  have hdLt : data.size < 65536 := by
+    simpa [maxSectionSize] using Nat.lt_succ_of_le hdata
+  have hpRound : (UInt16.ofNat parameters.size).toNat = parameters.size := by
+    simp [Nat.mod_eq_of_lt hpLt]
+  have hdRound : (UInt16.ofNat data.size).toNat = data.size := by
+    simp [Nat.mod_eq_of_lt hdLt]
+  have hpduSize : pdu.size = jobHeaderSize + parameters.size + data.size := by
+    simp [pdu, header, jobHeaderSize]
+  have hread0 : Cursor.readUInt8 { data := pdu } =
+      .ok (protocolId, { data := pdu, offset := 1 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by rw [hpduSize]; simp [jobHeaderSize]; omega)]
+    congr 2 <;> simp [pdu, header, bytes]
+  have hread1 : Cursor.readUInt8 { data := pdu, offset := 1 } =
+      .ok (jobType, { data := pdu, offset := 2 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by rw [hpduSize]; simp [jobHeaderSize]; omega)]
+    congr 2 <;> simp [pdu, header, bytes]
+  have hreserved : Cursor.readUInt16BE { data := pdu, offset := 2 } =
+      .ok (0, { data := pdu, offset := 4 }) := by
+    have hfixed : bytes #[protocolId, jobType, 0, 0] =
+        bytes #[protocolId, jobType] ++ uint16BE 0 := by
+      native_decide
+    simpa [pdu, header, hfixed, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, jobType])
+        (uint16BE reference ++ uint16BE (UInt16.ofNat parameters.size) ++
+          uint16BE (UInt16.ofNat data.size) ++ parameters ++ data) 0
+  have href : Cursor.readUInt16BE { data := pdu, offset := 4 } =
+      .ok (reference, { data := pdu, offset := 6 }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, jobType, 0, 0])
+        (uint16BE (UInt16.ofNat parameters.size) ++
+          uint16BE (UInt16.ofNat data.size) ++ parameters ++ data)
+        reference
+  have hpLength : Cursor.readUInt16BE { data := pdu, offset := 6 } =
+      .ok (UInt16.ofNat parameters.size, { data := pdu, offset := 8 }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, jobType, 0, 0] ++ uint16BE reference)
+        (uint16BE (UInt16.ofNat data.size) ++ parameters ++ data)
+        (UInt16.ofNat parameters.size)
+  have hdLength : Cursor.readUInt16BE { data := pdu, offset := 8 } =
+      .ok (UInt16.ofNat data.size, { data := pdu, offset := 10 }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, jobType, 0, 0] ++ uint16BE reference ++
+          uint16BE (UInt16.ofNat parameters.size))
+        (parameters ++ data) (UInt16.ofNat data.size)
+  have hpRead : Cursor.readBytes { data := pdu, offset := 10 }
+      parameters.size = .ok
+        (parameters, { data := pdu, offset := 10 + parameters.size }) := by
+    simpa [pdu, header, ByteArray.append_assoc] using
+      Cursor.readBytes_append header parameters data
+  have hdRead : Cursor.readBytes
+      { data := pdu, offset := 10 + parameters.size } data.size = .ok
+        (data, { data := pdu, offset := 10 + parameters.size + data.size }) := by
+    have h := Cursor.readBytes_append (header ++ parameters) data ByteArray.empty
+    simp only [ByteArray.append_empty] at h
+    rw [show header ++ parameters ++ data = pdu by rfl] at h
+    have hheaderSize : header.size = 10 := by
+      simp [header]
+    simpa [hheaderSize] using h
+  rw [decodeJob, hread0]
+  change Except.bind (Except.ok
+      (protocolId, ({ data := pdu, offset := 1 } : Cursor)))
+    (fun protocolResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hread1]
+  change Except.bind (Except.ok
+      (jobType, ({ data := pdu, offset := 2 } : Cursor)))
+    (fun typeResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hreserved]
+  change Except.bind (Except.ok
+      (0, ({ data := pdu, offset := 4 } : Cursor)))
+    (fun reservedResult => _) = _
+  rw [Except.bind]
+  rw [href]
+  change Except.bind (Except.ok
+      (reference, ({ data := pdu, offset := 6 } : Cursor)))
+    (fun referenceResult => _) = _
+  rw [Except.bind]
+  rw [hpLength]
+  change Except.bind (Except.ok
+      (UInt16.ofNat parameters.size, ({ data := pdu, offset := 8 } : Cursor)))
+    (fun parameterLengthResult => _) = _
+  rw [Except.bind]
+  rw [hdLength]
+  change Except.bind (Except.ok
+      (UInt16.ofNat data.size, ({ data := pdu, offset := 10 } : Cursor)))
+    (fun dataLengthResult => _) = _
+  rw [Except.bind]
+  simp [hpRound, hdRound, hpduSize, jobHeaderSize]
+  rw [hpRead]
+  change Except.bind (Except.ok
+      (parameters, ({ data := pdu, offset := 10 + parameters.size } : Cursor)))
+    (fun parametersResult => _) = _
+  rw [Except.bind]
+  rw [hdRead]
+  change Except.bind (Except.ok
+      (data, ({ data := pdu, offset := 10 + parameters.size + data.size } : Cursor)))
+    (fun dataResult => _) = _
+  rw [Except.bind]
+  have hfinish : Cursor.finish
+      ({ data := pdu, offset := 10 + parameters.size + data.size } : Cursor) =
+      .ok () := by
+    rw [Cursor.finish, if_pos (by
+      dsimp only [Cursor.offset, Cursor.data]
+      rw [hpduSize]
+      simp [jobHeaderSize])]
+  rw [hfinish]
+  rfl
+
 structure SetupCommunication where
   maxAmqCaller : UInt16 := 1
   maxAmqCallee : UInt16 := 1

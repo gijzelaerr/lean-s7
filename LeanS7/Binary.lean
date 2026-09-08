@@ -86,6 +86,9 @@ def uint16BE (value : UInt16) : ByteArray :=
   let n := value.toNat
   ByteArray.mk #[UInt8.ofNat (n / 256), UInt8.ofNat n]
 
+@[simp] theorem uint16BE_size (value : UInt16) : (uint16BE value).size = 2 := by
+  rfl
+
 /-- Encoding then reading a big-endian word returns the original value. -/
 theorem readUInt16BE_uint16BE (value : UInt16) :
     Cursor.readUInt16BE { data := uint16BE value } =
@@ -103,6 +106,82 @@ theorem readUInt16BE_uint16BE (value : UInt16) :
   simp [UInt16.toNat_add, UInt16.toNat_mul, UInt8.toNat_ofNat']
   have h := UInt16.toNat_lt value
   omega
+
+/-- A big-endian word can be read at the boundary between an arbitrary prefix
+    and suffix. This is the compositional form used by protocol codec proofs. -/
+theorem Cursor.readUInt16BE_append_uint16BE (pre suffix : ByteArray)
+    (value : UInt16) :
+    Cursor.readUInt16BE {
+      data := pre ++ (uint16BE value ++ suffix)
+      offset := pre.size
+    } = .ok (value, {
+      data := pre ++ (uint16BE value ++ suffix)
+      offset := pre.size + 2
+    }) := by
+  let data := pre ++ (uint16BE value ++ suffix)
+  rw [Cursor.readUInt16BE_of_available (cursor := { data, offset := pre.size }) (by
+    dsimp only [data]
+    rw [ByteArray.size_append, ByteArray.size_append]
+    change pre.size + 2 ≤ pre.size + (2 + suffix.size)
+    omega)]
+  congr 2
+  have hdata0 : pre.size < data.size := by
+    dsimp only [data]
+    rw [ByteArray.size_append, ByteArray.size_append]
+    change pre.size < pre.size + (2 + suffix.size)
+    omega
+  have hdata1 : pre.size + 1 < data.size := by
+    dsimp only [data]
+    rw [ByteArray.size_append, ByteArray.size_append]
+    change pre.size + 1 < pre.size + (2 + suffix.size)
+    omega
+  have hword0 : 0 < (uint16BE value).size := by
+    change 0 < (#[UInt8.ofNat (value.toNat / 256), UInt8.ofNat value.toNat] : Array UInt8).size
+    simp
+  have hword1 : 1 < (uint16BE value).size := by
+    change 1 < (#[UInt8.ofNat (value.toNat / 256), UInt8.ofNat value.toNat] : Array UInt8).size
+    simp
+  have hget0 : data[pre.size]'hdata0 = (uint16BE value)[0]'hword0 := by
+    dsimp only [data]
+    rw [ByteArray.getElem_append_right (by omega)]
+    simp only [Nat.sub_self]
+    rw [ByteArray.getElem_append_left hword0]
+  have hget1 : data[pre.size + 1]'hdata1 = (uint16BE value)[1]'hword1 := by
+    dsimp only [data]
+    rw [ByteArray.getElem_append_right (by omega)]
+    simp only [Nat.add_sub_cancel_left]
+    rw [ByteArray.getElem_append_left hword1]
+  rw [hget0, hget1]
+  have hround := readUInt16BE_uint16BE value
+  rw [Cursor.readUInt16BE_of_available _ (by
+    change 2 ≤ (#[UInt8.ofNat (value.toNat / 256), UInt8.ofNat value.toNat] : Array UInt8).size
+    simp)] at hround
+  injection hround with hpair
+  injection hpair with hvalue
+
+/-- Reading the next complete byte segment returns that segment and leaves the
+    cursor at the following boundary. -/
+theorem Cursor.readBytes_append (pre value suffix : ByteArray) :
+    Cursor.readBytes {
+      data := pre ++ (value ++ suffix)
+      offset := pre.size
+    } value.size = .ok (value, {
+      data := pre ++ (value ++ suffix)
+      offset := pre.size + value.size
+    }) := by
+  let data := pre ++ (value ++ suffix)
+  rw [Cursor.readBytes, if_pos (by simp [Cursor.remaining])]
+  have hextract : data.extract pre.size (pre.size + value.size) = value := by
+    dsimp only [data]
+    rw [show (pre ++ (value ++ suffix)).extract pre.size
+        (pre.size + value.size) = (value ++ suffix).extract 0 value.size by
+      simpa using (ByteArray.extract_append_size_add
+        (a := pre) (b := value ++ suffix) (i := 0) (j := value.size))]
+    exact ByteArray.extract_append_eq_left rfl
+  change Except.ok
+    (data.extract pre.size (pre.size + value.size),
+      ({ data, offset := pre.size + value.size } : Cursor)) = _
+  rw [hextract]
 
 def uint24BE (value : UInt32) : ByteArray :=
   let n := value.toNat
@@ -124,5 +203,8 @@ def uint64BE (value : UInt64) : ByteArray :=
 
 def bytes (values : Array UInt8) : ByteArray :=
   ByteArray.mk values
+
+@[simp] theorem bytes_size (values : Array UInt8) : (bytes values).size = values.size := by
+  rfl
 
 end LeanS7
