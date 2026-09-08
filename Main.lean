@@ -290,11 +290,30 @@ def runDownloadIntegration (host portString : String) : IO Unit := do
     try client.disconnect catch _ => pure ()
     throw error
 
+def runSegmentedIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host
+    port := UInt16.ofNat portNat
+    operationTimeoutMs := some 1000
+  }
+  try
+    let payload ← client.dbRead 1 0 4
+    unless payload == bytes #[0xde, 0xad, 0xbe, 0xef] do
+      throw <| IO.userError "segmented COTP response returned the wrong payload"
+    client.disconnect
+    IO.println s!"lean-s7 segmented COTP integration passed against {host}:{portNat}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
   | ["integration-reconnect", host, port] => runIntegration host port true
   | ["integration-download", host, port] => runDownloadIntegration host port
+  | ["integration-segmented", host, port] => runSegmentedIntegration host port
   | ["expect-connect-failure", host, port] => expectConnectFailure host port
   | [] => runDemo
   | _ => throw <| IO.userError "usage: lean-s7 [integration <host-or-address> <port>]"

@@ -210,6 +210,25 @@ structure Data where
   endOfTransmission : Bool := true
   deriving BEq
 
+/-- Accumulated payload from one or more COTP data TPDUs. -/
+structure Reassembly where
+  payload : ByteArray := ByteArray.empty
+  deriving BEq
+
+/-- Append one segment and report whether it completes the TSDU. -/
+def Reassembly.push (state : Reassembly) (segment : Data) : Reassembly × Bool :=
+  ({ payload := state.payload ++ segment.payload }, segment.endOfTransmission)
+
+/-- Reassembly preserves arrival order and appends every segment exactly once. -/
+theorem Reassembly.push_payload (state : Reassembly) (segment : Data) :
+    (state.push segment).1.payload = state.payload ++ segment.payload := by
+  rfl
+
+/-- Reassembly completes exactly on a segment carrying the EOT flag. -/
+theorem Reassembly.push_complete_iff (state : Reassembly) (segment : Data) :
+    (state.push segment).2 = true ↔ segment.endOfTransmission = true := by
+  rfl
+
 def encodeData (pdu : Data) : ByteArray :=
   bytes #[2, dataCode, if pdu.endOfTransmission then 0x80 else 0x00] ++ pdu.payload
 

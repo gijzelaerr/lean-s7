@@ -45,6 +45,7 @@ Implemented:
 - COTP connection-confirmation decoding
 - machine-checked COTP connection-confirmation reference and class validation
 - COTP data TPDU encoding and decoding
+- ordered COTP data-TPDU reassembly with machine-checked append/EOT invariants
 - S7 job framing and setup-communication request encoding
 - machine-checked setup-communication request size and codec round trip
 - machine-checked lower bound for accepted negotiated S7 PDU budgets
@@ -92,8 +93,8 @@ where it supports those goals, but is not the primary outcome.
 This is a classic S7comm client. S7comm Plus, including optimized symbolic
 access on newer controllers, is a different protocol and is not implemented.
 
-The current transport accepts IPv4, IPv6, and DNS hostnames. It supports one
-complete COTP data TPDU per S7 response; segmented COTP data is not yet implemented.
+The current transport accepts IPv4, IPv6, and DNS hostnames and reassembles
+segmented COTP data TPDUs until the end-of-transmission flag.
 
 ## Build and test
 

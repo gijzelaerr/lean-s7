@@ -105,12 +105,17 @@ def receiveFrame (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArr
 def sendData (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat := none) : IO Unit :=
   sendFrame socket (COTP.encodeData { payload }) timeoutMs
 
-def receiveData (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArray := do
+private partial def receiveDataSegments (socket : Socket) (timeoutMs : Option Nat)
+    (state : COTP.Reassembly) : IO ByteArray := do
   let payload ← receiveFrame socket timeoutMs
-  let data ← orThrow <| COTP.decodeData payload
-  if !data.endOfTransmission then
-    throw <| IO.userError "segmented COTP data is not supported yet"
-  return data.payload
+  let segment ← orThrow <| COTP.decodeData payload
+  let (state, complete) := state.push segment
+  if complete then
+    return state.payload
+  receiveDataSegments socket timeoutMs state
+
+def receiveData (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArray :=
+  receiveDataSegments socket timeoutMs {}
 
 private def socketAddress (address : IPAddr) (port : UInt16) : SocketAddress :=
   match address with

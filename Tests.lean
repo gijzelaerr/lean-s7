@@ -184,6 +184,17 @@ def testCOTPDataRoundTrip : IO Unit := do
     | .error _ => true | .ok _ => false) "invalid COTP data header length was accepted"
   check (match COTP.decodeData (bytes #[2, 0xf0, 0x81, 0x32]) with
     | .error _ => true | .ok _ => false) "nonzero COTP TPDU number was accepted"
+  let first : COTP.Data := {
+    payload := bytes #[0x32, 0x03]
+    endOfTransmission := false
+  }
+  let last : COTP.Data := { payload := bytes #[0xaa, 0xbb] }
+  let (state, complete) := ({} : COTP.Reassembly).push first
+  check (!complete && state.payload == first.payload)
+    "non-final COTP segment completed or was not accumulated"
+  let (state, complete) := state.push last
+  check (complete && state.payload == first.payload ++ last.payload)
+    "COTP segment reassembly lost order or completion"
 
 def cotpDecodeErrorName : DecodeError → String
   | .unexpectedEnd _ _ _ => "unexpected-end"

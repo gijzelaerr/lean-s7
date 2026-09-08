@@ -403,6 +403,11 @@ def _send_s7(connection: socket.socket, pdu: bytes) -> None:
     _send_tpkt(connection, bytes([2, 0xF0, 0x80]) + pdu)
 
 
+def _send_s7_segmented(connection: socket.socket, pdu: bytes, split_at: int) -> None:
+    _send_tpkt(connection, bytes([2, 0xF0, 0x00]) + pdu[:split_at])
+    _send_tpkt(connection, bytes([2, 0xF0, 0x80]) + pdu[split_at:])
+
+
 def _s7_response(reference: int, parameters: bytes, data: bytes = b"") -> bytes:
     return (
         struct.pack(
@@ -517,6 +522,64 @@ def run_download_integration(root: Path) -> None:
         raise errors[0]
 
 
+def serve_segmented_responses(
+    listener: socket.socket, errors: list[Exception]
+) -> None:
+    try:
+        connection, _ = listener.accept()
+        with connection:
+            connection.settimeout(2)
+            cr = _receive_tpkt(connection)
+            if len(cr) < 7 or cr[1] != 0xE0:
+                raise RuntimeError("expected COTP connection request")
+            cc = bytes([0x11, 0xD0, cr[4], cr[5], 0, 1, 0]) + cr[7:]
+            _send_tpkt(connection, cc)
+            setup = _receive_s7(connection)
+            setup_reference = struct.unpack(">H", setup[4:6])[0]
+            setup_response = _s7_response(
+                setup_reference, bytes([0xF0, 0, 0, 1, 0, 1, 1, 0xE0])
+            )
+            _send_s7_segmented(connection, setup_response, 7)
+            read = _receive_s7(connection)
+            read_reference = struct.unpack(">H", read[4:6])[0]
+            read_response = _s7_response(
+                read_reference,
+                bytes([0x04, 1]),
+                bytes([0xFF, 0x04, 0, 32, 0xDE, 0xAD, 0xBE, 0xEF]),
+            )
+            _send_s7_segmented(connection, read_response, 13)
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_segmented_integration(root: Path) -> None:
+    errors: list[Exception] = []
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = int(listener.getsockname()[1])
+        thread = threading.Thread(
+            target=serve_segmented_responses,
+            args=(listener, errors),
+        )
+        thread.start()
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-segmented",
+                "127.0.0.1",
+                str(port),
+            ],
+            cwd=root,
+            check=True,
+        )
+        thread.join(timeout=3)
+    if thread.is_alive():
+        raise RuntimeError("segmented COTP server did not finish")
+    if errors:
+        raise errors[0]
+
+
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
     port = free_port()
@@ -594,6 +657,7 @@ def main() -> None:
             check=True,
         )
         run_download_integration(root)
+        run_segmented_integration(root)
     finally:
         server.stop()
         server.destroy()
