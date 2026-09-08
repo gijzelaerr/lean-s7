@@ -51,6 +51,7 @@ Implemented:
 - machine-checked gap-free chunk coverage and per-chunk size bounds used by those transfers
 - DB, process-input, process-output, marker, counter, and timer accessors
 - big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
+- machine-checked fixed-width signed and unsigned integer round trips and sizes
 - multi-variable reads and writes with item-count and PDU-aware batching
 - IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect

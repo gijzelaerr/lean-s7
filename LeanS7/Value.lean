@@ -79,6 +79,96 @@ def putInt64 (value : Int64) : ByteArray := putUInt64 value.toUInt64
 def putReal (value : Float32) : ByteArray := putUInt32 value.toBits
 def putLReal (value : Float) : ByteArray := putUInt64 value.toBits
 
+@[simp] theorem putUInt8_size (value : UInt8) : (putUInt8 value).size = 1 := by
+  simp [putUInt8]
+
+@[simp] theorem putUInt16_size (value : UInt16) : (putUInt16 value).size = 2 := by
+  simp [putUInt16]
+
+@[simp] theorem putUInt32_size (value : UInt32) : (putUInt32 value).size = 4 := by
+  simp [putUInt32]
+
+@[simp] theorem putUInt64_size (value : UInt64) : (putUInt64 value).size = 8 := by
+  simp [putUInt64]
+
+/-- Encoding and then reading an unsigned byte returns the original value. -/
+theorem getUInt8_putUInt8 (value : UInt8) :
+    getUInt8 (putUInt8 value) = .ok value := by
+  have hread : Cursor.readUInt8 { data := putUInt8 value } =
+      .ok (value, { data := putUInt8 value, offset := 1 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by simp [putUInt8])]
+    congr 2 <;> simp [putUInt8, bytes]
+  rw [getUInt8]
+  change (do
+    let result ← fromDecode (Cursor.readUInt8 { data := putUInt8 value })
+    pure result.fst) = .ok value
+  rw [hread]
+  rfl
+
+/-- Encoding and then reading an unsigned word returns the original value. -/
+theorem getUInt16_putUInt16 (value : UInt16) :
+    getUInt16 (putUInt16 value) = .ok value := by
+  rw [getUInt16]
+  change (do
+    let result ← fromDecode (Cursor.readUInt16BE { data := uint16BE value })
+    pure result.fst) = .ok value
+  rw [readUInt16BE_uint16BE]
+  rfl
+
+/-- Encoding and then reading an unsigned double word returns the original
+    value. -/
+theorem getUInt32_putUInt32 (value : UInt32) :
+    getUInt32 (putUInt32 value) = .ok value := by
+  rw [getUInt32]
+  change (do
+    let result ← fromDecode (Cursor.readUInt32BE { data := uint32BE value })
+    pure result.fst) = .ok value
+  rw [readUInt32BE_uint32BE]
+  rfl
+
+/-- Encoding and then reading an unsigned quad word returns the original
+    value. -/
+theorem getUInt64_putUInt64 (value : UInt64) :
+    getUInt64 (putUInt64 value) = .ok value := by
+  rw [getUInt64]
+  change (do
+    let result ← fromDecode (Cursor.readUInt64BE { data := uint64BE value })
+    pure result.fst) = .ok value
+  rw [readUInt64BE_uint64BE]
+  rfl
+
+/-- Encoding and then reading a signed byte preserves its two's-complement
+    value. -/
+theorem getInt8_putInt8 (value : Int8) :
+    getInt8 (putInt8 value) = .ok value := by
+  rw [getInt8, putInt8, getUInt8_putUInt8]
+  change Except.ok value.toUInt8.toInt8 = Except.ok value
+  rw [Int8.toInt8_toUInt8]
+
+/-- Encoding and then reading a signed word preserves its two's-complement
+    value. -/
+theorem getInt16_putInt16 (value : Int16) :
+    getInt16 (putInt16 value) = .ok value := by
+  rw [getInt16, putInt16, getUInt16_putUInt16]
+  change Except.ok value.toUInt16.toInt16 = Except.ok value
+  rw [Int16.toInt16_toUInt16]
+
+/-- Encoding and then reading a signed double word preserves its
+    two's-complement value. -/
+theorem getInt32_putInt32 (value : Int32) :
+    getInt32 (putInt32 value) = .ok value := by
+  rw [getInt32, putInt32, getUInt32_putUInt32]
+  change Except.ok value.toUInt32.toInt32 = Except.ok value
+  rw [Int32.toInt32_toUInt32]
+
+/-- Encoding and then reading a signed quad word preserves its two's-complement
+    value. -/
+theorem getInt64_putInt64 (value : Int64) :
+    getInt64 (putInt64 value) = .ok value := by
+  rw [getInt64, putInt64, getUInt64_putUInt64]
+  change Except.ok value.toUInt64.toInt64 = Except.ok value
+  rw [Int64.toInt64_toUInt64]
+
 private def zeros (count : Nat) : ByteArray :=
   ByteArray.mk (Array.replicate count 0)
 

@@ -80,6 +80,66 @@ theorem readUInt16BE_of_available (cursor : Cursor)
   rw [readUInt8_of_lt _ (by simp; omega)]
   rfl
 
+/-- Four available bytes decode as a big-endian double word and advance the
+    cursor four positions. -/
+theorem readUInt32BE_of_available (cursor : Cursor)
+    (h : cursor.offset + 4 ≤ cursor.data.size) :
+    cursor.readUInt32BE = .ok (
+      UInt32.ofNat (
+        (UInt16.ofNat (
+          cursor.data[cursor.offset].toNat * 256 +
+            cursor.data[cursor.offset + 1].toNat)).toNat * 65536 +
+        (UInt16.ofNat (
+          cursor.data[cursor.offset + 2].toNat * 256 +
+            cursor.data[cursor.offset + 3].toNat)).toNat),
+      { cursor with offset := cursor.offset + 4 }) := by
+  rw [readUInt32BE, readUInt16BE_of_available cursor (by omega)]
+  change (do
+    let result ← readUInt16BE { cursor with offset := cursor.offset + 2 }
+    pure (UInt32.ofNat (
+      (UInt16.ofNat (
+        cursor.data[cursor.offset].toNat * 256 +
+          cursor.data[cursor.offset + 1].toNat)).toNat * 65536 +
+        result.fst.toNat), result.snd)) = _
+  rw [readUInt16BE_of_available _ (by simp; omega)]
+  rfl
+
+/-- Eight available bytes decode as a big-endian quad word and advance the
+    cursor eight positions. -/
+theorem readUInt64BE_of_available (cursor : Cursor)
+    (h : cursor.offset + 8 ≤ cursor.data.size) :
+    cursor.readUInt64BE = .ok (
+      UInt64.ofNat (
+        (UInt32.ofNat (
+          (UInt16.ofNat (
+            cursor.data[cursor.offset].toNat * 256 +
+              cursor.data[cursor.offset + 1].toNat)).toNat * 65536 +
+          (UInt16.ofNat (
+            cursor.data[cursor.offset + 2].toNat * 256 +
+              cursor.data[cursor.offset + 3].toNat)).toNat)).toNat * 4294967296 +
+        (UInt32.ofNat (
+          (UInt16.ofNat (
+            cursor.data[cursor.offset + 4].toNat * 256 +
+              cursor.data[cursor.offset + 5].toNat)).toNat * 65536 +
+          (UInt16.ofNat (
+            cursor.data[cursor.offset + 6].toNat * 256 +
+              cursor.data[cursor.offset + 7].toNat)).toNat)).toNat),
+      { cursor with offset := cursor.offset + 8 }) := by
+  rw [readUInt64BE, readUInt32BE_of_available cursor (by omega)]
+  change (do
+    let result ← readUInt32BE { cursor with offset := cursor.offset + 4 }
+    pure (UInt64.ofNat (
+      (UInt32.ofNat (
+        (UInt16.ofNat (
+          cursor.data[cursor.offset].toNat * 256 +
+            cursor.data[cursor.offset + 1].toNat)).toNat * 65536 +
+        (UInt16.ofNat (
+          cursor.data[cursor.offset + 2].toNat * 256 +
+            cursor.data[cursor.offset + 3].toNat)).toNat)).toNat * 4294967296 +
+        result.fst.toNat), result.snd)) = _
+  rw [readUInt32BE_of_available _ (by simp; omega)]
+  rfl
+
 end Cursor
 
 def uint16BE (value : UInt16) : ByteArray :=
@@ -187,11 +247,29 @@ def uint24BE (value : UInt32) : ByteArray :=
   let n := value.toNat
   ByteArray.mk #[UInt8.ofNat (n / 65536), UInt8.ofNat (n / 256), UInt8.ofNat n]
 
+@[simp] theorem uint24BE_size (value : UInt32) : (uint24BE value).size = 3 := by
+  rfl
+
 def uint32BE (value : UInt32) : ByteArray :=
   let n := value.toNat
   ByteArray.mk #[
     UInt8.ofNat (n / 16777216), UInt8.ofNat (n / 65536),
     UInt8.ofNat (n / 256), UInt8.ofNat n]
+
+@[simp] theorem uint32BE_size (value : UInt32) : (uint32BE value).size = 4 := by
+  rfl
+
+/-- Encoding then reading a big-endian double word returns the original value. -/
+theorem readUInt32BE_uint32BE (value : UInt32) :
+    Cursor.readUInt32BE { data := uint32BE value } =
+      .ok (value, { data := uint32BE value, offset := 4 }) := by
+  rw [Cursor.readUInt32BE_of_available _ (by simp)]
+  congr 2
+  apply UInt32.toNat_inj.mp
+  simp only [uint32BE, ByteArray.getElem_eq_getElem_data]
+  simp [UInt32.toNat_ofNat', UInt16.toNat_ofNat', UInt8.toNat_ofNat']
+  have h := UInt32.toNat_lt value
+  omega
 
 def uint64BE (value : UInt64) : ByteArray :=
   let n := value.toNat
@@ -200,6 +278,23 @@ def uint64BE (value : UInt64) : ByteArray :=
     UInt8.ofNat (n / 1099511627776), UInt8.ofNat (n / 4294967296),
     UInt8.ofNat (n / 16777216), UInt8.ofNat (n / 65536),
     UInt8.ofNat (n / 256), UInt8.ofNat n]
+
+@[simp] theorem uint64BE_size (value : UInt64) : (uint64BE value).size = 8 := by
+  rfl
+
+set_option maxHeartbeats 800000 in
+/-- Encoding then reading a big-endian quad word returns the original value. -/
+theorem readUInt64BE_uint64BE (value : UInt64) :
+    Cursor.readUInt64BE { data := uint64BE value } =
+      .ok (value, { data := uint64BE value, offset := 8 }) := by
+  rw [Cursor.readUInt64BE_of_available _ (by simp)]
+  congr 2
+  apply UInt64.toNat_inj.mp
+  simp only [uint64BE, ByteArray.getElem_eq_getElem_data]
+  simp [UInt64.toNat_ofNat', UInt32.toNat_ofNat', UInt16.toNat_ofNat',
+    UInt8.toNat_ofNat']
+  have h := UInt64.toNat_lt value
+  omega
 
 def bytes (values : Array UInt8) : ByteArray :=
   ByteArray.mk values
