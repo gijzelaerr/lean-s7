@@ -2,6 +2,7 @@ import LeanS7.Transport
 import LeanS7.Advanced
 import LeanS7.Value
 import LeanS7.Chunking
+import LeanS7.Lifecycle
 
 namespace LeanS7
 
@@ -26,7 +27,7 @@ structure ClientConfig where
 structure Client where
   private connection : IO.Ref (Option Transport.Connection)
   private requestTail : IO.Ref (Task (Option Unit))
-  private closed : IO.Ref Bool
+  private state : IO.Ref Lifecycle.State
   private config : ClientConfig
   pduLength : UInt16
   private currentPduLength : IO.Ref UInt16
@@ -72,24 +73,33 @@ def Client.connect (config : ClientConfig) : IO Client := do
   let (session, setup) ← connectSession config
   let connection ← IO.mkRef (some session)
   let requestTail ← IO.mkRef (Task.pure (some ()))
-  let closed ← IO.mkRef false
+  let state ← IO.mkRef Lifecycle.State.connected
   let currentPduLength ← IO.mkRef setup.pduLength
   let nextReference ← IO.mkRef 2
-  return { connection, requestTail, closed, config, pduLength := setup.pduLength, currentPduLength, nextReference }
+  return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
   client.nextReference.modifyGet fun reference => (reference, reference + 1)
 
 def Client.isConnected (client : Client) : IO Bool :=
-  return (← client.connection.get).isSome
+  return (← client.state.get) == .connected
 
 def Client.negotiatedPduLength (client : Client) : IO UInt16 :=
   client.currentPduLength.get
+
+private def Client.applyLifecycleEvent (client : Client) (event : Lifecycle.Event) : IO Unit := do
+  let accepted ← client.state.modifyGet fun current =>
+    match Lifecycle.transition current event with
+    | some next => (true, next)
+    | none => (false, current)
+  unless accepted do
+    throw <| IO.userError s!"illegal S7 client lifecycle event {repr event}"
 
 private def Client.closeCurrent (client : Client) : IO Unit := do
   let previous ← client.connection.modifyGet fun connection => (connection, none)
   if let some connection := previous then
     try Transport.disconnect connection client.config.operationTimeoutMs catch _ => pure ()
+  client.applyLifecycleEvent .transportClosed
 
 private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
     (request : ByteArray) : IO ByteArray := do
@@ -110,6 +120,7 @@ private def Client.reconnect (client : Client) : IO Unit := do
   client.closeCurrent
   let (connection, setup) ← connectSession client.config
   client.connection.set (some connection)
+  client.applyLifecycleEvent .reconnected
   client.currentPduLength.set setup.pduLength
 
 private partial def Client.exchangeWithRetries (client : Client) (reference : UInt16)
@@ -120,7 +131,7 @@ private partial def Client.exchangeWithRetries (client : Client) (reference : UI
     client.exchangeCurrent reference request
   catch error =>
     client.closeCurrent
-    if remainingRetries == 0 || (← client.closed.get) then
+    if remainingRetries == 0 || (← client.state.get) == .closed then
       throw error
     client.exchangeWithRetries reference request (remainingRetries - 1) true
 
@@ -132,7 +143,7 @@ private partial def Client.exchangeBytesWithRetries (client : Client) (reference
     client.exchangeBytesCurrent reference request
   catch error =>
     client.closeCurrent
-    if remainingRetries == 0 || (← client.closed.get) then
+    if remainingRetries == 0 || (← client.state.get) == .closed then
       throw error
     client.exchangeBytesWithRetries reference request (remainingRetries - 1) true
 
@@ -951,7 +962,7 @@ def Client.cancelForceBit (client : Client) (area : S7.Area) (byteOffset bit : N
 
 def Client.disconnect (client : Client) : IO Unit :=
   client.serialized do
-    client.closed.set true
     client.closeCurrent
+    client.applyLifecycleEvent .disconnect
 
 end LeanS7

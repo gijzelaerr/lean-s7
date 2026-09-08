@@ -25,6 +25,20 @@ def testChunking : IO Unit := do
   check (Chunking.counts 5 10 == [5]) "small transfer was not kept in one chunk"
   check (Chunking.counts 5 0 == []) "zero-capacity transfer produced chunks"
 
+def testLifecycle : IO Unit := do
+  check (Lifecycle.transition .connected .transportClosed == some .disconnected)
+    "transport closure did not disconnect the lifecycle"
+  check (Lifecycle.transition .disconnected .reconnected == some .connected)
+    "reconnect did not restore the connected lifecycle"
+  check (Lifecycle.transition .connected .reconnected == none)
+    "connected lifecycle accepted a reconnect transition"
+  check (Lifecycle.transition .closed .reconnected == none)
+    "closed lifecycle accepted a reconnect transition"
+  check (Lifecycle.transition .connected .disconnect == some .closed &&
+      Lifecycle.transition .disconnected .disconnect == some .closed &&
+      Lifecycle.transition .closed .disconnect == some .closed)
+    "disconnect did not reach the terminal lifecycle state"
+
 def testTPKTRoundTrip : IO Unit := do
   let frame : TPKT.Frame := { payload := bytes #[2, 0xf0, 0x80, 0xde, 0xad] }
   match TPKT.encode frame with
@@ -611,6 +625,7 @@ def testS7AdvancedVectors : IO Unit := do
 def main : IO Unit := do
   testBinary
   testChunking
+  testLifecycle
   testTPKTRoundTrip
   testTPKTRejectsMalformedFrames
   testTPKTIgnoresReservedInput

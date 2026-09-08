@@ -54,6 +54,7 @@ Implemented:
 - multi-variable reads and writes with item-count and PDU-aware batching
 - IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
+- a machine-checked lifecycle transition system used by connect, reconnect, transport close, and disconnect
 - machine-checked response-reference, PLC-status, and function validation invariants
 - machine-checked ACK_DATA response length and codec round-trip properties
 - machine-checked complete-stack ACK_DATA packet round-trip properties

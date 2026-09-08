@@ -20,6 +20,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/S7.lean`: classic S7 PDU codecs and validation.
 - `LeanS7/Protocol.lean`: composed TPKT/COTP/S7 framing and stack-level proofs.
 - `LeanS7/Chunking.lean`: proved transfer chunk plans and coverage bounds.
+- `LeanS7/Lifecycle.lean`: client state machine and legal-transition proofs.
 - `LeanS7/Management.lean`: USER_DATA, SZL, clock, security, and CPU-control codecs.
 - `LeanS7/Advanced.lean`: block discovery, transfer, maintenance, and force-table codecs.
 - `LeanS7/Value.lean`: typed DB values, bits, STRING, and WSTRING codecs.
