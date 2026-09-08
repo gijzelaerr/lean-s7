@@ -56,6 +56,7 @@ Implemented:
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
 - a machine-checked lifecycle transition system used by connect, reconnect, transport close, and disconnect
 - machine-checked response-reference, PLC-status, and function validation invariants
+- machine-checked wire-reference extraction for encoded jobs and ACK_DATA responses
 - machine-checked ACK_DATA response length and codec round-trip properties
 - machine-checked complete-stack ACK_DATA packet round-trip properties
 - machine-checked multi-item batching order, coverage, item-count bounds, and

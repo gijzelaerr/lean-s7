@@ -213,6 +213,8 @@ def testS7SetupCommunication : IO Unit := do
       check (encoded.size == S7.jobHeaderSize + job.parameters.size + job.data.size)
         "generic S7 job encoded length is incorrect"
       check (isOkEq (S7.decodeJob encoded) job) "generic S7 job round trip failed"
+      check (isOkEq (S7.decodePduReference encoded) job.reference)
+        "S7 job correlation reference was decoded incorrectly"
 
   match Protocol.encodeJob job with
   | .error err => throw <| IO.userError s!"could not encode complete S7 packet: {repr err}"
@@ -264,6 +266,8 @@ def testS7ResponseDecoding : IO Unit := do
   match S7.encodeAckData 0x1234 parameters data with
   | .error err => throw <| IO.userError s!"could not encode S7 ACK_DATA: {repr err}"
   | .ok encoded =>
+      check (isOkEq (S7.decodePduReference encoded) 0x1234)
+        "S7 ACK_DATA correlation reference was decoded incorrectly"
       check (isOkEq (S7.decodeResponse encoded) {
         pduType := S7.ackDataType
         reference := 0x1234

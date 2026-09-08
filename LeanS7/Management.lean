@@ -164,6 +164,93 @@ def decodePduReference (pdu : ByteArray) : Except DecodeError UInt16 := do
   let (reference, _) ← cursor.readUInt16BE
   return reference
 
+/-- The lightweight correlation decoder returns the reference from every S7
+    header prefix, independently of the PDU kind and following sections. -/
+theorem decodePduReference_header (kind : UInt8) (reference : UInt16)
+    (suffix : ByteArray) :
+    decodePduReference
+      (bytes #[protocolId, kind, 0, 0] ++ uint16BE reference ++ suffix) =
+      .ok reference := by
+  let pdu := bytes #[protocolId, kind, 0, 0] ++ uint16BE reference ++ suffix
+  have hpduSize : pdu.size = 6 + suffix.size := by simp [pdu]
+  have hread0 : Cursor.readUInt8 { data := pdu } =
+      .ok (protocolId, { data := pdu, offset := 1 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by
+      dsimp only [Cursor.offset]
+      rw [hpduSize]
+      omega)]
+    congr 2 <;> simp [pdu, bytes]
+  have hread1 : Cursor.readUInt8 { data := pdu, offset := 1 } =
+      .ok (kind, { data := pdu, offset := 2 }) := by
+    rw [Cursor.readUInt8_of_lt _ (by
+      dsimp only [Cursor.offset]
+      rw [hpduSize]
+      omega)]
+    congr 2 <;> simp [pdu, bytes]
+  have hreserved : Cursor.readUInt16BE { data := pdu, offset := 2 } =
+      .ok (0, { data := pdu, offset := 4 }) := by
+    have hfixed : bytes #[protocolId, kind, 0, 0] =
+        bytes #[protocolId, kind] ++ uint16BE 0 := by
+      change ByteArray.mk #[protocolId, kind, 0, 0] =
+        ByteArray.mk (#[protocolId, kind] ++ #[0, 0])
+      rfl
+    simpa [pdu, hfixed, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, kind]) (uint16BE reference ++ suffix) 0
+  have href : Cursor.readUInt16BE { data := pdu, offset := 4 } =
+      .ok (reference, { data := pdu, offset := 6 }) := by
+    simpa [pdu, ByteArray.append_assoc] using
+      Cursor.readUInt16BE_append_uint16BE
+        (bytes #[protocolId, kind, 0, 0]) suffix reference
+  change decodePduReference pdu = .ok reference
+  rw [decodePduReference, hread0]
+  change Except.bind (Except.ok
+      (protocolId, ({ data := pdu, offset := 1 } : Cursor)))
+    (fun protocolResult => _) = _
+  rw [Except.bind]
+  simp
+  rw [hread1]
+  change Except.bind (Except.ok
+      (kind, ({ data := pdu, offset := 2 } : Cursor)))
+    (fun kindResult => _) = _
+  rw [Except.bind, hreserved]
+  change Except.bind (Except.ok
+      (0, ({ data := pdu, offset := 4 } : Cursor)))
+    (fun reservedResult => _) = _
+  rw [Except.bind, href]
+  rfl
+
+/-- Correlation extraction from every successfully encoded S7 job returns the
+    job's reference. -/
+theorem decodePduReference_encodeJob (job : Job) (packet : ByteArray)
+    (hparameters : job.parameters.size ≤ maxSectionSize)
+    (hdata : job.data.size ≤ maxSectionSize)
+    (hencode : encodeJob job = .ok packet) :
+    decodePduReference packet = .ok job.reference := by
+  rw [encodeJob, if_neg (Nat.not_lt.mpr hparameters),
+    if_neg (Nat.not_lt.mpr hdata)] at hencode
+  injection hencode with hpacket
+  subst packet
+  simpa [ByteArray.append_assoc] using decodePduReference_header jobType job.reference
+    (uint16BE (UInt16.ofNat job.parameters.size) ++
+      uint16BE (UInt16.ofNat job.data.size) ++ job.parameters ++ job.data)
+
+/-- Correlation extraction from every successfully encoded ACK_DATA response
+    returns the response reference. -/
+theorem decodePduReference_encodeAckData (reference : UInt16)
+    (parameters data packet : ByteArray)
+    (hparameters : parameters.size ≤ maxSectionSize)
+    (hdata : data.size ≤ maxSectionSize)
+    (hencode : encodeAckData reference parameters data = .ok packet) :
+    decodePduReference packet = .ok reference := by
+  rw [encodeAckData, if_neg (Nat.not_lt.mpr hparameters),
+    if_neg (Nat.not_lt.mpr hdata)] at hencode
+  injection hencode with hpacket
+  subst packet
+  simpa [ByteArray.append_assoc] using decodePduReference_header ackDataType reference
+    (uint16BE (UInt16.ofNat parameters.size) ++
+      uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data)
+
 inductive CpuState where
   | unknown
   | stopped
