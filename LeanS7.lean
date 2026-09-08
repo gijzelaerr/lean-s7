@@ -4,6 +4,7 @@ import LeanS7.Conformance
 import LeanS7.COTP
 import LeanS7.S7
 import LeanS7.Protocol
+import LeanS7.Chunking
 import LeanS7.Management
 import LeanS7.Advanced
 import LeanS7.Value

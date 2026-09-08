@@ -1,6 +1,7 @@
 import LeanS7.Transport
 import LeanS7.Advanced
 import LeanS7.Value
+import LeanS7.Chunking
 
 namespace LeanS7
 
@@ -451,14 +452,14 @@ private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
   let response ← client.exchange reference request
   orThrow <| S7.decodeDbWrite reference response
 
-private partial def Client.readAreaLoop (client : Client) (area : S7.Area)
-    (dbNumber : UInt16) (start remaining maxCount : Nat) (result : ByteArray) : IO ByteArray := do
-  if remaining == 0 then
-    return result
-  let count := min remaining maxCount
-  let chunk ← client.readAreaChunk { area, dbNumber, start, count }
-  client.readAreaLoop area dbNumber (start + count * area.elementSize) (remaining - count)
-    maxCount (result ++ chunk)
+private def Client.readAreaChunks (client : Client) (area : S7.Area)
+    (dbNumber : UInt16) (start : Nat) :
+    (chunks : List Nat) → (result : ByteArray) → IO ByteArray
+  | [], result => pure result
+  | count :: rest, result => do
+      let chunk ← client.readAreaChunk { area, dbNumber, start, count }
+      client.readAreaChunks area dbNumber (start + count * area.elementSize)
+        rest (result ++ chunk)
 
 def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start count : Nat) : IO ByteArray := do
@@ -469,18 +470,18 @@ def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
   let maxCount := min S7.maxSectionSize (availableBytes / area.elementSize)
   if maxCount == 0 then
     throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a read item"
-  client.readAreaLoop area dbNumber start count maxCount ByteArray.empty
+  client.readAreaChunks area dbNumber start (Chunking.counts count maxCount) ByteArray.empty
 
-private partial def Client.writeAreaLoop (client : Client) (area : S7.Area)
-    (dbNumber : UInt16) (start remaining maxCount offset : Nat) (payload : ByteArray) : IO Unit := do
-  if remaining == 0 then
-    return
-  let count := min remaining maxCount
-  let byteCount := count * area.elementSize
-  let chunk := payload.extract offset (offset + byteCount)
-  client.writeAreaChunk { area, dbNumber, start, count } chunk
-  client.writeAreaLoop area dbNumber (start + byteCount) (remaining - count) maxCount
-    (offset + byteCount) payload
+private def Client.writeAreaChunks (client : Client) (area : S7.Area)
+    (dbNumber : UInt16) (start offset : Nat) (payload : ByteArray) :
+    List Nat → IO Unit
+  | [] => pure ()
+  | count :: rest => do
+      let byteCount := count * area.elementSize
+      let chunk := payload.extract offset (offset + byteCount)
+      client.writeAreaChunk { area, dbNumber, start, count } chunk
+      client.writeAreaChunks area dbNumber (start + byteCount) (offset + byteCount)
+        payload rest
 
 def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start : Nat) (payload : ByteArray) : IO Unit := do
@@ -498,7 +499,8 @@ def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (min availableBytes lengthLimitedBytes / area.elementSize)
   if maxCount == 0 then
     throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a write item"
-  client.writeAreaLoop area dbNumber start (payload.size / area.elementSize) maxCount 0 payload
+  client.writeAreaChunks area dbNumber start 0 payload
+    (Chunking.counts (payload.size / area.elementSize) maxCount)
 
 def Client.dbRead (client : Client) (dbNumber : UInt16) (start size : Nat) : IO ByteArray :=
   client.readArea .dataBlocks dbNumber start size

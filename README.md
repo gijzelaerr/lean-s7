@@ -47,6 +47,7 @@ Implemented:
 - IPv4 TCP transport and ISO-on-TCP session negotiation
 - classic S7 client connection and PDU-length negotiation
 - PDU-aware, chunked `Client.readArea` and `Client.writeArea`
+- machine-checked gap-free chunk coverage and per-chunk size bounds used by those transfers
 - DB, process-input, process-output, marker, counter, and timer accessors
 - big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
 - multi-variable reads and writes with item-count and PDU-aware batching

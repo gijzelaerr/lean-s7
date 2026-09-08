@@ -18,6 +18,13 @@ def testBinary : IO Unit := do
       check (cursor.remaining == 1) "cursor did not advance"
   | .error err => throw <| IO.userError s!"unexpected binary decode error: {repr err}"
 
+def testChunking : IO Unit := do
+  check (Chunking.counts 0 10 == []) "empty transfer produced chunks"
+  check (Chunking.counts 25 10 == [10, 10, 5]) "transfer chunk plan has gaps"
+  check (Chunking.counts 20 10 == [10, 10]) "exact transfer produced an empty remainder"
+  check (Chunking.counts 5 10 == [5]) "small transfer was not kept in one chunk"
+  check (Chunking.counts 5 0 == []) "zero-capacity transfer produced chunks"
+
 def testTPKTRoundTrip : IO Unit := do
   let frame : TPKT.Frame := { payload := bytes #[2, 0xf0, 0x80, 0xde, 0xad] }
   match TPKT.encode frame with
@@ -575,6 +582,7 @@ def testS7AdvancedVectors : IO Unit := do
 
 def main : IO Unit := do
   testBinary
+  testChunking
   testTPKTRoundTrip
   testTPKTRejectsMalformedFrames
   testTPKTIgnoresReservedInput
