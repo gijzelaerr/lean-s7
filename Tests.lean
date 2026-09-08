@@ -258,6 +258,17 @@ def testS7ResponseDecoding : IO Unit := do
         errorClass := 0
         errorCode := 0
       }) "S7 ACK_DATA round trip failed"
+  match Protocol.encodeAckData 0x1234 parameters data with
+  | .error err => throw <| IO.userError s!"could not encode complete ACK_DATA packet: {repr err}"
+  | .ok packet =>
+      check (isOkEq (Protocol.decodeResponse packet) {
+        pduType := S7.ackDataType
+        reference := 0x1234
+        parameters
+        data
+        errorClass := 0
+        errorCode := 0
+      }) "complete TPKT/COTP/S7 ACK_DATA round trip failed"
 
 def testS7DbVectors : IO Unit := do
   let readRange : S7.DbRange := { dbNumber := 1, start := 10, size := 4 }

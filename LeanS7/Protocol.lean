@@ -23,6 +23,21 @@ def decodeJob (packet : ByteArray) : Except DecodeError S7.Job := do
       "segmented COTP data cannot be decoded as a complete S7 job")
   S7.decodeJob cotp.payload
 
+/-- Encode a complete RFC 1006 / COTP / successful S7 ACK_DATA packet. -/
+def encodeAckData (reference : UInt16) (parameters data : ByteArray) :
+    Except EncodeError ByteArray := do
+  let s7 ← (S7.encodeAckData reference parameters data).mapError .s7
+  (TPKT.encode { payload := COTP.encodeData { payload := s7 } }).mapError .tpkt
+
+/-- Decode exactly one complete RFC 1006 / COTP / S7 response packet. -/
+def decodeResponse (packet : ByteArray) : Except DecodeError S7.Response := do
+  let frame ← TPKT.decode packet
+  let cotp ← COTP.decodeData frame.payload
+  if !cotp.endOfTransmission then
+    throw (.invalidField (TPKT.headerSize + 2)
+      "segmented COTP data cannot be decoded as a complete S7 response")
+  S7.decodeResponse cotp.payload
+
 /-- A packet budget that includes every framing header is sufficient to encode
     a complete job whose individual S7 sections fit their wire fields. -/
 theorem encodeJob_succeeds (job : S7.Job)
@@ -99,5 +114,58 @@ theorem decodeJob_encodeJob (job : S7.Job) (packet : ByteArray)
   change Except.bind (Except.ok cotp) (fun decodedCotp => _) = _
   rw [Except.bind]
   simp [cotp, S7.decodeJob_encodeJob job s7 hparameters hdata hs7]
+
+/-- Complete-stack encode/decode round trip for every successful ACK_DATA
+    response that fits one TPKT frame. -/
+theorem decodeResponse_encodeAckData (reference : UInt16)
+    (parameters data packet : ByteArray)
+    (hparameters : parameters.size ≤ S7.maxSectionSize)
+    (hdata : data.size ≤ S7.maxSectionSize)
+    (hpacket : TPKT.headerSize + 3 + S7.responseHeaderSize +
+      parameters.size + data.size ≤ TPKT.maxFrameSize)
+    (hencode : encodeAckData reference parameters data = .ok packet) :
+    decodeResponse packet = .ok {
+      pduType := S7.ackDataType
+      reference
+      parameters
+      data
+      errorClass := 0
+      errorCode := 0
+    } := by
+  let s7 := bytes #[S7.protocolId, S7.ackDataType, 0, 0] ++
+    uint16BE reference ++ uint16BE (UInt16.ofNat parameters.size) ++
+    uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data
+  have hs7 : S7.encodeAckData reference parameters data = .ok s7 := by
+    rw [S7.encodeAckData, if_neg (Nat.not_lt.mpr hparameters),
+      if_neg (Nat.not_lt.mpr hdata)]
+    rfl
+  let cotp : COTP.Data := { payload := s7 }
+  let frame : TPKT.Frame := { payload := COTP.encodeData cotp }
+  have hs7Size : s7.size = S7.responseHeaderSize + parameters.size + data.size :=
+    S7.encodedAckData_size reference parameters data s7 hs7
+  have hframeSize : TPKT.headerSize + frame.payload.size ≤ TPKT.maxFrameSize := by
+    simp [frame, cotp, COTP.encodedData_size, hs7Size] at hpacket ⊢
+    omega
+  have hframeMin : TPKT.minFrameSize ≤ TPKT.headerSize + frame.payload.size := by
+    simp [frame, cotp, COTP.encodedData_size, hs7Size, TPKT.minFrameSize,
+      TPKT.headerSize, S7.responseHeaderSize]
+    omega
+  have ht : TPKT.encode frame = .ok packet := by
+    rw [encodeAckData, hs7] at hencode
+    change Except.mapError EncodeError.tpkt (TPKT.encode frame) = .ok packet at hencode
+    cases htResult : TPKT.encode frame with
+    | error error => simp [htResult, Except.mapError] at hencode
+    | ok encoded =>
+        have heq : encoded = packet := by
+          simpa [htResult, Except.mapError] using hencode
+        subst packet
+        rfl
+  rw [decodeResponse, TPKT.decode_encode frame packet hframeMin hframeSize ht]
+  change Except.bind (Except.ok frame) (fun decodedFrame => _) = _
+  rw [Except.bind, COTP.decodeData_encodeData cotp]
+  change Except.bind (Except.ok cotp) (fun decodedCotp => _) = _
+  rw [Except.bind]
+  simp [cotp, S7.decodeResponse_encodeAckData reference parameters data s7
+    hparameters hdata hs7]
 
 end LeanS7.Protocol

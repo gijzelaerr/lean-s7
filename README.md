@@ -40,6 +40,7 @@ Implemented:
 - strict TPKT encoding and decoding
 - strict S7 job encoding and decoding
 - composed TPKT/COTP/S7 job packet encoding and decoding
+- composed TPKT/COTP/S7 ACK_DATA packet encoding and response decoding
 - COTP connection-request encoding
 - COTP connection-confirmation decoding
 - COTP data TPDU encoding and decoding
@@ -55,6 +56,7 @@ Implemented:
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
 - machine-checked response-reference, PLC-status, and function validation invariants
 - machine-checked ACK_DATA response length and codec round-trip properties
+- machine-checked complete-stack ACK_DATA packet round-trip properties
 - machine-checked multi-item batching order, coverage, item-count bounds, and
   negotiated request/response PDU budgets
 - fragmented SZL reads and the SZL directory
