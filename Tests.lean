@@ -171,6 +171,35 @@ def testCOTPConnectionRequest : IO Unit := do
     | .error _ => true
     | .ok _ => false) "wrong COTP transport class was accepted"
 
+  let reorderedParameters := bytes #[0xc0, 1, 9, 0xc1, 2, 1, 0, 0xc0, 1, 10]
+  match COTP.decodeParameters reorderedParameters with
+  | .error err => throw <| IO.userError s!"could not decode COTP parameters: {repr err}"
+  | .ok parameters =>
+      check (COTP.findLastParameter parameters COTP.pduSizeParameter ==
+        some (bytes #[10])) "last duplicate COTP parameter did not win"
+  check (match COTP.decodeParameters (bytes #[0xc0, 2, 10]) with
+    | .error _ => true
+    | .ok _ => false) "truncated COTP parameter value was accepted"
+  check (isOkEq (COTP.validateConnectionConfirm request
+      { confirmation with parameters := reorderedParameters }) ())
+    "reordered valid COTP negotiation parameters were rejected"
+  check (isOkEq (COTP.negotiatedTpduSizeExponent request
+      { confirmation with parameters := reorderedParameters }) 10)
+    "negotiated COTP TPDU size did not use the last parameter"
+  check (match COTP.validateConnectionConfirm request
+      { confirmation with parameters := bytes #[0xc0, 2, 0, 10] } with
+    | .error _ => true
+    | .ok _ => false) "invalid COTP TPDU size parameter length was accepted"
+  check (match COTP.validateConnectionConfirm request
+      { confirmation with parameters := bytes #[0xc0, 1, 11] } with
+    | .error _ => true
+    | .ok _ => false) "larger-than-requested COTP TPDU size was accepted"
+  check (isOkEq (COTP.validateDataPayloadBudget 10 480) ())
+    "valid COTP/S7 payload budget was rejected"
+  check (match COTP.validateDataPayloadBudget 8 480 with
+    | .error _ => true
+    | .ok _ => false) "oversized S7 PDU was accepted for a small COTP TPDU"
+
 def testCOTPDataRoundTrip : IO Unit := do
   let pdu : COTP.Data := { payload := bytes #[0x32, 0x01, 0x00] }
   let encoded := COTP.encodeData pdu

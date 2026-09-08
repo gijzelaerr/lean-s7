@@ -35,6 +35,47 @@ def encodeConnectionRequest (request : ConnectionRequest) : ByteArray :=
     (encodeConnectionRequest request).size = 18 := by
   simp [encodeConnectionRequest]
 
+/-- One code/length/value entry from a COTP variable header. -/
+structure Parameter where
+  code : UInt8
+  value : ByteArray
+  deriving BEq
+
+private def decodeParametersWithFuel : Nat → Cursor → Except DecodeError (List Parameter)
+  | 0, cursor =>
+      if cursor.remaining = 0 then
+        .ok []
+      else
+        .error (.invalidField cursor.offset "COTP parameter decoder exhausted its input bound")
+  | fuel + 1, cursor => do
+      if cursor.remaining = 0 then
+        return []
+      let (code, cursor) ← cursor.readUInt8
+      let (length, cursor) ← cursor.readUInt8
+      let (value, cursor) ← cursor.readBytes length.toNat
+      return { code, value } :: (← decodeParametersWithFuel fuel cursor)
+
+/-- Decode a complete COTP variable part as bounded TLV parameters. Unknown
+    codes remain available to the caller for TPDU-specific policy. -/
+def decodeParameters (data : ByteArray) : Except DecodeError (List Parameter) :=
+  decodeParametersWithFuel data.size { data }
+
+/-- Locate the last occurrence of a parameter code, as required by ISO 8073
+    duplicate-parameter semantics. -/
+def findLastParameter (parameters : List Parameter) (code : UInt8) : Option ByteArray :=
+  parameters.foldl (fun found parameter =>
+    if parameter.code == code then some parameter.value else found) none
+
+@[simp] theorem findLastParameter_nil (code : UInt8) :
+    findLastParameter [] code = none := by
+  rfl
+
+/-- Appending a matching parameter makes its value authoritative. -/
+theorem findLastParameter_append_match (parameters : List Parameter)
+    (code : UInt8) (value : ByteArray) :
+    findLastParameter (parameters ++ [{ code, value }]) code = some value := by
+  simp [findLastParameter, List.foldl_append]
+
 structure ConnectionConfirm where
   destinationReference : UInt16
   sourceReference : UInt16
@@ -161,6 +202,23 @@ def decodeConnectionConfirm (data : ByteArray) : Except DecodeError ConnectionCo
   cursor.finish
   return { destinationReference, sourceReference, classOption, parameters }
 
+/-- Validate the ISO 8073 power-of-two TPDU size codes supported by RFC 1006. -/
+def validateTpduSizeExponent (exponent : UInt8) (offset : Nat) :
+    Except DecodeError Unit := do
+  if exponent.toNat < 7 ∨ 13 < exponent.toNat then
+    throw (.invalidField offset s!"invalid COTP TPDU size exponent {exponent}")
+
+/-- Every accepted TPDU size code denotes a standard size from 128 through
+    8192 octets. -/
+theorem validateTpduSizeExponent_bounds (exponent : UInt8) (offset : Nat)
+    (hvalidate : validateTpduSizeExponent exponent offset = .ok ()) :
+    7 ≤ exponent.toNat ∧ exponent.toNat ≤ 13 := by
+  simp only [validateTpduSizeExponent] at hvalidate
+  split at hvalidate <;> rename_i hbounds
+  · contradiction
+  · exact ⟨Nat.le_of_not_lt (not_or.mp hbounds).1,
+      Nat.le_of_not_lt (not_or.mp hbounds).2⟩
+
 /-- Validate that a connection confirmation belongs to the request and accepts
     the requested transport class. -/
 def validateConnectionConfirm (request : ConnectionRequest)
@@ -171,6 +229,18 @@ def validateConnectionConfirm (request : ConnectionRequest)
   if confirmation.classOption != request.classOption then
     throw (.invalidField 6
       s!"expected COTP class option {request.classOption}, got {confirmation.classOption}")
+  validateTpduSizeExponent request.tpduSizeExponent 7
+  let parameters ← decodeParameters confirmation.parameters
+  match findLastParameter parameters pduSizeParameter with
+  | none => pure ()
+  | some value =>
+      if value.size != 1 then
+        throw (.invalidField 7 "COTP TPDU size parameter must contain one byte")
+      let exponent := value[0]!
+      validateTpduSizeExponent exponent 9
+      if exponent > request.tpduSizeExponent then
+        throw (.invalidField 9
+          s!"COTP TPDU size exponent {exponent} exceeds requested {request.tpduSizeExponent}")
 
 /-- A confirmation with the wrong destination reference is rejected. -/
 theorem validateConnectionConfirm_rejects_destination (request : ConnectionRequest)
@@ -204,6 +274,46 @@ theorem validateConnectionConfirm_class_eq (request : ConnectionRequest)
     rw [validateConnectionConfirm, if_neg (by simp [hreference]),
       if_pos (by simpa using hclass)] at h
     contradiction
+
+/-- Return the selected TPDU size exponent after full confirmation validation.
+    An omitted parameter conservatively retains the requested size. -/
+def negotiatedTpduSizeExponent (request : ConnectionRequest)
+    (confirmation : ConnectionConfirm) : Except DecodeError UInt8 := do
+  validateConnectionConfirm request confirmation
+  let parameters ← decodeParameters confirmation.parameters
+  match findLastParameter parameters pduSizeParameter with
+  | none => pure request.tpduSizeExponent
+  | some value => pure value[0]!
+
+def tpduSize (exponent : UInt8) : Nat :=
+  2 ^ exponent.toNat
+
+/-- Check that one unsegmented COTP data TPDU can contain an S7 PDU and its
+    three-byte class-0 data header. -/
+def validateDataPayloadBudget (exponent : UInt8) (payloadSize : Nat) :
+    Except DecodeError Unit := do
+  validateTpduSizeExponent exponent 0
+  if tpduSize exponent < 3 + payloadSize then
+    throw (.invalidField 0
+      s!"COTP TPDU size {tpduSize exponent} cannot contain {payloadSize} payload bytes")
+
+/-- Every accepted unsegmented data budget fits its header and complete payload
+    within the negotiated TPDU size. -/
+theorem validateDataPayloadBudget_fits (exponent : UInt8) (payloadSize : Nat)
+    (hvalidate : validateDataPayloadBudget exponent payloadSize = .ok ()) :
+    3 + payloadSize ≤ tpduSize exponent := by
+  rw [validateDataPayloadBudget] at hvalidate
+  cases hexponent : validateTpduSizeExponent exponent 0 with
+  | error error =>
+      rw [hexponent] at hvalidate
+      contradiction
+  | ok value =>
+      have hvalue : value = () := Subsingleton.elim _ _
+      subst value
+      rw [hexponent] at hvalidate
+      split at hvalidate <;> rename_i hsize
+      · contradiction
+      · exact Nat.le_of_not_lt hsize
 
 structure Data where
   payload : ByteArray

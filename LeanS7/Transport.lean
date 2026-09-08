@@ -19,6 +19,7 @@ structure Connection where
   socket : Socket
   localReference : UInt16
   remoteReference : UInt16
+  tpduSizeExponent : UInt8
 
 private inductive TimeoutResult (α : Type) where
   | completed (result : Except IO.Error α)
@@ -142,11 +143,13 @@ private def connectAddress (address : SocketAddress) (request : COTP.ConnectionR
     let connectionRequest := COTP.encodeConnectionRequest request
     sendFrame socket connectionRequest timeoutMs
     let confirmation ← orThrow <| COTP.decodeConnectionConfirm (← receiveFrame socket timeoutMs)
-    orThrow <| COTP.validateConnectionConfirm request confirmation
+    let tpduSizeExponent ← orThrow <|
+      COTP.negotiatedTpduSizeExponent request confirmation
     return {
       socket
       localReference := request.sourceReference
       remoteReference := confirmation.sourceReference
+      tpduSizeExponent
     }
   catch error =>
     try await socket.shutdown catch _ => pure ()

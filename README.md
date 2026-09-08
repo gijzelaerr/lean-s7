@@ -44,6 +44,8 @@ Implemented:
 - COTP connection-request encoding
 - COTP connection-confirmation decoding
 - machine-checked COTP connection-confirmation reference and class validation
+- bounded, order-independent COTP TLV parameter decoding with last-duplicate lookup
+- machine-checked COTP TPDU-size bounds and confirmation negotiation validation
 - COTP data TPDU encoding and decoding
 - ordered COTP data-TPDU reassembly with machine-checked append/EOT invariants
 - S7 job framing and setup-communication request encoding
@@ -51,6 +53,7 @@ Implemented:
 - machine-checked lower bound for accepted negotiated S7 PDU budgets
 - IPv4 TCP transport and ISO-on-TCP session negotiation
 - classic S7 client connection and PDU-length negotiation
+- cross-validated negotiated S7 PDU and COTP TPDU payload budgets
 - PDU-aware, chunked `Client.readArea` and `Client.writeArea`
 - machine-checked gap-free chunk coverage and per-chunk size bounds used by those transfers
 - DB, process-input, process-output, marker, counter, and timer accessors

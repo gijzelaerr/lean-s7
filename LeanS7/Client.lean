@@ -64,6 +64,8 @@ private def connectSession (config : ClientConfig) : IO (Transport.Connection ×
     let response ← orThrow <| S7.decodeResponse
       (← Transport.receiveData connection.socket config.operationTimeoutMs)
     let setup ← orThrow <| S7.decodeSetupCommunication reference response
+    orThrow <| COTP.validateDataPayloadBudget connection.tpduSizeExponent
+      setup.pduLength.toNat
     return (connection, setup)
   catch error =>
     try Transport.disconnect connection config.operationTimeoutMs catch _ => pure ()
