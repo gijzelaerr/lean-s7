@@ -1,3 +1,5 @@
+import LeanS7.Binary
+
 namespace LeanS7.Chunking
 
 /-- Split an element count into full chunks followed by at most one remainder.
@@ -58,5 +60,82 @@ theorem counts_byte_sum (total maximum elementSize : Nat)
   by_cases hmaximum : maximum = 0
   · simp [counts, hmaximum]
   · simp [counts, hmaximum]
+
+/-- The read loop carries the exact number of assembled elements in its type. -/
+structure ReadAssembly (elementSize consumed : Nat) where
+  data : ByteArray
+  size_eq : data.size = consumed * elementSize
+
+namespace ReadAssembly
+
+def empty (elementSize : Nat) : ReadAssembly elementSize 0 :=
+  ⟨ByteArray.empty, by simp⟩
+
+def nextStart (state : ReadAssembly elementSize consumed) (start : Nat) : Nat :=
+  start + state.data.size
+
+/-- The next request begins immediately after the assembled prefix. -/
+theorem nextStart_eq (state : ReadAssembly elementSize consumed) (start : Nat) :
+    state.nextStart start = start + consumed * elementSize := by
+  simp [nextStart, state.size_eq]
+
+def append (state : ReadAssembly elementSize consumed)
+    (chunk : { data : ByteArray // data.size = count * elementSize }) :
+    ReadAssembly elementSize (consumed + count) :=
+  ⟨state.data ++ chunk.val, by simp [state.size_eq, chunk.property, Nat.add_mul]⟩
+
+/-- Assembly retains the previous bytes followed by the new response, in order. -/
+theorem append_data (state : ReadAssembly elementSize consumed)
+    (chunk : { data : ByteArray // data.size = count * elementSize }) :
+    (state.append chunk).data = state.data ++ chunk.val := rfl
+
+theorem append_nextStart (state : ReadAssembly elementSize consumed)
+    (chunk : { data : ByteArray // data.size = count * elementSize }) (start : Nat) :
+    (state.append chunk).nextStart start = state.nextStart start + count * elementSize := by
+  simp [nextStart, append, chunk.property, Nat.add_assoc]
+
+/-- Completing the generated plan yields exactly the requested byte count. -/
+theorem complete_size (total maximum elementSize : Nat) (hmaximum : maximum ≠ 0)
+    (state : ReadAssembly elementSize (0 + (counts total maximum).sum)) :
+    state.data.size = total * elementSize := by
+  simpa [counts_sum total maximum hmaximum] using state.size_eq
+
+end ReadAssembly
+
+/-- A bounded write slice cannot silently truncate at the end of the payload. -/
+def writeSlice (payload : ByteArray) (offset count elementSize : Nat)
+    (hbound : offset + count * elementSize ≤ payload.size) :
+    { data : ByteArray // data.size = count * elementSize } :=
+  ⟨payload.extract offset (offset + count * elementSize), by
+    simp only [ByteArray.size_extract, Nat.min_eq_left hbound]
+    omega⟩
+
+/-- The bytes presented to sequential write requests, in request order. -/
+def writeSlices (payload : ByteArray) (elementSize offset : Nat) : List Nat → ByteArray
+  | [] => ByteArray.empty
+  | count :: rest => payload.extract offset (offset + count * elementSize) ++
+      writeSlices payload elementSize (offset + count * elementSize) rest
+
+theorem writeSlices_eq_extract (payload : ByteArray) (elementSize offset : Nat)
+    (chunks : List Nat) :
+    writeSlices payload elementSize offset chunks =
+      payload.extract offset (offset + chunks.sum * elementSize) := by
+  induction chunks generalizing offset with
+  | nil => simp [writeSlices]
+  | cons count rest ih =>
+      rw [writeSlices, ih]
+      rw [ByteArray.extract_append_extract]
+      simp [Nat.add_mul, Nat.add_assoc]
+
+/-- An aligned payload is exactly reconstructed by its generated write slices. -/
+theorem writeSlices_complete (payload : ByteArray) (elementSize maximum : Nat)
+    (haligned : payload.size % elementSize = 0) (hmaximum : maximum ≠ 0) :
+    writeSlices payload elementSize 0 (counts (payload.size / elementSize) maximum) =
+      payload := by
+  rw [writeSlices_eq_extract, counts_sum _ _ hmaximum]
+  have hsize : payload.size / elementSize * elementSize = payload.size := by
+    have := Nat.div_add_mod payload.size elementSize
+    simpa [haligned, Nat.mul_comm] using this
+  simp [hsize]
 
 end LeanS7.Chunking

@@ -443,7 +443,8 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
 def Client.readForceTable (client : Client) : IO (Array S7.ForceEntry) := do
   orThrow <| S7.decodeForceTable (← client.readSzl 0x0025 0)
 
-private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) : IO ByteArray := do
+private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) :
+    IO { data : ByteArray // data.size = range.count * range.area.elementSize } := do
   let reference ← client.freshReference
   let request ← orThrow <| S7.encodeAreaRead reference range
   let pduLength ← client.negotiatedPduLength
@@ -453,7 +454,11 @@ private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) : IO
   if expectedSize + 18 > pduLength.toNat then
     throw <| IO.userError s!"response would exceed negotiated PDU length {pduLength}"
   let response ← client.exchange reference request
-  orThrow <| S7.decodeAreaRead reference range.area expectedSize response
+  match hdecode : S7.decodeAreaRead reference range.area expectedSize response with
+  | .error error => throw <| IO.userError (reprStr error)
+  | .ok payload =>
+      return ⟨payload, S7.decodeAreaRead_size reference range.area expectedSize response
+        payload hdecode⟩
 
 private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
     (payload : ByteArray) : IO Unit := do
@@ -466,54 +471,79 @@ private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
   orThrow <| S7.decodeDbWrite reference response
 
 private def Client.readAreaChunks (client : Client) (area : S7.Area)
-    (dbNumber : UInt16) (start : Nat) :
-    (chunks : List Nat) → (result : ByteArray) → IO ByteArray
-  | [], result => pure result
-  | count :: rest, result => do
-      let chunk ← client.readAreaChunk { area, dbNumber, start, count }
-      client.readAreaChunks area dbNumber (start + count * area.elementSize)
-        rest (result ++ chunk)
+    (dbNumber : UInt16) (start : Nat) (consumed : Nat) (chunks : List Nat)
+    (result : Chunking.ReadAssembly area.elementSize consumed) :
+    IO (Chunking.ReadAssembly area.elementSize (consumed + chunks.sum)) := do
+  match hchunks : chunks with
+  | [] => return (by simpa [hchunks] using result)
+  | count :: rest =>
+      let chunk ← client.readAreaChunk {
+        area, dbNumber, start := result.nextStart start, count
+      }
+      let assembled ← client.readAreaChunks area dbNumber start (consumed + count)
+        rest (result.append chunk)
+      return (by simpa [hchunks, List.sum_cons, Nat.add_assoc] using assembled)
 
-def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
-    (start count : Nat) : IO ByteArray := do
-  if count == 0 then
-    return ByteArray.empty
+/-- Internal transfer result retains the byte-count proof through the IO loop. -/
+private def Client.readAreaChecked (client : Client) (area : S7.Area) (dbNumber : UInt16)
+    (start count : Nat) : IO { data : ByteArray // data.size = count * area.elementSize } := do
+  if hzero : count = 0 then
+    return ⟨ByteArray.empty, by simp [hzero]⟩
   let pduLength ← client.negotiatedPduLength
   let availableBytes := pduLength.toNat - 18
   let maxCount := min S7.maxSectionSize (availableBytes / area.elementSize)
-  if maxCount == 0 then
+  if hmaximum : maxCount = 0 then
     throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a read item"
-  client.readAreaChunks area dbNumber start (Chunking.counts count maxCount) ByteArray.empty
+  else
+    let assembled ← client.readAreaChunks area dbNumber start 0
+      (Chunking.counts count maxCount) (Chunking.ReadAssembly.empty area.elementSize)
+    return ⟨assembled.data, Chunking.ReadAssembly.complete_size count maxCount
+      area.elementSize hmaximum assembled⟩
+
+def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
+    (start count : Nat) : IO ByteArray := do
+  return (← client.readAreaChecked area dbNumber start count).val
 
 private def Client.writeAreaChunks (client : Client) (area : S7.Area)
-    (dbNumber : UInt16) (start offset : Nat) (payload : ByteArray) :
-    List Nat → IO Unit
+    (dbNumber : UInt16) (start offset : Nat) (payload : ByteArray)
+    (chunks : List Nat) (hcoverage : offset + chunks.sum * area.elementSize = payload.size) :
+    IO Unit := do
+  match hchunks : chunks with
   | [] => pure ()
-  | count :: rest => do
+  | count :: rest =>
       let byteCount := count * area.elementSize
-      let chunk := payload.extract offset (offset + byteCount)
-      client.writeAreaChunk { area, dbNumber, start, count } chunk
-      client.writeAreaChunks area dbNumber (start + byteCount) (offset + byteCount)
-        payload rest
+      have htail : offset + byteCount + rest.sum * area.elementSize = payload.size := by
+        simpa [hchunks, byteCount, Nat.add_mul, Nat.add_assoc] using hcoverage
+      let chunk := Chunking.writeSlice payload offset count area.elementSize (by omega)
+      client.writeAreaChunk { area, dbNumber, start := start + offset, count } chunk.val
+      client.writeAreaChunks area dbNumber start (offset + byteCount)
+        payload rest htail
 
 def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start : Nat) (payload : ByteArray) : IO Unit := do
   if payload.isEmpty then
     return
-  if payload.size % area.elementSize != 0 then
+  if haligned : payload.size % area.elementSize ≠ 0 then
     throw <| IO.userError s!"payload size {payload.size} is not aligned to {area.elementSize}-byte elements"
-  let pduLength ← client.negotiatedPduLength
-  let availableBytes := pduLength.toNat - 28
-  let lengthLimitedBytes := if area.dataTransportSize == S7.octetTransportSize then
-    S7.maxSectionSize
   else
-    S7.maxSectionSize / 8
-  let maxCount := min S7.maxSectionSize
-    (min availableBytes lengthLimitedBytes / area.elementSize)
-  if maxCount == 0 then
-    throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a write item"
-  client.writeAreaChunks area dbNumber start 0 payload
-    (Chunking.counts (payload.size / area.elementSize) maxCount)
+    have hsize : payload.size / area.elementSize * area.elementSize = payload.size := by
+      have hmod : payload.size % area.elementSize = 0 := by omega
+      have := Nat.div_add_mod payload.size area.elementSize
+      simpa [hmod, Nat.mul_comm] using this
+    let pduLength ← client.negotiatedPduLength
+    let availableBytes := pduLength.toNat - 28
+    let lengthLimitedBytes := if area.dataTransportSize == S7.octetTransportSize then
+      S7.maxSectionSize
+    else
+      S7.maxSectionSize / 8
+    let maxCount := min S7.maxSectionSize
+      (min availableBytes lengthLimitedBytes / area.elementSize)
+    if hmaximum : maxCount = 0 then
+      throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a write item"
+    else
+      client.writeAreaChunks area dbNumber start 0 payload
+        (Chunking.counts (payload.size / area.elementSize) maxCount) (by
+          simpa [Chunking.counts_sum _ _ hmaximum] using hsize)
 
 def Client.dbRead (client : Client) (dbNumber : UInt16) (start size : Nat) : IO ByteArray :=
   client.readArea .dataBlocks dbNumber start size

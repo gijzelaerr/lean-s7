@@ -1,4 +1,5 @@
 import LeanS7
+import LeanS7.S7Conformance
 
 open LeanS7
 
@@ -708,6 +709,7 @@ def main : IO Unit := do
   testTPKTIgnoresReservedInput
   testTPKTSizeBoundary
   testTPKTConformanceCorpus
+  Conformance.S7.validate
   testCOTPConnectionRequest
   testCOTPDataRoundTrip
   testCOTPConformanceCorpus

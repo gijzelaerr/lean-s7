@@ -79,6 +79,13 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
     client.timersWrite 0 timerValue
     unless (← client.timersRead 0 2) == timerValue do
       throw <| IO.userError "timer write/read-back mismatch"
+    let elements := large.extract 0 1000
+    for area in [S7.Area.counters, S7.Area.timers] do
+      client.writeArea area 0 16 elements
+      unless (← client.readArea area 0 16 500) == elements do
+        throw <| IO.userError "chunked two-byte-element write/read-back mismatch"
+    unless (← client.dbRead 1 512 0).isEmpty do
+      throw <| IO.userError "empty read returned data"
     client.dbWriteUInt8 1 2000 0xa5
     unless (← client.dbReadUInt8 1 2000) == 0xa5 do
       throw <| IO.userError "typed UInt8 DB access mismatch"

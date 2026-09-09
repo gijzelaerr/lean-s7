@@ -80,6 +80,9 @@ structure CoreProtocolAssurance : Prop where
   responseErrorFree : ∀ response reference function,
     S7.validateResponse response reference function = .ok () →
       response.errorClass = 0 ∧ response.errorCode = 0
+  singleReadPayloadSize : ∀ reference area expectedSize response payload,
+    S7.decodeAreaRead reference area expectedSize response = .ok payload →
+      payload.size = expectedSize
   negotiatedPduMinimum : ∀ pduLength,
     S7.validateSetupPduLength pduLength = .ok () → 240 ≤ pduLength.toNat
   memoryRangeSafety : ∀ range,
@@ -103,6 +106,24 @@ structure CoreProtocolAssurance : Prop where
   chunkBounds : ∀ total maximum chunk,
     maximum ≠ 0 → chunk ∈ Chunking.counts total maximum →
       0 < chunk ∧ chunk ≤ maximum
+  readAssemblyOrder : ∀ elementSize consumed count
+      (state : Chunking.ReadAssembly elementSize consumed)
+      (chunk : { data : ByteArray // data.size = count * elementSize }),
+    (state.append chunk).data = state.data ++ chunk.val
+  readAssemblyNextStart : ∀ elementSize consumed count
+      (state : Chunking.ReadAssembly elementSize consumed)
+      (chunk : { data : ByteArray // data.size = count * elementSize }) start,
+    (state.append chunk).nextStart start = state.nextStart start + count * elementSize
+  readAssemblyCompleteSize : ∀ total maximum elementSize,
+    maximum ≠ 0 →
+      ∀ state : Chunking.ReadAssembly elementSize (0 + (Chunking.counts total maximum).sum),
+        state.data.size = total * elementSize
+  writeSliceSize : ∀ payload offset count elementSize hbound,
+    (Chunking.writeSlice payload offset count elementSize hbound).val.size = count * elementSize
+  writeSlicesComplete : ∀ payload elementSize maximum,
+    payload.size % elementSize = 0 → maximum ≠ 0 →
+      Chunking.writeSlices payload elementSize 0
+        (Chunking.counts (payload.size / elementSize) maximum) = payload
   readBatchOrder : ∀ pduLength pending count requestSize responseSize selected,
     let result := takeReadBatch pduLength pending count requestSize responseSize selected
     result.1 ++ result.2 = selected.reverse ++ pending
@@ -162,6 +183,7 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact S7.decodeJob_encodeSetupCommunication
   · exact S7.validateResponse_reference_eq
   · exact S7.validateResponse_error_free
+  · exact S7.decodeAreaRead_size
   · exact S7.validateSetupPduLength_lower_bound
   · exact S7.validateMemoryRange_invariants
   · exact S7.encodedMemoryAddress_size
@@ -169,6 +191,12 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact S7.encodedAreaWrite_size
   · exact Chunking.counts_sum
   · exact Chunking.counts_bounds
+  · exact fun _ _ _ => Chunking.ReadAssembly.append_data
+  · exact fun _ _ _ => Chunking.ReadAssembly.append_nextStart
+  · exact Chunking.ReadAssembly.complete_size
+  · intro payload offset count elementSize hbound
+    exact (Chunking.writeSlice payload offset count elementSize hbound).property
+  · exact Chunking.writeSlices_complete
   · exact takeReadBatch_preserves_order
   · exact takeReadBatch_count_le
   · exact takeReadBatch_fits

@@ -912,6 +912,23 @@ def decodeAreaRead (reference : UInt16) (area : Area) (expectedSize : Nat)
   cursor.finish
   return payload
 
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 800000 in
+/-- Successful single-area reads expose exactly the caller's requested byte count. -/
+theorem decodeAreaRead_size (reference : UInt16) (area : Area) (expectedSize : Nat)
+    (response : Response) (payload : ByteArray)
+    (h : decodeAreaRead reference area expectedSize response = .ok payload) :
+    payload.size = expectedSize := by
+  unfold decodeAreaRead at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  all_goals
+    simp only [Except.ok.injEq] at h
+    subst payload
+    have hsize := Cursor.readBytes_size _ _ _ _ (by assumption)
+    simp_all
+
 private def validateItemParameters (response : Response) (reference : UInt16)
     (function : UInt8) (expectedCount : Nat) : Except DecodeError Unit := do
   validateResponse response reference function

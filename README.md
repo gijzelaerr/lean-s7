@@ -95,8 +95,8 @@ Implemented:
   packet size/round-trip properties
 - end-to-end tests against the python-snap7 emulator
 
-Next: prove core codec and chunking properties, define a shared conformance-vector
-format, and add real-controller evidence. A native Lean emulator remains useful
+Next: extend conformance coverage and independently validate addressing,
+exercise transport failures, and add real-controller evidence. A native Lean emulator remains useful
 where it supports those goals, but is not the primary outcome.
 
 This is a classic S7comm client. S7comm Plus, including optimized symbolic
@@ -128,6 +128,7 @@ at `conformance/v1/tpkt.json`. Verify that it is current with:
 ```console
 lake exe lean-s7-conformance | diff - conformance/v1/tpkt.json
 lake exe lean-s7-conformance cotp | diff - conformance/v1/cotp-data.json
+lake exe lean-s7-conformance s7 | diff - conformance/v1/s7.json
 ```
 
 It can also expose framing differences in python-snap7 independently of the
@@ -137,7 +138,39 @@ divergences and exits nonzero:
 ```console
 python integration/tpkt_conformance.py
 python integration/cotp_conformance.py
+python integration/s7_conformance.py
 ```
+
+The S7 corpus covers valid and malformed single-read/write responses, two-byte
+element chunking, and multi-write payload preservation. Its generator checks
+fixed expectations against the Lean codecs and chunk planner before exporting.
+The Python runner exercises public client methods with an in-memory peer and
+exits nonzero for divergences. See [the corpus contract](conformance/v1/README.md)
+for field meanings and the limits of cross-implementation comparisons.
+
+`S7.decodeAreaRead_size` proves that a successful single-area response decode
+returns exactly the requested byte count. The internal read loop retains this
+proof in its return type and uses `Chunking.ReadAssembly` to preserve response
+order, advance byte offsets without gaps or overlap, and return exactly
+`count * elementSize` bytes for the completed plan. These assembly properties
+are included in the core assurance contract. They do not prove transport liveness
+or that a controller supplied the intended memory contents.
+
+The emulator fixture explicitly models Lean's direct counter/timer byte offsets;
+python-snap7 3.0.0's generic parser divides those addresses by eight. The
+multi-chunk counter/timer tests therefore validate assembly under that model,
+not independent agreement on controller addressing.
+
+Five additional generated address vectors pass offline dissection with Wireshark
+4.6.8. Run `python integration/addressing_conformance.py` with `tshark` installed.
+This independently checks packet interpretation; physical counter/timer indexing
+remains unresolved. See [the addressing evidence](reports/addressing-evidence-2026-09-09.md).
+
+The write loop carries a proof that its remaining plan ends exactly at the
+payload boundary and uses bounded slices of the original payload. The
+`Chunking.writeSlices_complete` theorem proves that concatenating those slices
+in order reproduces the original bytes exactly. This establishes local transfer
+coverage and payload preservation, not atomic writes or controller persistence.
 
 The project pins its Lean toolchain in `lean-toolchain`.
 

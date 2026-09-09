@@ -58,6 +58,17 @@ def finish (cursor : Cursor) : Except DecodeError Unit :=
   else
     .error (.trailingBytes cursor.offset cursor.remaining)
 
+/-- A successful bounded read returns exactly the requested number of bytes. -/
+theorem readBytes_size (cursor next : Cursor) (count : Nat) (payload : ByteArray)
+    (h : cursor.readBytes count = .ok (payload, next)) : payload.size = count := by
+  unfold readBytes at h
+  split at h
+  · cases h
+    simp only [ByteArray.size_extract]
+    unfold remaining at *
+    omega
+  · contradiction
+
 /-- A byte read succeeds when the cursor points inside the input. -/
 theorem readUInt8_of_lt (cursor : Cursor) (h : cursor.offset < cursor.data.size) :
     cursor.readUInt8 = .ok (cursor.data[cursor.offset],

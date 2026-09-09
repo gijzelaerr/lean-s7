@@ -50,6 +50,15 @@ class MultiItemServer(Server):
             for index in range(count)
         ]
 
+    def _parse_address_specification(self, addr_spec: bytes) -> dict:
+        spec = super()._parse_address_specification(addr_spec)
+        if spec and spec["word_len"] in (S7WordLen.TIMER, S7WordLen.COUNTER):
+            # Model-fixture convention: Lean uses direct byte offsets here.
+            # The pinned emulator divides these by eight like DB bit addresses.
+            # This override tests assembly, not independent PLC compatibility.
+            spec["start"] = int.from_bytes(addr_spec[9:12], "big")
+        return spec
+
     @staticmethod
     def _response_header(
         request: dict, function: int, count: int, data: bytes
@@ -74,7 +83,10 @@ class MultiItemServer(Server):
         self, request: dict, client_address: tuple[str, int]
     ) -> bytes:
         count = request["raw_parameters"][1]
-        if count == 1:
+        if count == 1 and request["raw_parameters"][5] not in (
+            S7WordLen.TIMER,
+            S7WordLen.COUNTER,
+        ):
             response = super()._handle_read_area(request, client_address)
             if self.stale_once:
                 self.stale_once = False
@@ -108,7 +120,10 @@ class MultiItemServer(Server):
         self, request: dict, client_address: tuple[str, int]
     ) -> bytes:
         count = request["raw_parameters"][1]
-        if count == 1:
+        if count == 1 and request["raw_parameters"][5] not in (
+            S7WordLen.TIMER,
+            S7WordLen.COUNTER,
+        ):
             return super()._handle_write_area(request, client_address)
         data = request["raw_data"]
         offset = 0
@@ -522,9 +537,7 @@ def run_download_integration(root: Path) -> None:
         raise errors[0]
 
 
-def serve_segmented_responses(
-    listener: socket.socket, errors: list[Exception]
-) -> None:
+def serve_segmented_responses(listener: socket.socket, errors: list[Exception]) -> None:
     try:
         connection, _ = listener.accept()
         with connection:
@@ -588,8 +601,8 @@ def main() -> None:
         (SrvArea.PE, 0): bytearray(256),
         (SrvArea.PA, 0): bytearray(256),
         (SrvArea.MK, 0): bytearray(256),
-        (SrvArea.CT, 0): bytearray(256),
-        (SrvArea.TM, 0): bytearray(256),
+        (SrvArea.CT, 0): bytearray(2048),
+        (SrvArea.TM, 0): bytearray(2048),
     }
     areas[(SrvArea.DB, 1)][:4] = b"\xaa\xbb\xcc\xdd"
     areas[(SrvArea.PE, 0)][:4] = b"\x11\x12\x13\x14"
@@ -608,6 +621,14 @@ def main() -> None:
             cwd=root,
             check=True,
         )
+        expected_elements = bytes((index * 37 + 11) % 256 for index in range(1000))
+        for area in (SrvArea.CT, SrvArea.TM):
+            if areas[(area, 0)][16:1016] != expected_elements:
+                raise AssertionError(
+                    "chunked write did not preserve source bytes at the destination"
+                )
+            if any(areas[(area, 0)][1016:]):
+                raise AssertionError("chunked write modified bytes beyond the payload")
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)
