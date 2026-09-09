@@ -109,8 +109,9 @@ private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
     | throw <| IO.userError "S7 client is disconnected"
   Transport.sendData connection.socket request client.config.operationTimeoutMs
   let pduLength ← client.currentPduLength.get
+  let deadline ← Transport.receiveDeadline client.config.operationTimeoutMs
   for _ in [0:client.config.maxStaleResponses + 1] do
-    let response ← Transport.receiveData connection.socket client.config.operationTimeoutMs
+    let response ← Transport.receiveDataUntil connection.socket deadline
       pduLength.toNat
     if (← orThrow <| S7.decodePduReference response) == reference then
       return response

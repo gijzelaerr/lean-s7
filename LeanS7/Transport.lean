@@ -68,7 +68,21 @@ private def orThrow [Repr ε] (result : Except ε α) : IO α :=
 def sendBytes (socket : Socket) (data : ByteArray) (_timeoutMs : Option Nat := none) : IO Unit :=
   await (socket.send data)
 
-private def receiveSome (socket : Socket) (count : Nat) (timeoutMs : Option Nat) : IO (Option ByteArray) := do
+/-- One monotonic receive deadline, shared by fragments and stale responses. -/
+def receiveDeadline (timeoutMs : Option Nat) : IO (Option Nat) := do
+  match timeoutMs with
+  | none => return none
+  | some timeout => return some ((← IO.monoMsNow) + timeout)
+
+private def remainingReceiveTime (deadline : Option Nat) : IO (Option Nat) := do
+  let some deadline := deadline | return none
+  let now ← IO.monoMsNow
+  if now ≥ deadline then
+    throw <| IO.userError "socket receive timed out: operation deadline expired"
+  return some (deadline - now)
+
+private def receiveSome (socket : Socket) (count : Nat) (deadline : Option Nat) : IO (Option ByteArray) := do
+  let timeoutMs ← remainingReceiveTime deadline
   let some timeoutMs := timeoutMs | await (socket.recv? count.toUInt64)
   let timer ← await (Selector.sleep (Std.Time.Millisecond.Offset.ofNat timeoutMs))
   let selected : Async ReceiveResult := Selectable.one #[
@@ -76,48 +90,62 @@ private def receiveSome (socket : Socket) (count : Nat) (timeoutMs : Option Nat)
     .case timer fun _ => pure ReceiveResult.timedOut
   ]
   match ← await selected with
-  | .received data => return data
+  | .received data =>
+      discard <| remainingReceiveTime deadline
+      return data
   | .timedOut => throw <| IO.userError s!"socket receive timed out after {timeoutMs} ms"
 
-def receiveExact (socket : Socket) (count : Nat) (timeoutMs : Option Nat := none) : IO ByteArray := do
+private def receiveExactUntil (socket : Socket) (count : Nat) (deadline : Option Nat) : IO ByteArray := do
   let mut result := ByteArray.empty
   while result.size < count do
-    let some chunk ← receiveSome socket (count - result.size) timeoutMs
+    let some chunk ← receiveSome socket (count - result.size) deadline
       | throw <| IO.userError s!"connection closed with {count - result.size} bytes still expected"
     if chunk.size == 0 then
       throw <| IO.userError "socket returned an empty chunk before EOF"
     result := result ++ chunk
   return result
 
+def receiveExact (socket : Socket) (count : Nat) (timeoutMs : Option Nat := none) : IO ByteArray := do
+  receiveExactUntil socket count (← receiveDeadline timeoutMs)
+
 def sendFrame (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat := none) : IO Unit := do
   let frame ← orThrow <| TPKT.encode { payload }
   sendBytes socket frame timeoutMs
 
-def receiveFrame (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArray := do
-  let header ← receiveExact socket TPKT.headerSize timeoutMs
+private def receiveFrameUntil (socket : Socket) (deadline : Option Nat) : IO ByteArray := do
+  let header ← receiveExactUntil socket TPKT.headerSize deadline
   let cursor : Cursor := { data := header, offset := 2 }
   let (length, _) ← orThrow cursor.readUInt16BE
   if length.toNat < TPKT.headerSize then
     throw <| IO.userError s!"invalid TPKT frame length {length}"
-  let payload ← receiveExact socket (length.toNat - TPKT.headerSize) timeoutMs
+  let payload ← receiveExactUntil socket (length.toNat - TPKT.headerSize) deadline
   let frame ← orThrow <| TPKT.decode (header ++ payload)
   return frame.payload
+
+def receiveFrame (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArray := do
+  receiveFrameUntil socket (← receiveDeadline timeoutMs)
 
 def sendData (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat := none) : IO Unit :=
   sendFrame socket (COTP.encodeData { payload }) timeoutMs
 
-private partial def receiveDataSegments (socket : Socket) (timeoutMs : Option Nat)
+private partial def receiveDataSegments (socket : Socket) (deadline : Option Nat)
     (maximum : Nat) (state : COTP.Reassembly) : IO ByteArray := do
-  let payload ← receiveFrame socket timeoutMs
+  let payload ← receiveFrameUntil socket deadline
   let segment ← orThrow <| COTP.decodeData payload
   let (state, complete) ← orThrow <| state.pushBounded segment maximum
   if complete then
     return state.payload
-  receiveDataSegments socket timeoutMs maximum state
+  receiveDataSegments socket deadline maximum state
+
+/-- Receive one complete TSDU using an absolute `IO.monoMsNow` deadline.
+    `none` disables the deadline; callers may reuse it while discarding stale PDUs. -/
+def receiveDataUntil (socket : Socket) (deadline : Option Nat)
+    (maxPayloadSize : Nat := 65535) : IO ByteArray :=
+  receiveDataSegments socket deadline maxPayloadSize {}
 
 def receiveData (socket : Socket) (timeoutMs : Option Nat := none)
-    (maxPayloadSize : Nat := 65535) : IO ByteArray :=
-  receiveDataSegments socket timeoutMs maxPayloadSize {}
+    (maxPayloadSize : Nat := 65535) : IO ByteArray := do
+  receiveDataUntil socket (← receiveDeadline timeoutMs) maxPayloadSize
 
 private def socketAddress (address : IPAddr) (port : UInt16) : SocketAddress :=
   match address with

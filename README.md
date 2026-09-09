@@ -108,8 +108,11 @@ Reassembly rejects cumulative payloads beyond the negotiated S7 PDU budget befor
 appending the offending segment. Before negotiation, the default cap is 65535
 bytes. The size-bound theorem is included in the core assurance contract.
 Scripted peers test exact-budget acceptance, single and cumulative overflow,
-missing EOT, truncated headers, and stale-response exhaustion. The byte cap does
-not impose an overall deadline on a peer that continuously sends more segments.
+missing EOT, truncated headers, and stale-response exhaustion. Each receive uses
+one monotonic deadline across TCP fragments, TPKT headers/payloads, and COTP
+segments; stale responses share the same deadline within an exchange attempt.
+Continuous small or empty segments cannot refresh that deadline. This bounds
+receiving, not sending or the total duration of multiple reconnect attempts.
 
 ## Build and test
 

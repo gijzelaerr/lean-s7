@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import select
 import socket
 import struct
 import subprocess
@@ -593,6 +594,19 @@ def run_segmented_integration(root: Path) -> None:
         raise errors[0]
 
 
+def send_trickle(
+    connection: socket.socket, pieces: list[bytes], interval: float
+) -> None:
+    for piece in pieces:
+        # A rejection may send a disconnect before closing. Stop immediately,
+        # so a broken pipe cannot disguise the client's own timeout result.
+        readable, _, _ = select.select([connection], [], [], interval)
+        if readable:
+            connection.recv(1024)
+            return
+        connection.sendall(piece)
+
+
 def serve_transport_case(
     listener: socket.socket, mode: str, errors: list[Exception]
 ) -> None:
@@ -626,13 +640,45 @@ def serve_transport_case(
                 )
                 for _ in range(5):
                     _send_s7(connection, response)
-            elif mode == "exact-budget":
+            elif mode in ("exact-budget", "fragmented-tcp"):
                 response = _s7_response(
                     reference,
                     bytes([4, 1]),
                     bytes([255, 4, 14, 112]) + bytes([0xAA]) * 462,
                 )
-                _send_s7_segmented(connection, response, 300)
+                if mode == "exact-budget":
+                    _send_s7_segmented(connection, response, 300)
+                else:
+                    packet = (
+                        struct.pack(">BBH", 3, 0, len(response) + 7)
+                        + bytes([2, 0xF0, 0x80])
+                        + response
+                    )
+                    send_trickle(
+                        connection,
+                        [packet[:1], packet[1:3], packet[3:8], packet[8:]],
+                        0.01,
+                    )
+            elif mode in ("drip-header", "drip-body", "drip-segments", "drip-stale"):
+                response = _s7_response(
+                    reference, bytes([4, 1]), bytes([255, 4, 0, 32, 1, 2, 3, 4])
+                )
+                cotp = bytes([2, 0xF0, 0x80]) + response
+                packet = struct.pack(">BBH", 3, 0, len(cotp) + 4) + cotp
+                if mode == "drip-header":
+                    pieces = [packet[index : index + 1] for index in range(len(packet))]
+                elif mode == "drip-body":
+                    connection.sendall(packet[:4])
+                    pieces = [
+                        packet[index : index + 1] for index in range(4, len(packet))
+                    ]
+                elif mode == "drip-segments":
+                    pieces = [bytes([3, 0, 0, 7, 2, 0xF0, 0])] * 8 + [packet]
+                else:
+                    stale = bytearray(packet)
+                    stale[11:13] = (reference + 1).to_bytes(2, "big")
+                    pieces = [bytes(stale)] * 4 + [packet]
+                send_trickle(connection, pieces, 0.1)
             else:
                 raise ValueError(f"unknown transport case: {mode}")
             # Keep the stream open until the client rejects/disconnects. Missing
@@ -646,11 +692,16 @@ def serve_transport_case(
 def run_transport_failures(root: Path) -> None:
     for mode, expected in (
         ("exact-budget", "accept"),
+        ("fragmented-tcp", "accept"),
         ("single-overflow", "COTP reassembly exceeds payload limit 480"),
         ("cumulative-overflow", "COTP reassembly exceeds payload limit 480"),
         ("missing-eot", "socket receive timed out"),
         ("truncated-header", "bytes still expected"),
         ("stale-flood", "too many stale S7 responses"),
+        ("drip-header", "socket receive timed out"),
+        ("drip-body", "socket receive timed out"),
+        ("drip-segments", "socket receive timed out"),
+        ("drip-stale", "socket receive timed out"),
     ):
         errors: list[Exception] = []
         with socket.socket() as listener:
