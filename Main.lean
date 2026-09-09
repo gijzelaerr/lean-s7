@@ -315,12 +315,41 @@ def runSegmentedIntegration (host portString : String) : IO Unit := do
     try client.disconnect catch _ => pure ()
     throw error
 
+def runTransportFailureIntegration (host portString expected : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host, port := UInt16.ofNat portNat,
+    operationTimeoutMs := some 300, reconnectRetries := 0
+  }
+  try
+    let outcome ← try
+      let payload ← client.dbRead 1 0 (if expected == "accept" then 462 else 4)
+      pure (.ok payload : Except String ByteArray)
+    catch error => pure (.error error.toString)
+    match outcome with
+    | .ok payload =>
+        unless expected == "accept" && payload == ByteArray.mk (Array.replicate 462 0xaa) do
+          throw <| IO.userError "invalid transport response was accepted"
+    | .error message =>
+        unless expected != "accept" && (message.splitOn expected).length > 1 do
+          throw <| IO.userError s!"unexpected transport failure: {message}"
+        if ← client.isConnected then
+          throw <| IO.userError "failed exchange left the client connected"
+    client.disconnect
+    IO.println s!"transport case passed: {expected}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
   | ["integration-reconnect", host, port] => runIntegration host port true
   | ["integration-download", host, port] => runDownloadIntegration host port
   | ["integration-segmented", host, port] => runSegmentedIntegration host port
+  | ["integration-transport", host, port, expected] =>
+      runTransportFailureIntegration host port expected
   | ["expect-connect-failure", host, port] => expectConnectFailure host port
   | [] => runDemo
   | _ => throw <| IO.userError "usage: lean-s7 [integration <host-or-address> <port>]"

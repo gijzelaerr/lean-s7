@@ -108,8 +108,10 @@ private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
   let some connection ← client.connection.get
     | throw <| IO.userError "S7 client is disconnected"
   Transport.sendData connection.socket request client.config.operationTimeoutMs
+  let pduLength ← client.currentPduLength.get
   for _ in [0:client.config.maxStaleResponses + 1] do
     let response ← Transport.receiveData connection.socket client.config.operationTimeoutMs
+      pduLength.toNat
     if (← orThrow <| S7.decodePduReference response) == reference then
       return response
   throw <| IO.userError s!"too many stale S7 responses while waiting for reference {reference}"
@@ -380,8 +382,9 @@ def Client.copyRamToRom (client : Client) : IO Unit :=
 private def Client.receiveServerJob (client : Client) : IO S7.JobPdu := do
   let some connection ← client.connection.get
     | throw <| IO.userError "S7 client is disconnected"
+  let pduLength ← client.currentPduLength.get
   orThrow <| S7.decodeJobPdu
-    (← Transport.receiveData connection.socket client.config.operationTimeoutMs)
+    (← Transport.receiveData connection.socket client.config.operationTimeoutMs pduLength.toNat)
 
 private def Client.sendServerResponse (client : Client) (response : ByteArray) : IO Unit := do
   let some connection ← client.connection.get

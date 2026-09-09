@@ -8,6 +8,9 @@ namespace LeanS7
     classic S7 protocol core. It does not claim coverage of S7comm Plus or
     controller-specific service semantics. -/
 structure CoreProtocolAssurance : Prop where
+  cotpReassemblyBudget : ∀ state next segment maximum complete,
+    COTP.Reassembly.pushBounded state segment maximum = .ok (next, complete) →
+      next.payload.size ≤ maximum
   cotpDataCodec : ∀ pdu : COTP.Data,
     COTP.decodeData (COTP.encodeData pdu) = .ok pdu
   cotpDisconnectCodec : ∀ request : COTP.DisconnectRequest,
@@ -160,6 +163,7 @@ structure CoreProtocolAssurance : Prop where
     `CoreProtocolAssurance`. -/
 theorem coreProtocolAssurance : CoreProtocolAssurance := by
   constructor
+  · exact COTP.Reassembly.pushBounded_size
   · exact COTP.decodeData_encodeData
   · exact COTP.decodeDisconnectRequest_encodeDisconnectRequest
   · exact COTP.Reassembly.push_payload

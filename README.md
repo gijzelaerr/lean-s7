@@ -104,6 +104,12 @@ access on newer controllers, is a different protocol and is not implemented.
 
 The current transport accepts IPv4, IPv6, and DNS hostnames and reassembles
 segmented COTP data TPDUs until the end-of-transmission flag.
+Reassembly rejects cumulative payloads beyond the negotiated S7 PDU budget before
+appending the offending segment. Before negotiation, the default cap is 65535
+bytes. The size-bound theorem is included in the core assurance contract.
+Scripted peers test exact-budget acceptance, single and cumulative overflow,
+missing EOT, truncated headers, and stale-response exhaustion. The byte cap does
+not impose an overall deadline on a peer that continuously sends more segments.
 
 ## Build and test
 

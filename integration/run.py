@@ -593,6 +593,95 @@ def run_segmented_integration(root: Path) -> None:
         raise errors[0]
 
 
+def serve_transport_case(
+    listener: socket.socket, mode: str, errors: list[Exception]
+) -> None:
+    try:
+        connection, _ = listener.accept()
+        with connection:
+            connection.settimeout(3)
+            cr = _receive_tpkt(connection)
+            _send_tpkt(connection, bytes([0x11, 0xD0, cr[4], cr[5], 0, 1, 0]) + cr[7:])
+            setup = _receive_s7(connection)
+            reference = int.from_bytes(setup[4:6], "big")
+            _send_s7(
+                connection,
+                _s7_response(reference, bytes([0xF0, 0, 0, 1, 0, 1, 1, 0xE0])),
+            )
+            request = _receive_s7(connection)
+            reference = int.from_bytes(request[4:6], "big")
+            if mode == "single-overflow":
+                _send_tpkt(connection, bytes([2, 0xF0, 0x80]) + bytes(481))
+            elif mode == "cumulative-overflow":
+                _send_tpkt(connection, bytes([2, 0xF0, 0]) + bytes(300))
+                _send_tpkt(connection, bytes([2, 0xF0, 0]) + bytes(181))
+            elif mode == "missing-eot":
+                _send_tpkt(connection, bytes([2, 0xF0, 0]) + bytes(20))
+            elif mode == "truncated-header":
+                connection.sendall(bytes([3, 0]))
+                return
+            elif mode == "stale-flood":
+                response = _s7_response(
+                    reference + 1, bytes([4, 1]), bytes([255, 4, 0, 32, 1, 2, 3, 4])
+                )
+                for _ in range(5):
+                    _send_s7(connection, response)
+            elif mode == "exact-budget":
+                response = _s7_response(
+                    reference,
+                    bytes([4, 1]),
+                    bytes([255, 4, 14, 112]) + bytes([0xAA]) * 462,
+                )
+                _send_s7_segmented(connection, response, 300)
+            else:
+                raise ValueError(f"unknown transport case: {mode}")
+            # Keep the stream open until the client rejects/disconnects. Missing
+            # EOT must hit its receive deadline, not pass due to server-side EOF.
+            while connection.recv(1024):
+                pass
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_transport_failures(root: Path) -> None:
+    for mode, expected in (
+        ("exact-budget", "accept"),
+        ("single-overflow", "COTP reassembly exceeds payload limit 480"),
+        ("cumulative-overflow", "COTP reassembly exceeds payload limit 480"),
+        ("missing-eot", "socket receive timed out"),
+        ("truncated-header", "bytes still expected"),
+        ("stale-flood", "too many stale S7 responses"),
+    ):
+        errors: list[Exception] = []
+        with socket.socket() as listener:
+            listener.settimeout(5)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            thread = threading.Thread(
+                target=serve_transport_case, args=(listener, mode, errors)
+            )
+            thread.start()
+            try:
+                subprocess.run(
+                    [
+                        str(root / ".lake/build/bin/lean-s7"),
+                        "integration-transport",
+                        "127.0.0.1",
+                        str(listener.getsockname()[1]),
+                        expected,
+                    ],
+                    cwd=root,
+                    check=True,
+                    timeout=10,
+                )
+            finally:
+                thread.join(timeout=6)
+            if thread.is_alive():
+                raise RuntimeError(f"transport peer did not finish: {mode}")
+            if errors:
+                raise errors[0]
+
+
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
     port = free_port()
@@ -679,6 +768,7 @@ def main() -> None:
         )
         run_download_integration(root)
         run_segmented_integration(root)
+        run_transport_failures(root)
     finally:
         server.stop()
         server.destroy()

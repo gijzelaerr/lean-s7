@@ -107,16 +107,17 @@ def sendData (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat := 
   sendFrame socket (COTP.encodeData { payload }) timeoutMs
 
 private partial def receiveDataSegments (socket : Socket) (timeoutMs : Option Nat)
-    (state : COTP.Reassembly) : IO ByteArray := do
+    (maximum : Nat) (state : COTP.Reassembly) : IO ByteArray := do
   let payload ← receiveFrame socket timeoutMs
   let segment ← orThrow <| COTP.decodeData payload
-  let (state, complete) := state.push segment
+  let (state, complete) ← orThrow <| state.pushBounded segment maximum
   if complete then
     return state.payload
-  receiveDataSegments socket timeoutMs state
+  receiveDataSegments socket timeoutMs maximum state
 
-def receiveData (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArray :=
-  receiveDataSegments socket timeoutMs {}
+def receiveData (socket : Socket) (timeoutMs : Option Nat := none)
+    (maxPayloadSize : Nat := 65535) : IO ByteArray :=
+  receiveDataSegments socket timeoutMs maxPayloadSize {}
 
 private def socketAddress (address : IPAddr) (port : UInt16) : SocketAddress :=
   match address with

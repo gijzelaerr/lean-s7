@@ -225,6 +225,12 @@ def testCOTPDataRoundTrip : IO Unit := do
   let (state, complete) := state.push last
   check (complete && state.payload == first.payload ++ last.payload)
     "COTP segment reassembly lost order or completion"
+  check (isOkEq (({ payload := first.payload } : COTP.Reassembly).pushBounded last 4)
+      (state, true)) "exact reassembly budget was rejected"
+  check (match ({} : COTP.Reassembly).pushBounded last 1 with
+    | .error _ => true | .ok _ => false) "oversized first segment was accepted"
+  check (match ({ payload := first.payload } : COTP.Reassembly).pushBounded last 3 with
+    | .error _ => true | .ok _ => false) "cumulative reassembly overflow was accepted"
 
 def cotpDecodeErrorName : DecodeError → String
   | .unexpectedEnd _ _ _ => "unexpected-end"

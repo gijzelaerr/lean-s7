@@ -329,6 +329,24 @@ structure Reassembly where
 def Reassembly.push (state : Reassembly) (segment : Data) : Reassembly × Bool :=
   ({ payload := state.payload ++ segment.payload }, segment.endOfTransmission)
 
+/-- Enforce a cumulative TSDU budget before allocating the appended payload. -/
+def Reassembly.pushBounded (state : Reassembly) (segment : Data) (maximum : Nat) :
+    Except DecodeError (Reassembly × Bool) :=
+  if state.payload.size + segment.payload.size ≤ maximum then
+    .ok (state.push segment)
+  else
+    .error (.invalidField 0 s!"COTP reassembly exceeds payload limit {maximum}")
+
+theorem Reassembly.pushBounded_size (state next : Reassembly) (segment : Data)
+    (maximum : Nat) (complete : Bool)
+    (h : state.pushBounded segment maximum = .ok (next, complete)) :
+    next.payload.size ≤ maximum := by
+  unfold pushBounded at h
+  split at h
+  · cases h
+    simpa [push] using ‹state.payload.size + segment.payload.size ≤ maximum›
+  · contradiction
+
 /-- Reassembly preserves arrival order and appends every segment exactly once. -/
 theorem Reassembly.push_payload (state : Reassembly) (segment : Data) :
     (state.push segment).1.payload = state.payload ++ segment.payload := by
