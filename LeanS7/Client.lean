@@ -5,6 +5,7 @@ import LeanS7.Value
 import LeanS7.Chunking
 import LeanS7.Download
 import LeanS7.Upload
+import LeanS7.UserDataAssembly
 import LeanS7.Lifecycle
 
 namespace LeanS7
@@ -24,6 +25,9 @@ structure ClientConfig where
   tpduSizeExponent : UInt8 := 0x0a
   connectTimeoutMs : Option Nat := some 5000
   operationTimeoutMs : Option Nat := some 5000
+  /-- Whole upload, SZL, and segmented USER_DATA receive budget, starting after
+      the request enters the serialization gate. Does not cancel sends/connects. -/
+  transferReceiveTimeoutMs : Option Nat := some 30000
   reconnectRetries : Nat := 0
   maxStaleResponses : Nat := 4
   /-- First post-handshake PDU reference. Primarily useful for deterministic
@@ -121,12 +125,14 @@ private def Client.closeCurrent (client : Client) : IO Unit := do
   client.applyLifecycleEvent .transportClosed
 
 private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
-    (request : ByteArray) : IO ByteArray := do
+    (request : ByteArray) (transferDeadline : Option Nat := none) : IO ByteArray := do
+  Transport.checkReceiveDeadline transferDeadline
   let some connection ← client.connection.get
     | throw <| ClientError.disconnected "S7 client is disconnected"
   Transport.sendData connection.socket request client.config.operationTimeoutMs
   let pduLength ← client.currentPduLength.get
-  let deadline ← Transport.receiveDeadline client.config.operationTimeoutMs
+  let deadline := Transport.earlierReceiveDeadline
+    (← Transport.receiveDeadline client.config.operationTimeoutMs) transferDeadline
   for _ in [0:client.config.maxStaleResponses + 1] do
     let response ← Transport.receiveDataUntil connection.socket deadline
       pduLength.toNat
@@ -135,8 +141,8 @@ private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
   throw <| ClientError.protocol s!"too many stale S7 responses while waiting for reference {reference}"
 
 private def Client.exchangeCurrent (client : Client) (reference : UInt16)
-    (request : ByteArray) : IO S7.Response := do
-  orThrow <| S7.decodeResponse (← client.exchangeBytesCurrent reference request)
+    (request : ByteArray) (transferDeadline : Option Nat := none) : IO S7.Response := do
+  orThrow <| S7.decodeResponse (← client.exchangeBytesCurrent reference request transferDeadline)
 
 private def Client.reconnect (client : Client) : IO Unit := do
   client.closeCurrent
@@ -151,30 +157,34 @@ private def Client.reconnect (client : Client) : IO Unit := do
   client.currentPduLength.set setup.pduLength
 
 private partial def Client.exchangeWithRetries (client : Client) (reference : UInt16)
-    (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false) : IO S7.Response := do
+    (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
+    (transferDeadline : Option Nat := none) : IO S7.Response := do
   try
+    Transport.checkReceiveDeadline transferDeadline
     if reconnectFirst then
       client.reconnect
-    client.exchangeCurrent reference request
+    client.exchangeCurrent reference request transferDeadline
   catch error =>
     client.closeCurrent
     if remainingRetries == 0 || (← client.state.get) == .closed ||
         !isRetryableClientError error then
       throw error
-    client.exchangeWithRetries reference request (remainingRetries - 1) true
+    client.exchangeWithRetries reference request (remainingRetries - 1) true transferDeadline
 
 private partial def Client.exchangeBytesWithRetries (client : Client) (reference : UInt16)
-    (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false) : IO ByteArray := do
+    (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
+    (transferDeadline : Option Nat := none) : IO ByteArray := do
   try
+    Transport.checkReceiveDeadline transferDeadline
     if reconnectFirst then
       client.reconnect
-    client.exchangeBytesCurrent reference request
+    client.exchangeBytesCurrent reference request transferDeadline
   catch error =>
     client.closeCurrent
     if remainingRetries == 0 || (← client.state.get) == .closed ||
         !isRetryableClientError error then
       throw error
-    client.exchangeBytesWithRetries reference request (remainingRetries - 1) true
+    client.exchangeBytesWithRetries reference request (remainingRetries - 1) true transferDeadline
 
 private def Client.serialized (client : Client) (operation : IO α) : IO α := do
   let gate : IO.Promise Unit ← IO.Promise.new
@@ -210,36 +220,39 @@ private def Client.exchangeUserData (client : Client) (reference : UInt16) (grou
     decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction response
 
 private partial def Client.readSzlFragments (client : Client) (id index : UInt16)
-    (fragmentNumber : Nat) (sequence : UInt8) (payload : ByteArray) : IO ByteArray := do
-  if fragmentNumber >= 256 then
-    throw <| ClientError.protocol "SZL response exceeded the 256-fragment safety limit"
+    (state : UserDataAssembly.State (16 * 1024 * 1024) 256) (sequence : UInt8)
+    (deadline : Option Nat) : IO ByteArray := do
   let reference ← client.freshReference
-  let request ← if fragmentNumber == 0 then
+  let request ← if state.count == 0 then
     inputOrThrow <| S7.encodeReadSzl reference id index
   else
     inputOrThrow <| S7.encodeReadSzlContinuation reference sequence
   let raw ← client.exchangeBytesWithRetries reference request
-    (if fragmentNumber == 0 then client.config.reconnectRetries else 0)
+    (if state.count == 0 then client.config.reconnectRetries else 0) false deadline
   let response ← decodeOrThrow <| S7.decodeUserDataResponse reference S7.szlGroup
     S7.readSzlSubfunction raw
-  let nextPayload ← if fragmentNumber == 0 then
+  let nextPayload ← if state.count == 0 then
     let (actualId, actualIndex, firstPayload) ← orThrow <| S7.decodeSzlFirst response
     if actualId != id || actualIndex != index then
       throw <| ClientError.protocol s!"PLC returned SZL {actualId}/{actualIndex}, expected {id}/{index}"
     pure firstPayload
   else
     pure response.payload
-  let accumulated := payload ++ nextPayload
-  if accumulated.size > 16 * 1024 * 1024 then
-    throw <| ClientError.protocol "SZL response exceeded the 16 MiB safety limit"
+  let step ← orThrow <| UserDataAssembly.accept state nextPayload response.hasMoreData
   if response.hasMoreData then
-    client.readSzlFragments id index (fragmentNumber + 1) response.sequence accumulated
+    client.readSzlFragments id index step.after response.sequence deadline
   else
-    return accumulated
+    return step.after.data
 
 def Client.readSzl (client : Client) (id : UInt16) (index : UInt16 := 0) : IO S7.Szl :=
   client.serialized do
-    orThrow <| S7.decodeSzl id index (← client.readSzlFragments id index 0 0 ByteArray.empty)
+    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    try
+      orThrow <| S7.decodeSzl id index
+        (← client.readSzlFragments id index (UserDataAssembly.empty _ _) 0 deadline)
+    catch error =>
+      client.closeCurrent
+      throw error
 
 def Client.readSzlList (client : Client) : IO (Array UInt16) := do
   let szl ← client.readSzl 0 0
@@ -309,23 +322,19 @@ def Client.clearSessionPassword (client : Client) : IO Unit := do
   discard <| client.exchangeUserData reference S7.securityGroup S7.clearPasswordSubfunction request
 
 private partial def Client.userDataFragments (client : Client) (group subfunction : UInt8)
-    (firstRequest : UInt16 → Except S7.EncodeError ByteArray) (fragmentNumber : Nat)
-    (sequence : UInt8) (payload : ByteArray) : IO ByteArray := do
-  if fragmentNumber >= 256 then
-    throw <| ClientError.protocol "USER_DATA response exceeded the 256-fragment safety limit"
+    (firstRequest : UInt16 → Except S7.EncodeError ByteArray)
+    (state : UserDataAssembly.State (16 * 1024 * 1024) 256)
+    (sequence : UInt8) (deadline : Option Nat) : IO ByteArray := do
   let reference ← client.freshReference
-  let request ← if fragmentNumber == 0 then inputOrThrow <| firstRequest reference
+  let request ← if state.count == 0 then inputOrThrow <| firstRequest reference
     else inputOrThrow <| S7.encodeUserDataContinuation reference group subfunction sequence
   let raw ← client.exchangeBytesWithRetries reference request
-    (if fragmentNumber == 0 then client.config.reconnectRetries else 0)
+    (if state.count == 0 then client.config.reconnectRetries else 0) false deadline
   let response ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction raw
-  let accumulated := payload ++ response.payload
-  if accumulated.size > 16 * 1024 * 1024 then
-    throw <| ClientError.protocol "USER_DATA response exceeded the 16 MiB safety limit"
+  let step ← orThrow <| UserDataAssembly.accept state response.payload response.hasMoreData
   if response.hasMoreData then
-    client.userDataFragments group subfunction firstRequest (fragmentNumber + 1)
-      response.sequence accumulated
-  else return accumulated
+    client.userDataFragments group subfunction firstRequest step.after response.sequence deadline
+  else return step.after.data
 
 def Client.listBlocks (client : Client) : IO S7.BlockCounts := do
   let reference ← client.freshReference
@@ -337,9 +346,15 @@ def Client.listBlocks (client : Client) : IO S7.BlockCounts := do
 def Client.listBlocksOfType (client : Client) (blockType : S7.BlockType) :
     IO (Array S7.BlockEntry) :=
   client.serialized do
-    let payload ← client.userDataFragments S7.blocksInfoGroup S7.listBlocksOfTypeSubfunction
-      (fun reference => S7.encodeListBlocksOfType reference blockType) 0 0 ByteArray.empty
-    orThrow <| S7.decodeBlockEntries payload
+    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    try
+      let payload ← client.userDataFragments S7.blocksInfoGroup S7.listBlocksOfTypeSubfunction
+        (fun reference => S7.encodeListBlocksOfType reference blockType)
+        (UserDataAssembly.empty _ _) 0 deadline
+      orThrow <| S7.decodeBlockEntries payload
+    catch error =>
+      client.closeCurrent
+      throw error
 
 def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : Nat) :
     IO S7.BlockInfo := do
@@ -351,40 +366,42 @@ def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : N
 private def uploadSafetyLimit : Nat := 64 * 1024 * 1024
 
 private partial def Client.uploadFragments (client : Client) (uploadId : UInt8)
-    (fragmentNumber : Nat) (state : Upload.State uploadSafetyLimit) :
+    (fragmentNumber : Nat) (state : Upload.State uploadSafetyLimit) (deadline : Option Nat) :
     IO (Upload.State uploadSafetyLimit) := do
   if fragmentNumber >= 65536 then
     throw <| ClientError.protocol "block upload exceeded the 65536-fragment safety limit"
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeUpload reference uploadId
-  let response ← client.exchangeWithRetries reference request 0
+  let response ← client.exchangeWithRetries reference request 0 false deadline
   let fragment ← decodeOrThrow <| S7.decodeUploadFragment reference response
   let accepted ← decodeOrThrow <| Upload.accept state fragment
   if fragment.isLast then return accepted.after
-  client.uploadFragments uploadId (fragmentNumber + 1) accepted.after
+  client.uploadFragments uploadId (fragmentNumber + 1) accepted.after deadline
 
 private def Client.uploadBlockData (client : Client) (blockType : S7.BlockType)
     (number : Nat) : IO ByteArray :=
   client.serialized do
     try
+      let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
       let startReference ← client.freshReference
       let startRequest ← inputOrThrow <| S7.encodeStartUpload startReference blockType number
-      let startResponse ← client.exchangeWithRetries startReference startRequest client.config.reconnectRetries
+      let startResponse ← client.exchangeWithRetries startReference startRequest
+        client.config.reconnectRetries false deadline
       let upload ← decodeOrThrow <| S7.decodeStartUpload startReference startResponse
       let transferred ← try
         let ready ← decodeOrThrow <| Upload.start uploadSafetyLimit upload.loadSize
-        client.uploadFragments upload.uploadId 0 ready
+        client.uploadFragments upload.uploadId 0 ready deadline
       catch error =>
           let endReference ← client.freshReference
           try
             let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
-            let endResponse ← client.exchangeWithRetries endReference endRequest 0
+            let endResponse ← client.exchangeWithRetries endReference endRequest 0 false deadline
             decodeOrThrow <| S7.decodeEndUpload endReference endResponse
           catch _ => pure ()
           throw error
       let endReference ← client.freshReference
       let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
-      let endResponse ← client.exchangeWithRetries endReference endRequest 0
+      let endResponse ← client.exchangeWithRetries endReference endRequest 0 false deadline
       decodeOrThrow <| S7.decodeEndUpload endReference endResponse
       let completed ← decodeOrThrow <| Upload.finish transferred
       return completed.assembly.data
@@ -753,6 +770,52 @@ theorem takeReadBatch_fits (pduLength : Nat) (pending : List S7.MemoryRange)
   · exact takeReadBatch_response_size_le pduLength 14 pending 0 12 14 []
       (by simp [readResponseContributions]) hresponse
 
+/-- Every selected read has a positive element count. -/
+theorem takeReadBatch_positive (pduLength : Nat)
+    (pending : List S7.MemoryRange) (count requestSize responseSize : Nat)
+    (selected : List S7.MemoryRange)
+    (hselected : ∀ range ∈ selected, 0 < range.count) :
+    ∀ range ∈ (takeReadBatch pduLength pending count requestSize responseSize selected).1,
+      0 < range.count := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeReadBatch] using hselected
+  | cons range rest ih =>
+    simp only [takeReadBatch]
+    split
+    case isTrue hcondition =>
+      have hproperties := hcondition
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hproperties
+      apply ih (count + 1) (requestSize + 12)
+        (responseSize + readResponseContribution range) (range :: selected)
+      intro item hitem
+      rcases List.mem_cons.mp hitem with heq | hmem
+      · subst item
+        exact hproperties.1.1.1
+      · exact hselected item hmem
+    case isFalse => simpa using hselected
+
+/-- A certificate for the exact read planner used by the client, including its
+    unprocessed suffix. Budget accounting conservatively includes final padding. -/
+structure ReadBatchPlan (pduLength : Nat) (pending : List S7.MemoryRange) where
+  selected : List S7.MemoryRange
+  remaining : List S7.MemoryRange
+  partition : selected ++ remaining = pending
+  countBound : selected.length ≤ S7.maxItemCount
+  positive : ∀ range ∈ selected, 0 < range.count
+  budgets : 14 ≤ pduLength →
+    12 + 12 * selected.length ≤ pduLength ∧
+      14 + readResponseContributions selected ≤ pduLength
+
+def planReadBatch (pduLength : Nat) (pending : List S7.MemoryRange) :
+    ReadBatchPlan pduLength pending :=
+  let result := takeReadBatch pduLength pending 0 12 14 []
+  { selected := result.1, remaining := result.2
+    partition := by simpa using takeReadBatch_preserves_order pduLength pending 0 12 14 []
+    countBound := takeReadBatch_count_le pduLength pending 0 12 14 [] (by simp)
+      (by decide)
+    positive := takeReadBatch_positive pduLength pending 0 12 14 [] (by simp)
+    budgets := fun h => takeReadBatch_fits pduLength pending (by omega) h }
+
 private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaReadMany reference ranges
@@ -769,7 +832,9 @@ private partial def Client.readMultiLoop (client : Client) (pending : List S7.Me
   | [] => return results
   | range :: rest =>
       let pduLength ← client.negotiatedPduLength
-      let (batch, remaining) := takeReadBatch pduLength.toNat pending 0 12 14 []
+      let plan := planReadBatch pduLength.toNat pending
+      let batch := plan.selected
+      let remaining := plan.remaining
       if batch.isEmpty then
         let payload ← client.readArea range.area range.dbNumber range.start range.count
         client.readMultiLoop rest (results.push (.success payload))
@@ -906,6 +971,54 @@ theorem takeWriteBatch_fits (pduLength : Nat) (pending : List S7.WriteItem)
   · exact takeWriteBatch_response_size_le pduLength 14 pending 0 12 14 []
       (by simp) (by simp) hresponse
 
+/-- Every selected write has a positive count and an exactly matching payload. -/
+theorem takeWriteBatch_payloads (pduLength : Nat)
+    (pending : List S7.WriteItem) (count requestSize responseSize : Nat)
+    (selected : List S7.WriteItem)
+    (hselected : ∀ item ∈ selected, 0 < item.range.count ∧
+      item.payload.size = item.range.count * item.range.area.elementSize) :
+    ∀ item ∈ (takeWriteBatch pduLength pending count requestSize responseSize selected).1,
+      0 < item.range.count ∧
+        item.payload.size = item.range.count * item.range.area.elementSize := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeWriteBatch] using hselected
+  | cons item rest ih =>
+    simp only [takeWriteBatch]
+    split
+    case isTrue hcondition =>
+      have hproperties := hcondition
+      simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hproperties
+      apply ih (count + 1) (requestSize + writeRequestContribution item)
+        (responseSize + 1) (item :: selected)
+      intro next hnext
+      rcases List.mem_cons.mp hnext with heq | hmem
+      · subst next
+        exact hproperties.1.1.1
+      · exact hselected next hmem
+    case isFalse => simpa using hselected
+
+/-- A certificate for the exact write planner used by the client. -/
+structure WriteBatchPlan (pduLength : Nat) (pending : List S7.WriteItem) where
+  selected : List S7.WriteItem
+  remaining : List S7.WriteItem
+  partition : selected ++ remaining = pending
+  countBound : selected.length ≤ S7.maxItemCount
+  payloads : ∀ item ∈ selected, 0 < item.range.count ∧
+    item.payload.size = item.range.count * item.range.area.elementSize
+  budgets : 14 ≤ pduLength →
+    12 + writeRequestContributions selected ≤ pduLength ∧
+      14 + selected.length ≤ pduLength
+
+def planWriteBatch (pduLength : Nat) (pending : List S7.WriteItem) :
+    WriteBatchPlan pduLength pending :=
+  let result := takeWriteBatch pduLength pending 0 12 14 []
+  { selected := result.1, remaining := result.2
+    partition := by simpa using takeWriteBatch_preserves_order pduLength pending 0 12 14 []
+    countBound := takeWriteBatch_count_le pduLength pending 0 12 14 [] (by simp)
+      (by decide)
+    payloads := takeWriteBatch_payloads pduLength pending 0 12 14 [] (by simp)
+    budgets := fun h => takeWriteBatch_fits pduLength pending (by omega) h }
+
 private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaWriteMany reference items
@@ -926,7 +1039,9 @@ private partial def Client.writeMultiLoop (client : Client) (pending : List S7.W
         throw <| ClientError.invalidInput
           s!"multi-write payload size {item.payload.size} does not match expected {expectedSize}"
       let pduLength ← client.negotiatedPduLength
-      let (batch, remaining) := takeWriteBatch pduLength.toNat pending 0 12 14 []
+      let plan := planWriteBatch pduLength.toNat pending
+      let batch := plan.selected
+      let remaining := plan.remaining
       if batch.isEmpty then
         client.writeArea item.range.area item.range.dbNumber item.range.start item.payload
         client.writeMultiLoop rest (results.push .success)

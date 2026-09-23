@@ -10,9 +10,11 @@ import threading
 import time
 from pathlib import Path
 
+from multi_batching import run_multi_batching
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
 from snap7.type import SrvArea
+from transfer_deadlines import run_transfer_deadlines
 
 
 class MultiItemServer(Server):
@@ -576,10 +578,32 @@ def serve_service_rejection(
                     _userdata_response(reference, 3, 1, bytes([4, 0x24, 0, 0])),
                 )
                 return
+            if mode in ("szl-invalid-flag-two", "szl-invalid-flag-ff"):
+                flag = 2 if mode.endswith("two") else 0xFF
+                packet = bytearray(
+                    _userdata_response(reference, 4, 1, bytes([4, 0x24, 0, 0]))
+                )
+                packet[19] = flag
+                _send_s7(connection, bytes(packet))
+                return
             if mode == "szl-truncated-payload":
                 _send_s7(
                     connection,
                     _userdata_response(reference, 4, 1, b"\xaa\xbb", declared_length=4),
+                )
+                return
+            if mode == "szl-invalid-final-records":
+                _send_s7(
+                    connection,
+                    _userdata_response(
+                        reference, 4, 1, bytes([4, 0x24, 0, 0, 0, 4, 0, 1, 0xAA])
+                    ),
+                )
+                return
+            if mode == "userdata-invalid-final-entries":
+                _send_s7(
+                    connection,
+                    _userdata_response(reference, 3, 2, b"\xaa"),
                 )
                 return
             if mode == "szl-plc-error":
@@ -696,7 +720,15 @@ def serve_service_rejection(
 def run_service_rejections(root: Path) -> None:
     for mode, operation, expected in (
         ("szl-wrong-group", "szl", "unexpected USER_DATA type or function group"),
+        ("szl-invalid-flag-two", "szl", "invalid USER_DATA continuation flag"),
+        ("szl-invalid-flag-ff", "szl", "invalid USER_DATA continuation flag"),
         ("szl-truncated-payload", "szl", "unexpectedEnd"),
+        ("szl-invalid-final-records", "szl", "SZL header describes"),
+        (
+            "userdata-invalid-final-entries",
+            "userdata",
+            "not aligned to four-byte entries",
+        ),
         ("szl-plc-error", "szl", "request failed with code"),
         ("szl-endless-fragments", "szl", "256-fragment safety limit"),
         ("upload-invalid-marker", "upload", "invalid upload data marker"),
@@ -1520,6 +1552,8 @@ def main() -> None:
             pass
         run_handshake_rejections(root)
         run_service_rejections(root)
+        run_transfer_deadlines(root)
+        run_multi_batching(root)
         run_reconnect_shrink(root)
         run_reconnect_recovery(root)
         run_download_integration(root)

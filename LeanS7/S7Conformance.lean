@@ -75,6 +75,22 @@ def userDataCases : Array UserDataCase := #[
     expected := some { payload := bytes #[0xde, 0xad], sequence := 4, hasMoreData := true }
   },
   {
+    id := "invalid-continuation-flag-two"
+    expectedGroup := S7.szlGroup
+    expectedSubfunction := S7.readSzlSubfunction
+    pdu := userDataPacket (userDataParameters 4 1 0 0 2)
+      (userDataItem 0xff (bytes #[0xaa]))
+    expected := none
+  },
+  {
+    id := "invalid-continuation-flag-ff"
+    expectedGroup := S7.szlGroup
+    expectedSubfunction := S7.readSzlSubfunction
+    pdu := userDataPacket (userDataParameters 4 1 0 0 0xff)
+      (userDataItem 0xff (bytes #[0xaa]))
+    expected := none
+  },
+  {
     id := "wrong-function-group"
     expectedGroup := S7.szlGroup
     expectedSubfunction := S7.readSzlSubfunction

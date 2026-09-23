@@ -125,3 +125,33 @@ These are cross-implementation observations, not formal claims about the Python 
   and malformed END_UPLOAD acknowledgements on success and cleanup paths.
 - Validation passed: clean build, all Lean tests, generated corpus comparisons,
   full pinned python-snap7 3.0.0 integration suite, and Python lint/format checks.
+
+## Parallel transfer and batching assurance follow-up
+
+- Added a pure SZL/USER_DATA accumulator with pre-append byte and fragment
+  checks, ordered assembly, count progress, completion tracking, and proofs
+  that continuing replies leave an available fragment slot. Empty metadata
+  fragments remain valid. The client closes failed transfers, including final
+  record/entry decoding failures.
+- Added a configurable absolute upload/SZL/segmented USER_DATA receive deadline
+  (30 seconds by default), shared across continuations, retries, and cleanup.
+  Per-exchange limits remain active; disabling the transfer budget does not
+  disable those limits. Sends and connection establishment remain outside the
+  cancellation guarantee.
+- Actual multi-item client loops now use proof-carrying planner certificates
+  for ordered partitioning, item count, and both PDU budgets. Added positive
+  read-count and exact write-payload properties to the core assurance contract.
+  Executable tests check actual encoder accounting and mixed return-code order;
+  these tests are not an encoder-correspondence theorem.
+- Added deterministic mutation testing over valid corpus seeds. The initial
+  2,636 checks found acceptance of USER_DATA continuation flag 2; values other
+  than 0 and 1 are now rejected, with two focused corpus regressions (52 S7
+  cases). The supported flag values are independently corroborated by the
+  [Wireshark S7 dissector's `userdata_lastdataunit_names` definitions](https://github.com/wireshark/wireshark/blob/master/epan/dissectors/packet-s7comm.c).
+- Independent peer checks passed: 19 deadline scenarios across all three
+  transfer kinds, and four 41-item read/write batching scenarios at 240/480-byte
+  PDU sizes with one- and 37-byte payloads and interleaved PLC failures.
+- Combined validation passed: clean build, all Lean tests, all three generated
+  corpus comparisons, Ruff lint/format, whitespace checks, and the full pinned
+  python-snap7 3.0.0 emulator/scripted-peer suite. No real-controller
+  compatibility claim is made.

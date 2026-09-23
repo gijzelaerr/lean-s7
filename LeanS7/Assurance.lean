@@ -157,6 +157,21 @@ structure CoreProtocolAssurance : Prop where
   uploadFinishExact : ∀ maximum (state after : Upload.State maximum) expected,
     state.expected = some expected → Upload.finish state = .ok after →
       after.assembly.data.size = expected
+  userDataAssemblyOrder : ∀ maximum fragments
+      (state : UserDataAssembly.State maximum fragments) chunk more
+      (step : UserDataAssembly.Step state chunk more),
+    step.after.data = state.data ++ chunk
+  userDataAssemblyBounds : ∀ maximum fragments
+      (state : UserDataAssembly.State maximum fragments),
+    state.data.size ≤ maximum ∧ state.count ≤ fragments
+  userDataFragmentProgress : ∀ maximum fragments
+      (state : UserDataAssembly.State maximum fragments) chunk more
+      (step : UserDataAssembly.Step state chunk more),
+    state.count < step.after.count
+  userDataContinuationRoom : ∀ maximum fragments
+      (state : UserDataAssembly.State maximum fragments) chunk more
+      (step : UserDataAssembly.Step state chunk more),
+    more = true → step.after.count < fragments
   chunkCoverage : ∀ total maximum,
     maximum ≠ 0 → (Chunking.counts total maximum).sum = total
   chunkBounds : ∀ total maximum chunk,
@@ -204,6 +219,11 @@ structure CoreProtocolAssurance : Prop where
     selected.length = count → count ≤ S7.maxItemCount →
       let result := takeWriteBatch pduLength pending count requestSize responseSize selected
       result.1.length ≤ S7.maxItemCount
+  plannedReadPositive : ∀ pduLength pending range,
+    range ∈ (planReadBatch pduLength pending).selected → 0 < range.count
+  plannedWritePayloads : ∀ pduLength pending item,
+    item ∈ (planWriteBatch pduLength pending).selected →
+      0 < item.range.count ∧ item.payload.size = item.range.count * item.range.area.elementSize
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -266,6 +286,10 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact fun _ _ _ step => step.progress
   · exact fun _ => Upload.finish_phase
   · exact fun _ => Upload.finish_exact
+  · exact fun _ _ _ _ _ step => step.order
+  · exact fun _ _ state => ⟨state.bounded, state.countBounded⟩
+  · exact fun _ _ _ _ _ step => UserDataAssembly.accepted_progress step
+  · exact fun _ _ _ _ _ step => step.continuationRoom
   · exact Chunking.counts_sum
   · exact Chunking.counts_bounds
   · exact fun _ _ _ => Chunking.ReadAssembly.append_data
@@ -280,6 +304,8 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact takeWriteBatch_fits
   · exact takeWriteBatch_preserves_order
   · exact takeWriteBatch_count_le
+  · exact fun pdu pending => (planReadBatch pdu pending).positive
+  · exact fun pdu pending => (planWriteBatch pdu pending).payloads
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition
