@@ -32,9 +32,10 @@ the response rather than through unchecked indexing.
 
 `upload_cases` contains complete S7 ACK_DATA PDUs for block-upload fragments.
 Accepted cases expose the exact fragment payload and end-of-upload flag.
-Rejected cases cover an invalid data marker, inconsistent declared length, and
-the wrong service function. These are fragment-codec cases; they do not claim
-that a controller contains or serves a particular block.
+Rejected cases cover an invalid data marker, inconsistent declared length,
+invalid continuation flags, and the wrong service function. These are
+fragment-codec cases; they do not claim that a controller contains or serves a
+particular block.
 
 ## Request cases
 

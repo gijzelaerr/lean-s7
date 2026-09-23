@@ -4,6 +4,7 @@ import LeanS7.Advanced
 import LeanS7.Value
 import LeanS7.Chunking
 import LeanS7.Download
+import LeanS7.Upload
 import LeanS7.Lifecycle
 
 namespace LeanS7
@@ -347,40 +348,49 @@ def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : N
   let response ← client.exchangeUserData reference S7.blocksInfoGroup S7.blockInfoSubfunction request
   orThrow <| S7.decodeBlockInfo response.payload
 
+private def uploadSafetyLimit : Nat := 64 * 1024 * 1024
+
 private partial def Client.uploadFragments (client : Client) (uploadId : UInt8)
-    (fragmentNumber : Nat) (payload : ByteArray) : IO ByteArray := do
+    (fragmentNumber : Nat) (state : Upload.State uploadSafetyLimit) :
+    IO (Upload.State uploadSafetyLimit) := do
   if fragmentNumber >= 65536 then
     throw <| ClientError.protocol "block upload exceeded the 65536-fragment safety limit"
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeUpload reference uploadId
   let response ← client.exchangeWithRetries reference request 0
   let fragment ← decodeOrThrow <| S7.decodeUploadFragment reference response
-  let accumulated := payload ++ fragment.data
-  if accumulated.size > 64 * 1024 * 1024 then
-    throw <| ClientError.protocol "block upload exceeded the 64 MiB safety limit"
-  if fragment.isLast then return accumulated
-  client.uploadFragments uploadId (fragmentNumber + 1) accumulated
+  let accepted ← decodeOrThrow <| Upload.accept state fragment
+  if fragment.isLast then return accepted.after
+  client.uploadFragments uploadId (fragmentNumber + 1) accepted.after
 
 private def Client.uploadBlockData (client : Client) (blockType : S7.BlockType)
     (number : Nat) : IO ByteArray :=
   client.serialized do
-    let startReference ← client.freshReference
-    let startRequest ← inputOrThrow <| S7.encodeStartUpload startReference blockType number
-    let startResponse ← client.exchangeWithRetries startReference startRequest client.config.reconnectRetries
-    let upload ← decodeOrThrow <| S7.decodeStartUpload startReference startResponse
-    let payload ← try client.uploadFragments upload.uploadId 0 ByteArray.empty
+    try
+      let startReference ← client.freshReference
+      let startRequest ← inputOrThrow <| S7.encodeStartUpload startReference blockType number
+      let startResponse ← client.exchangeWithRetries startReference startRequest client.config.reconnectRetries
+      let upload ← decodeOrThrow <| S7.decodeStartUpload startReference startResponse
+      let transferred ← try
+        let ready ← decodeOrThrow <| Upload.start uploadSafetyLimit upload.loadSize
+        client.uploadFragments upload.uploadId 0 ready
       catch error =>
-        let endReference ← client.freshReference
-        try
-          let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
-          discard <| client.exchangeWithRetries endReference endRequest 0
-        catch _ => pure ()
-        throw error
-    let endReference ← client.freshReference
-    let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
-    let endResponse ← client.exchangeWithRetries endReference endRequest 0
-    decodeOrThrow <| S7.decodeEndUpload endReference endResponse
-    return payload
+          let endReference ← client.freshReference
+          try
+            let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
+            let endResponse ← client.exchangeWithRetries endReference endRequest 0
+            decodeOrThrow <| S7.decodeEndUpload endReference endResponse
+          catch _ => pure ()
+          throw error
+      let endReference ← client.freshReference
+      let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
+      let endResponse ← client.exchangeWithRetries endReference endRequest 0
+      decodeOrThrow <| S7.decodeEndUpload endReference endResponse
+      let completed ← decodeOrThrow <| Upload.finish transferred
+      return completed.assembly.data
+    catch error =>
+      client.closeCurrent
+      throw error
 
 def Client.fullUpload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray :=
   client.uploadBlockData blockType number

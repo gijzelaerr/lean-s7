@@ -6,6 +6,7 @@ import LeanS7.S7
 import LeanS7.Protocol
 import LeanS7.Chunking
 import LeanS7.Download
+import LeanS7.Upload
 import LeanS7.Lifecycle
 import LeanS7.Management
 import LeanS7.Advanced

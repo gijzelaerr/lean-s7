@@ -132,6 +132,12 @@
    "expected": {"status": "reject"}},
   {"pdu": [50, 3, 0, 0, 0, 1, 0, 2, 0, 6, 0, 0, 29, 0, 0, 2, 0, 251, 222, 173],
    "id": "upload-wrong-function",
+   "expected": {"status": "reject"}},
+  {"pdu": [50, 3, 0, 0, 0, 1, 0, 2, 0, 6, 0, 0, 30, 2, 0, 2, 0, 251, 222, 173],
+   "id": "upload-invalid-continuation-flag",
+   "expected": {"status": "reject"}},
+  {"pdu": [50, 3, 0, 0, 0, 1, 0, 2, 0, 6, 0, 0, 30, 255, 0, 2, 0, 251, 222, 173],
+   "id": "upload-invalid-continuation-flag-ff",
    "expected": {"status": "reject"}}],
  "schema_version": 1,
  "response_cases":

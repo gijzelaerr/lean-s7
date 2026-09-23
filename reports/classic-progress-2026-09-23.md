@@ -104,3 +104,24 @@ These are cross-implementation observations, not formal claims about the Python 
   a protocol failure and the transport is closed.
 - The successful scripted transfer now runs at both 240- and 480-byte
   negotiated S7 PDU sizes and checks every fragment response against that limit.
+
+## Upload assembly assurance follow-up
+
+- Added a pure upload state machine used by the client. Its bounded accumulator
+  checks the cumulative size before appending a fragment. Proofs of byte order,
+  cumulative bounds, continuation progress, and exact declared size at completion
+  are included in `CoreProtocolAssurance`.
+- Enforced the PLC's declared upload length, rejected continuation flags other
+  than 0 or 1, and rejected empty continuation fragments. No block data is returned
+  until a valid END_UPLOAD acknowledgement. Rejected uploads attempt cleanup
+  with the validated upload ID, then close the transport.
+- Start-upload replies accept the canonical 16-byte parameters and the explicit
+  legacy eight-byte form without a declared length; other sizes, unexpected data,
+  and invalid ASCII length digits are rejected. The decimal decoder uses the
+  bounded cursor rather than panicking indexing.
+- Added two invalid-flag corpus vectors, bringing the S7 corpus to 50 cases.
+  Added scripted peers for invalid flags, no progress, early termination,
+  declared-length overflow across fragments, continuation at the declared end,
+  and malformed END_UPLOAD acknowledgements on success and cleanup paths.
+- Validation passed: clean build, all Lean tests, generated corpus comparisons,
+  full pinned python-snap7 3.0.0 integration suite, and Python lint/format checks.
