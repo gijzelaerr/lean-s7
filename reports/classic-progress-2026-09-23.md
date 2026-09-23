@@ -89,3 +89,18 @@ These are cross-implementation observations, not formal claims about the Python 
   acknowledgements, wrong block numbers, nonzero reserved bytes, truncated
   parameters, and unexpected data. These are emulator-independent rejection
   checks, not evidence of behavior on a physical controller.
+
+## Download phase assurance follow-up
+
+- Added a pure download state machine used by the client for acknowledgement,
+  fragment, and completion transitions. Fragment plans contain proof witnesses
+  for progress and the negotiated PDU slice bound.
+- Proved that each accepted fragment extends exactly the previously sent prefix,
+  that no fragment or completion occurs before acknowledgement, that incomplete
+  transfers cannot complete, and that encoded responses fit their PDU budget.
+  These properties are part of `CoreProtocolAssurance`.
+- Scripted peers reject an early download-ended request and an extra fragment
+  request after the complete block has been sent. The resulting client error is
+  a protocol failure and the transport is closed.
+- The successful scripted transfer now runs at both 240- and 480-byte
+  negotiated S7 PDU sizes and checks every fragment response against that limit.
