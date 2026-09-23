@@ -70,6 +70,8 @@ Implemented:
 - big-endian integer, REAL/LREAL, bit, STRING, and WSTRING DB accessors
 - machine-checked fixed-width signed and unsigned integer round trips and sizes
 - multi-variable reads and writes with item-count and PDU-aware batching
+- proof-carrying batch plans used by the client, including ordered partitions,
+  item counts, request/response budgets, and write payload-size invariants
 - IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
 - reconnect rejection when a smaller negotiated PDU would invalidate an
@@ -124,6 +126,21 @@ one monotonic deadline across TCP fragments, TPKT headers/payloads, and COTP
 segments; stale responses share the same deadline within an exchange attempt.
 Continuous small or empty segments cannot refresh that deadline. This bounds
 receiving, not sending or the total duration of multiple reconnect attempts.
+
+Uploads, SZL reads, and segmented block lists additionally share one absolute
+receive deadline for the whole transfer. `ClientConfig.transferReceiveTimeoutMs`
+defaults to 30000 ms; `none` disables this whole-transfer budget but retains
+`operationTimeoutMs` for each exchange. The earlier deadline applies, and a
+continuation, retry, or upload cleanup does not refresh the transfer budget.
+These deadlines do not cancel socket sends or connection establishment.
+SZL/USER_DATA assembly checks byte and fragment limits before appending; its
+order, bounds, fragment progress, and continuation-room properties are proved.
+Empty metadata fragments remain legal and consume a fragment slot.
+
+The deterministic test suite also mutates valid corpus seeds with byte
+substitutions, bit flips, truncations, and trailing bytes. It checks structural
+and correlation invariants for accepted mutations rather than assuming every
+mutation is malformed. Discovered failures become focused corpus regressions.
 
 ## Build and test
 

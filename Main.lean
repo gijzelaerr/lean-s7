@@ -484,6 +484,8 @@ def runServiceRejectionIntegration (host portString operation expected : String)
         discard <| client.readSzl 0x0424 0
       else if operation == "upload" then
         discard <| client.fullUpload .dataBlock 1
+      else if operation == "userdata" then
+        discard <| client.listBlocksOfType .dataBlock
       else
         throw <| IO.userError s!"unknown rejection operation: {operation}"
       pure (none : Option IO.Error)
@@ -501,8 +503,8 @@ def runServiceRejectionIntegration (host portString operation expected : String)
         unless (message.splitOn expected).length > 1 do
           throw <| IO.userError s!"unexpected service failure: {message}"
     | none => throw <| IO.userError "malformed service response was accepted"
-    if operation == "upload" && (← client.isConnected) then
-      throw <| IO.userError "rejected upload left the client connected"
+    if ← client.isConnected then
+      throw <| IO.userError "rejected service transfer left the client connected"
     client.disconnect
     IO.println s!"service rejection passed: {operation}: {expected}"
   catch error =>
@@ -551,9 +553,94 @@ def runReconnectRecoveryIntegration (host portString : String) : IO Unit := do
     try client.disconnect catch _ => pure ()
     throw error
 
+def runTransferDeadlineIntegration (host portString operation operationMs transferMs expected : String) :
+    IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let some operationTimeout := operationMs.toNat?
+    | throw <| IO.userError s!"invalid operation timeout: {operationMs}"
+  let transferTimeout ← if transferMs == "none" then pure none else do
+    let some timeout := transferMs.toNat?
+      | throw <| IO.userError s!"invalid transfer timeout: {transferMs}"
+    pure (some timeout)
+  let client ← Client.connect {
+    endpoint := endpointOfString host, port := UInt16.ofNat portNat,
+    operationTimeoutMs := some operationTimeout,
+    connectTimeoutMs := some 1000,
+    transferReceiveTimeoutMs := transferTimeout,
+    reconnectRetries := 0
+  }
+  try
+    let outcome ← try
+      if operation == "upload" then
+        let payload ← client.fullUpload .dataBlock 1
+        unless payload == bytes #[0xaa, 0xbb, 0xcc, 0xdd] do
+          throw <| IO.userError "deadline upload returned incorrect bytes"
+      else if operation == "szl" then
+        let result ← client.readSzl 0x0424
+        unless result.data == bytes #[0xaa, 0xbb, 0xcc, 0xdd] do
+          throw <| IO.userError "deadline SZL returned incorrect bytes"
+      else if operation == "userdata" then
+        let result ← client.listBlocksOfType .dataBlock
+        unless result.size == 1 && result[0]!.number == 1 do
+          throw <| IO.userError "deadline USER_DATA returned incorrect result"
+      else throw <| IO.userError s!"unknown transfer: {operation}"
+      pure (none : Option IO.Error)
+    catch error => pure (some error)
+    match outcome with
+    | none => unless expected == "accept" do
+        throw <| IO.userError "slow transfer unexpectedly completed"
+    | some error =>
+        unless expected == "timeout" && classifyClientError error == .timeout do
+          throw <| IO.userError s!"unexpected transfer failure: {error}"
+        if ← client.isConnected then
+          throw <| IO.userError "timed out transfer left the client connected"
+    client.disconnect
+    IO.println s!"transfer deadline passed: {operation}: {expected}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
+def runMultiBatchingIntegration (host portString pduString countString sizeString : String) : IO Unit := do
+  let some port := portString.toNat? | throw <| IO.userError "invalid port"
+  let some pdu := pduString.toNat? | throw <| IO.userError "invalid PDU"
+  let some count := countString.toNat? | throw <| IO.userError "invalid item count"
+  let some size := sizeString.toNat? | throw <| IO.userError "invalid item size"
+  let client ← Client.connect {
+    endpoint := endpointOfString host, port := UInt16.ofNat port,
+    connectTimeoutMs := some 1000, operationTimeoutMs := some 1000
+  }
+  try
+    unless (← client.negotiatedPduLength).toNat == pdu do
+      throw <| IO.userError "unexpected negotiated batch PDU"
+    let ranges := (Array.range count).map fun index =>
+      ({ area := .dataBlocks, dbNumber := 1, start := index * 256, count := size } : S7.MemoryRange)
+    let items := ranges.mapIdx fun index range =>
+      ({ range, payload := bytes (Array.replicate size (UInt8.ofNat index)) } : S7.WriteItem)
+    let written ← client.writeMulti items
+    let read ← client.readMulti ranges
+    unless written.size == count && read.size == count do
+      throw <| IO.userError "batching changed result count"
+    for index in [:count] do
+      let expectedWrite : S7.WriteItemResult :=
+        if index % 7 == 3 then .failure 5 else .success
+      let expectedRead : S7.ReadItemResult := if index % 7 == 3 then .failure 5
+        else .success (bytes (Array.replicate size (UInt8.ofNat index)))
+      unless written[index]? == some expectedWrite && read[index]? == some expectedRead do
+        throw <| IO.userError s!"batching changed result order at {index}"
+    client.disconnect
+    IO.println s!"multi-batching passed: PDU {pdu}, items {count}, size {size}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
+  | ["integration-multi-batching", host, port, pdu, count, size] =>
+      runMultiBatchingIntegration host port pdu count size
+  | ["integration-transfer-deadline", host, port, operation, operationMs, transferMs, expected] =>
+      runTransferDeadlineIntegration host port operation operationMs transferMs expected
   | ["integration-reconnect", host, port] => runIntegration host port true
   | ["integration-download", host, port] => runDownloadIntegration host port
   | ["integration-download-interruption", host, port] =>

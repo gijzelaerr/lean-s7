@@ -25,7 +25,8 @@ requires a protocol rejection, not a crash or accidental indexing exception.
 for the specified function group and subfunction. Accepted cases expose the
 exact payload, sequence number, and continuation flag. Rejected cases cover a
 wrong group or subfunction, USER_DATA and item error codes, truncated declared
-payloads, and trailing bytes. A rejection must occur while parsing or validating
+payloads, invalid continuation flags, and trailing bytes. A rejection must occur
+while parsing or validating
 the response rather than through unchecked indexing.
 
 ## Upload cases

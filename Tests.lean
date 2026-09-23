@@ -1,5 +1,8 @@
 import LeanS7
 import LeanS7.S7Conformance
+import LeanS7.MutationTests
+import LeanS7.BatchingTests
+import LeanS7.UserDataAssemblyTests
 
 open LeanS7
 
@@ -878,6 +881,15 @@ def main : IO Unit := do
   testTPKTSizeBoundary
   testTPKTConformanceCorpus
   Conformance.S7.validate
+  MutationTests.run
+  BatchingTests.run
+  testUserDataAssembly
+  check (Transport.earlierReceiveDeadline none none == none &&
+    Transport.earlierReceiveDeadline (some 10) none == some 10 &&
+    Transport.earlierReceiveDeadline none (some 20) == some 20 &&
+    Transport.earlierReceiveDeadline (some 30) (some 20) == some 20 &&
+    Transport.earlierReceiveDeadline (some 10) (some 20) == some 10)
+    "exchange/transfer deadline minimum failed"
   testCOTPConnectionRequest
   testCOTPDataRoundTrip
   testCOTPConformanceCorpus

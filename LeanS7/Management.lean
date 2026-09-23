@@ -145,6 +145,8 @@ def decodeUserDataResponse (expectedReference : UInt16) (expectedGroup expectedS
   let (sequence, parameterCursor) ← parameterCursor.readUInt8
   let (dataUnitReference, parameterCursor) ← parameterCursor.readUInt8
   let (lastDataUnit, parameterCursor) ← parameterCursor.readUInt8
+  if lastDataUnit != 0 && lastDataUnit != 1 then
+    throw (.invalidField (jobHeaderSize + 9) "invalid USER_DATA continuation flag")
   let (error, parameterCursor) ← parameterCursor.readUInt16BE
   parameterCursor.finish
   if error != 0 then

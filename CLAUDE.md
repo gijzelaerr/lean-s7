@@ -22,6 +22,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/Chunking.lean`: proved transfer chunk plans and coverage bounds.
 - `LeanS7/Download.lean`: PLC-driven download phases and fragment-prefix proofs.
 - `LeanS7/Upload.lean`: upload phases, bounded accumulation, and completion proofs.
+- `LeanS7/UserDataAssembly.lean`: bounded SZL/USER_DATA fragment assembly and order proofs.
 - `LeanS7/Lifecycle.lean`: client state machine and legal-transition proofs.
 - `LeanS7/Management.lean`: USER_DATA, SZL, clock, security, and CPU-control codecs.
 - `LeanS7/Advanced.lean`: block discovery, transfer, maintenance, and force-table codecs.

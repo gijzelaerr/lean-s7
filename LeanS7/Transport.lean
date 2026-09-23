@@ -75,6 +75,21 @@ def receiveDeadline (timeoutMs : Option Nat) : IO (Option Nat) := do
   | none => return none
   | some timeout => return some ((← IO.monoMsNow) + timeout)
 
+/-- Keep both an exchange's receive budget and a whole-transfer budget.
+    `none` is an unbounded budget, not a fresh deadline. -/
+def earlierReceiveDeadline (exchange transfer : Option Nat) : Option Nat :=
+  match exchange, transfer with
+  | none, other => other
+  | other, none => other
+  | some first, some second => some (min first second)
+
+/-- Check before starting another exchange; this does not cancel socket sends
+    or connection establishment already in progress. -/
+def checkReceiveDeadline (deadline : Option Nat) : IO Unit := do
+  if let some deadline := deadline then
+    if (← IO.monoMsNow) ≥ deadline then
+      throw <| ClientError.timeout "socket receive timed out: transfer deadline expired"
+
 private def remainingReceiveTime (deadline : Option Nat) : IO (Option Nat) := do
   let some deadline := deadline | return none
   let now ← IO.monoMsNow
