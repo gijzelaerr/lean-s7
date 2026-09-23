@@ -325,3 +325,30 @@ These are cross-implementation observations, not formal claims about the Python 
   CI for the initially pushed head `a2aa44d` completed successfully. The capacity
   fix is ready to commit and push on the same branch; no physical PLC or PR merge
   is involved. Current-length changes do not establish a consistent PLC snapshot.
+
+## Single-response USER_DATA completion follow-up
+
+- The capacity fix was committed and pushed as `2a4010a`; the branch was clean
+  at the next owner request to push and continue. No additional PR/merge occurred.
+- Audit found that fixed single-response USER_DATA helpers ignore the continuation
+  flag. Complete-looking initial clock/block-count payloads and command replies
+  can therefore report success despite an incomplete response. Independent peers
+  are being added for five services, with positive complete-response controls.
+- Independent peers reproduced silent incomplete-response acceptance in all five
+  services before the fix. Shared single-response completion validation now
+  executes inside the operation gate, before typed payload decoding or command
+  success. A pure theorem states that accepted payloads require completion and
+  preserve bytes; this does not prove socket IO or exactly-once command execution.
+- All ten focused peers and the complete Lean tests passed. Complete replies
+  keep the connection usable; incomplete replies fail as protocol errors, close
+  the connection, prevent a later scalar write, and do not reconnect/replay even
+  with explicit mutation replay enabled. Final clean combined validation follows.
+- Final clean build passed all 88 jobs; complete Lean tests, all three corpus
+  comparisons, and Python lint/format (17 files) passed. The full suite passed
+  all ten completion peers, twenty compound peers, existing retry/provenance
+  peers, and segmented-service deadline checks; final transport checks remain
+  running. CI for earlier head `2a4010a` completed successfully.
+- The complete pinned python-snap7 3.0.0 emulator/scripted-peer suite passed
+  against the final clean build, including all existing transport checks. Combined
+  local validation is green; the single-response completion fix is ready for a
+  commit and push on the same branch. No PR merge or physical-PLC claim is made.

@@ -160,6 +160,10 @@ distinguishable. Acknowledgements carry the same provenance. The existing
 error when the detailed call fails.
 SZL/USER_DATA assembly checks byte and fragment limits before appending; its
 order, bounds, fragment progress, and continuation-room properties are proved.
+Single-response USER_DATA services reject replies marked as incomplete rather
+than exposing an initial fragment or reporting command success. Clock,
+block-count, and password peers cover complete and incomplete replies; segmented
+SZL and block-list services retain their separate bounded assembly paths.
 Empty metadata fragments remain legal and consume a fragment slot.
 
 The deterministic test suite also mutates valid corpus seeds with byte

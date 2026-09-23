@@ -255,6 +255,9 @@ structure CoreProtocolAssurance : Prop where
       state.pending.toList.reverse ++ state.history.map (·.location)
   writeTraceAckCount : ∀ (state after : WriteProgress.State) results,
     state.acknowledge results = .ok after → results.size = state.pending.size
+  singleUserDataCompletion : ∀ (response : S7.UserDataResponse) payload,
+    S7.requireCompleteUserData response = .ok payload →
+      response.hasMoreData = false ∧ payload = response.payload
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -348,6 +351,7 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact WriteProgress.State.sent_preserves_history
   · exact WriteProgress.State.replay_history_locations
   · exact WriteProgress.State.acknowledge_count
+  · exact S7.requireCompleteUserData_complete
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition

@@ -239,7 +239,9 @@ private def Client.exchangeUserData (client : Client) (reference : UInt16) (grou
   client.serialized do
     try
       let response ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries false none safety
-      decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction response
+      let decoded ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction response
+      discard <| decodeOrThrow <| S7.requireCompleteUserData decoded
+      return decoded
     catch error =>
       if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
         client.closeCurrent
@@ -254,7 +256,8 @@ private def Client.readUserDataValue (client : Client) (reference : UInt16)
     try
       let raw ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries false none .readOnly
       let response ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction raw
-      decodeOrThrow <| decode response.payload
+      let payload ← decodeOrThrow <| S7.requireCompleteUserData response
+      decodeOrThrow <| decode payload
     catch error =>
       if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
         client.closeCurrent

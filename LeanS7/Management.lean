@@ -31,6 +31,22 @@ structure UserDataResponse where
   payload : ByteArray
   deriving BEq
 
+/-- Fixed single-response services must not expose an incomplete fragment.
+    Segmented services use their separate bounded assembly paths. -/
+def requireCompleteUserData (response : UserDataResponse) : Except DecodeError ByteArray :=
+  if response.hasMoreData then
+    .error (.invalidField 19 "unexpected USER_DATA continuation for single-response service")
+  else .ok response.payload
+
+theorem requireCompleteUserData_complete (response : UserDataResponse) (payload : ByteArray)
+    (h : requireCompleteUserData response = .ok payload) :
+    response.hasMoreData = false ∧ payload = response.payload := by
+  unfold requireCompleteUserData at h
+  split at h
+  · contradiction
+  · cases h
+    simp_all
+
 def encodeUserDataHeader (reference : UInt16) (parameters data : ByteArray) :
     Except EncodeError ByteArray := do
   if parameters.size > maxSectionSize then
