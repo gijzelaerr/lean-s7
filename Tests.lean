@@ -67,6 +67,42 @@ def testLifecycle : IO Unit := do
       Lifecycle.transition .closed .disconnect == some .closed)
     "disconnect did not reach the terminal lifecycle state"
 
+def testDownloadState : IO Unit := do
+  let payload := bytes #[1, 2, 3, 4, 5]
+  let start := Download.start payload
+  check ((Download.nextFragment payload start 2).isNone)
+    "download sent a fragment before acknowledgement"
+  check ((Download.finish payload start).isNone)
+    "download finished before acknowledgement"
+  let some ready := Download.acknowledge start
+    | throw <| IO.userError "download acknowledgement was rejected"
+  check ((Download.acknowledge ready).isNone && (Download.finish payload ready).isNone)
+    "download accepted a duplicate acknowledgement or early completion"
+  check ((Download.nextFragment payload ready 0).isNone)
+    "download accepted a zero-byte PDU budget"
+  let some first := Download.nextFragment payload ready 2
+    | throw <| IO.userError "first download fragment was rejected"
+  let some second := Download.nextFragment payload first.after 2
+    | throw <| IO.userError "second download fragment was rejected"
+  let some last := Download.nextFragment payload second.after 2
+    | throw <| IO.userError "final download fragment was rejected"
+  check (first.chunk == bytes #[1, 2] && second.chunk == bytes #[3, 4] &&
+      last.chunk == bytes #[5] &&
+      first.chunk ++ second.chunk ++ last.chunk == payload)
+    "download fragments did not cover the block exactly in order"
+  check (first.after.phase == .awaitingFragment &&
+      second.after.phase == .awaitingFragment && last.after.phase == .awaitingEnd)
+    "download advanced to the wrong transfer phase"
+  check ((Download.nextFragment payload last.after 2).isNone &&
+      (Download.finish payload second.after).isNone)
+    "download accepted an extra fragment or premature final response"
+  let some completed := Download.finish payload last.after
+    | throw <| IO.userError "completed download was rejected"
+  check (completed.phase == .complete && completed.offset == payload.size &&
+      (Download.nextFragment payload completed 2).isNone &&
+      (Download.finish payload completed).isNone)
+    "completed download accepted another transition"
+
 def testTPKTRoundTrip : IO Unit := do
   let frame : TPKT.Frame := { payload := bytes #[2, 0xf0, 0x80, 0xde, 0xad] }
   match TPKT.encode frame with
@@ -773,6 +809,7 @@ def main : IO Unit := do
   testBinary
   testChunking
   testLifecycle
+  testDownloadState
   testTPKTRoundTrip
   testTPKTRejectsMalformedFrames
   testTPKTIgnoresReservedInput

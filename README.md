@@ -92,6 +92,8 @@ Implemented:
 - fragmented MC7 and full load-memory block uploads
 - PLC-driven fragmented block downloads, insertion, and deletion
 - exact machine-checked PLC-driven download-fragment size
+- machine-checked PLC-driven download phases, ordered fragment-prefix coverage,
+  final-completion guard, and negotiated response-budget bound
 - live-stack rejection of malformed SZL and upload fragments, including
   continuation limits and end-upload cleanup
 - memory compression and RAM-to-ROM copy commands

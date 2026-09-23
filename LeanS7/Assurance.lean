@@ -123,6 +123,27 @@ structure CoreProtocolAssurance : Prop where
   downloadFragmentSize : ∀ reference isLast payload packet,
     S7.encodeDownloadFragmentResponse reference isLast payload = .ok packet →
       packet.size = S7.responseHeaderSize + 6 + payload.size
+  downloadNoEarlyFragment : ∀ payload maximum,
+    Download.nextFragment payload (Download.start payload) maximum = none
+  downloadAckTransition : ∀ payload (state after : Download.State payload),
+    Download.acknowledge state = some after →
+      state.phase = .awaitingAck ∧ after.phase = .awaitingFragment ∧
+        after.offset = state.offset
+  downloadNoEarlyFinish : ∀ payload,
+    Download.finish payload (Download.start payload) = none
+  downloadNoIncompleteFinish : ∀ payload (state : Download.State payload),
+    state.offset < payload.size → Download.finish payload state = none
+  downloadFragmentOrder : ∀ payload (state : Download.State payload) maximum
+      (fragment : Download.Fragment payload state maximum),
+    payload.extract 0 fragment.after.offset =
+      payload.extract 0 state.offset ++ fragment.chunk
+  downloadFragmentBudget : ∀ payload (state : Download.State payload) maximum
+      (fragment : Download.Fragment payload state maximum) reference isLast packet,
+    S7.encodeDownloadFragmentResponse reference isLast fragment.chunk = .ok packet →
+      packet.size ≤ maximum + 18
+  downloadFinishExact : ∀ payload (state after : Download.State payload),
+    Download.finish payload state = some after →
+      state.offset = payload.size ∧ after.phase = .complete
   chunkCoverage : ∀ total maximum,
     maximum ≠ 0 → (Chunking.counts total maximum).sum = total
   chunkBounds : ∀ total maximum chunk,
@@ -220,6 +241,13 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact S7.encodedAreaRead_size
   · exact S7.encodedAreaWrite_size
   · exact S7.encodedDownloadFragmentResponse_size
+  · exact Download.no_fragment_before_ack
+  · exact Download.acknowledge_transition
+  · exact Download.no_finish_before_ack
+  · exact Download.no_finish_before_complete
+  · exact Download.fragment_prefix
+  · exact Download.encoded_fragment_fits
+  · exact Download.finish_complete
   · exact Chunking.counts_sum
   · exact Chunking.counts_bounds
   · exact fun _ _ _ => Chunking.ReadAssembly.append_data

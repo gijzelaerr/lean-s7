@@ -807,7 +807,7 @@ def _download_service_params(function: int, block_number: int) -> bytes:
 
 
 def serve_plc_driven_download(
-    listener: socket.socket, expected: bytes, errors: list[Exception]
+    listener: socket.socket, expected: bytes, pdu_length: int, errors: list[Exception]
 ) -> None:
     try:
         connection, _ = listener.accept()
@@ -824,7 +824,7 @@ def serve_plc_driven_download(
                 connection,
                 _s7_response(
                     setup_reference,
-                    bytes([0xF0, 0, 0, 1, 0, 1, 1, 0xE0]),
+                    bytes([0xF0, 0, 0, 1, 0, 1]) + pdu_length.to_bytes(2, "big"),
                 ),
             )
             start = _receive_s7(connection)
@@ -837,6 +837,8 @@ def serve_plc_driven_download(
                     connection, _s7_job(sequence, _download_service_params(0x1B, 7))
                 )
                 response = _receive_s7(connection)
+                if len(response) > pdu_length:
+                    raise RuntimeError("download fragment exceeded negotiated PDU")
                 parameter_length = struct.unpack(">H", response[6:8])[0]
                 data_length = struct.unpack(">H", response[8:10])[0]
                 parameters = response[12 : 12 + parameter_length]
@@ -871,31 +873,32 @@ def serve_plc_driven_download(
 def run_download_integration(root: Path) -> None:
     mc7 = bytes((index * 29 + 7) & 0xFF for index in range(600))
     expected = bytes(34) + struct.pack(">H", len(mc7)) + mc7
-    errors: list[Exception] = []
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen(1)
-        port = int(listener.getsockname()[1])
-        thread = threading.Thread(
-            target=serve_plc_driven_download,
-            args=(listener, expected, errors),
-        )
-        thread.start()
-        subprocess.run(
-            [
-                str(root / ".lake/build/bin/lean-s7"),
-                "integration-download",
-                "127.0.0.1",
-                str(port),
-            ],
-            cwd=root,
-            check=True,
-        )
-        thread.join(timeout=3)
-    if thread.is_alive():
-        raise RuntimeError("PLC-driven download server did not finish")
-    if errors:
-        raise errors[0]
+    for pdu_length in (240, 480):
+        errors: list[Exception] = []
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            port = int(listener.getsockname()[1])
+            thread = threading.Thread(
+                target=serve_plc_driven_download,
+                args=(listener, expected, pdu_length, errors),
+            )
+            thread.start()
+            subprocess.run(
+                [
+                    str(root / ".lake/build/bin/lean-s7"),
+                    "integration-download",
+                    "127.0.0.1",
+                    str(port),
+                ],
+                cwd=root,
+                check=True,
+            )
+            thread.join(timeout=3)
+        if thread.is_alive():
+            raise RuntimeError("PLC-driven download server did not finish")
+        if errors:
+            raise errors[0]
 
 
 def serve_interrupted_download(
@@ -942,6 +945,20 @@ def run_download_interruption(root: Path) -> None:
         raise errors[0]
 
 
+def _expect_download_rejection(connection: socket.socket, mutation: str) -> None:
+    connection.settimeout(2)
+    try:
+        received = _receive_tpkt(connection)
+    except ConnectionResetError:
+        return
+    except RuntimeError as error:
+        if str(error) == "peer closed an incomplete test frame":
+            return
+        raise
+    if len(received) >= 2 and received[1] == 0xF0:
+        raise RuntimeError(f"client accepted malformed {mutation} download job")
+
+
 def serve_malformed_download_service(
     listener: socket.socket, mutation: str, errors: list[Exception]
 ) -> None:
@@ -967,17 +984,47 @@ def serve_malformed_download_service(
                     data = b"\x01"
                 _send_s7(connection, _s7_job(0x7000, bytes(parameters), data))
             # The client must reject the job and close before sending block data.
-            connection.settimeout(2)
-            try:
-                received = _receive_tpkt(connection)
-            except ConnectionResetError:
-                return
-            except RuntimeError as error:
-                if str(error) == "peer closed an incomplete test frame":
-                    return
-                raise
-            if len(received) >= 2 and received[1] == 0xF0:
-                raise RuntimeError(f"client accepted malformed {mutation} download job")
+            _expect_download_rejection(connection, mutation)
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def serve_invalid_download_phase(
+    listener: socket.socket, mutation: str, errors: list[Exception]
+) -> None:
+    try:
+        with _accept_session(listener, 480) as connection:
+            start = _receive_s7(connection)
+            reference = int.from_bytes(start[4:6], "big")
+            _send_s7(connection, _s7_response(reference, bytes([0x1A])))
+            sequence = 0x7000
+            if mutation == "early-ended":
+                _send_s7(
+                    connection,
+                    _s7_job(sequence, _download_service_params(0x1C, 7)),
+                )
+            else:
+                received = bytearray()
+                while len(received) < 636:
+                    _send_s7(
+                        connection,
+                        _s7_job(sequence, _download_service_params(0x1B, 7)),
+                    )
+                    response = _receive_s7(connection)
+                    if (
+                        int.from_bytes(response[4:6], "big") != sequence
+                        or response[12] != 0x1B
+                    ):
+                        raise RuntimeError("invalid response to valid download request")
+                    parameter_length = int.from_bytes(response[6:8], "big")
+                    data = response[12 + parameter_length :]
+                    received.extend(data[4:])
+                    sequence += 1
+                _send_s7(
+                    connection,
+                    _s7_job(sequence, _download_service_params(0x1B, 7)),
+                )
+            _expect_download_rejection(connection, mutation)
     except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
         errors.append(error)
 
@@ -990,13 +1037,19 @@ def run_download_rejections(root: Path) -> None:
         "reserved",
         "truncated",
         "data",
+        "early-ended",
+        "extra-fragment",
     ):
         errors: list[Exception] = []
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)
             thread = threading.Thread(
-                target=serve_malformed_download_service,
+                target=(
+                    serve_invalid_download_phase
+                    if mutation in ("early-ended", "extra-fragment")
+                    else serve_malformed_download_service
+                ),
                 args=(listener, mutation, errors),
             )
             thread.start()

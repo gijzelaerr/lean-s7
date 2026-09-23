@@ -3,6 +3,7 @@ import LeanS7.ClientError
 import LeanS7.Advanced
 import LeanS7.Value
 import LeanS7.Chunking
+import LeanS7.Download
 import LeanS7.Lifecycle
 
 namespace LeanS7
@@ -419,20 +420,20 @@ private def Client.sendServerResponse (client : Client) (response : ByteArray) :
   Transport.sendData connection.socket response client.config.operationTimeoutMs
 
 private partial def Client.serveDownloadFragments (client : Client) (blockType : S7.BlockType)
-    (number : Nat) (blockData : ByteArray)
-    (offset maxSlice fragmentNumber : Nat) : IO Unit := do
+    (number : Nat) (blockData : ByteArray) (state : Download.State blockData)
+    (maxSlice fragmentNumber : Nat) : IO (Download.State blockData) := do
   if fragmentNumber >= 65536 then
     throw <| ClientError.protocol "block download exceeded the 65536-fragment safety limit"
   let job ← client.receiveServerJob
   decodeOrThrow <| S7.validateDownloadServiceRequest job S7.downloadFunction blockType number
-  let remaining := blockData.size - offset
-  let size := min remaining maxSlice
-  let isLast := size == remaining
-  let response ← inputOrThrow <| S7.encodeDownloadFragmentResponse job.reference isLast
-    (blockData.extract offset (offset + size))
+  let some fragment := Download.nextFragment blockData state maxSlice
+    | throw <| ClientError.protocol "unexpected PLC download fragment request"
+  let isLast := fragment.after.phase == .awaitingEnd
+  let response ← inputOrThrow <|
+    S7.encodeDownloadFragmentResponse job.reference isLast fragment.chunk
   client.sendServerResponse response
-  unless isLast do
-    client.serveDownloadFragments blockType number blockData (offset + size) maxSlice (fragmentNumber + 1)
+  if isLast then return fragment.after
+  client.serveDownloadFragments blockType number blockData fragment.after maxSlice (fragmentNumber + 1)
 
 /-- Download a complete load-memory block returned by `fullUpload`. Classic S7
     download is PLC-driven: after the initial request the PLC asks for each
@@ -455,10 +456,15 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
       let pduLength ← client.negotiatedPduLength
       if pduLength.toNat <= 18 then
         throw <| ClientError.protocol "negotiated PDU is too small for block download"
-      client.serveDownloadFragments blockType number blockData 0 (pduLength.toNat - 18) 0
+      let some ready := Download.acknowledge (Download.start blockData)
+        | throw <| ClientError.lifecycle "download request acknowledgement was not accepted"
+      let transferred ← client.serveDownloadFragments blockType number blockData ready
+        (pduLength.toNat - 18) 0
       let ended ← client.receiveServerJob
       decodeOrThrow <| S7.validateDownloadServiceRequest ended S7.downloadEndedFunction
         blockType number
+      let some _ := Download.finish blockData transferred
+        | throw <| ClientError.protocol "PLC ended an incomplete block download"
       client.sendServerResponse (← inputOrThrow <| S7.encodeDownloadEndedResponse ended.reference)
       let insertReference ← client.freshReference
       let insertRequest ← inputOrThrow <| S7.encodeInsertBlock insertReference blockType number
