@@ -1,5 +1,8 @@
 import LeanS7
 import LeanS7.MultiSemanticsTests
+import LeanS7.ConcurrencyTests
+import LeanS7.StatefulFaultIntegration
+import LeanS7.RetryProgressTests
 
 open LeanS7 Std.Net
 
@@ -570,6 +573,7 @@ def runTransferDeadlineIntegration (host portString operation operationMs transf
     connectTimeoutMs := some 1000,
     transferReceiveTimeoutMs := transferTimeout,
     reconnectRetries := if operation.endsWith "-retry" then 1 else 0
+    allowPotentiallyMutatingRetries := operation == "write-retry"
   }
   try
     let outcome ← try
@@ -670,6 +674,12 @@ def runMultiBatchingIntegration (host portString pduString countString sizeStrin
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
+  | ["integration-concurrency", host, port, mode] =>
+      ConcurrencyTests.runIntegration host port mode
+  | ["integration-retry-progress", host, port, mode] =>
+      RetryProgressTests.runIntegration host port mode
+  | ["integration-stateful-fault", host, port, operation, expected] =>
+      StatefulFaultIntegration.run host port operation expected
   | ["integration-multi-semantics", host, port, mode] =>
       MultiSemanticsTests.runIntegration host port mode
   | ["integration-multi-batching", host, port, pdu, count, size] =>

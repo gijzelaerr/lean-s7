@@ -8,6 +8,8 @@ import LeanS7.Download
 import LeanS7.Upload
 import LeanS7.UserDataAssembly
 import LeanS7.Lifecycle
+import LeanS7.RetryPolicy
+import LeanS7.WriteProgress
 
 namespace LeanS7
 
@@ -31,6 +33,9 @@ structure ClientConfig where
       the request enters the serialization gate. Does not cancel sends/connects. -/
   transferReceiveTimeoutMs : Option Nat := some 30000
   reconnectRetries : Nat := 0
+  /-- Explicitly accept duplicate side effects after a lost acknowledgement.
+      Applies to writes, CPU/security/clock control, transfers, and raw PDUs. -/
+  allowPotentiallyMutatingRetries : Bool := false
   maxStaleResponses : Nat := 4
   /-- First post-handshake PDU reference. Primarily useful for deterministic
       wraparound and peer-correlation testing. -/
@@ -44,6 +49,7 @@ structure Client where
   pduLength : UInt16
   private currentPduLength : IO.Ref UInt16
   private nextReference : IO.Ref UInt16
+  private writeProgress : IO.Ref WriteProgress
 
 private def orThrow [Repr ε] (result : Except ε α) : IO α :=
   match result with
@@ -101,7 +107,8 @@ def Client.connect (config : ClientConfig) : IO Client := do
   let state ← IO.mkRef Lifecycle.State.connected
   let currentPduLength ← IO.mkRef setup.pduLength
   let nextReference ← IO.mkRef config.initialRequestReference
-  return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference }
+  let writeProgress ← IO.mkRef ({} : WriteProgress)
+  return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
   client.nextReference.modifyGet fun reference => (reference, reference + 1)
@@ -127,10 +134,12 @@ private def Client.closeCurrent (client : Client) : IO Unit := do
   client.applyLifecycleEvent .transportClosed
 
 private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
-    (request : ByteArray) (transferDeadline : Option Nat := none) : IO ByteArray := do
+    (request : ByteArray) (transferDeadline : Option Nat := none)
+    (beforeSend : IO Unit := pure ()) : IO ByteArray := do
   Transport.checkReceiveDeadline transferDeadline
   let some connection ← client.connection.get
     | throw <| ClientError.disconnected "S7 client is disconnected"
+  beforeSend
   Transport.sendData connection.socket request client.config.operationTimeoutMs
   let pduLength ← client.currentPduLength.get
   let deadline := Transport.earlierReceiveDeadline
@@ -143,8 +152,9 @@ private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
   throw <| ClientError.protocol s!"too many stale S7 responses while waiting for reference {reference}"
 
 private def Client.exchangeCurrent (client : Client) (reference : UInt16)
-    (request : ByteArray) (transferDeadline : Option Nat := none) : IO S7.Response := do
-  orThrow <| S7.decodeResponse (← client.exchangeBytesCurrent reference request transferDeadline)
+    (request : ByteArray) (transferDeadline : Option Nat := none)
+    (beforeSend : IO Unit := pure ()) : IO S7.Response := do
+  orThrow <| S7.decodeResponse (← client.exchangeBytesCurrent reference request transferDeadline beforeSend)
 
 private def Client.reconnect (client : Client) : IO Unit := do
   client.closeCurrent
@@ -160,22 +170,25 @@ private def Client.reconnect (client : Client) : IO Unit := do
 
 private partial def Client.exchangeWithRetries (client : Client) (reference : UInt16)
     (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
-    (transferDeadline : Option Nat := none) : IO S7.Response := do
+    (transferDeadline : Option Nat := none) (safety : RetrySafety := .potentiallyMutating)
+    (onReplay : IO Unit := pure ()) (beforeSend : IO Unit := pure ()) : IO S7.Response := do
+  let attempted ← IO.mkRef false
   try
     Transport.checkReceiveDeadline transferDeadline
     if reconnectFirst then
       client.reconnect
-    client.exchangeCurrent reference request transferDeadline
+    client.exchangeCurrent reference request transferDeadline (do attempted.set true; beforeSend)
   catch error =>
     client.closeCurrent
     if remainingRetries == 0 || (← client.state.get) == .closed ||
-        !isRetryableClientError error then
+        !isRetryableClientError error || !retryPermitted safety client.config.allowPotentiallyMutatingRetries then
       throw error
-    client.exchangeWithRetries reference request (remainingRetries - 1) true transferDeadline
+    if ← attempted.get then onReplay
+    client.exchangeWithRetries reference request (remainingRetries - 1) true transferDeadline safety onReplay beforeSend
 
 private partial def Client.exchangeBytesWithRetries (client : Client) (reference : UInt16)
     (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
-    (transferDeadline : Option Nat := none) : IO ByteArray := do
+    (transferDeadline : Option Nat := none) (safety : RetrySafety := .potentiallyMutating) : IO ByteArray := do
   try
     Transport.checkReceiveDeadline transferDeadline
     if reconnectFirst then
@@ -184,9 +197,9 @@ private partial def Client.exchangeBytesWithRetries (client : Client) (reference
   catch error =>
     client.closeCurrent
     if remainingRetries == 0 || (← client.state.get) == .closed ||
-        !isRetryableClientError error then
+        !isRetryableClientError error || !retryPermitted safety client.config.allowPotentiallyMutatingRetries then
       throw error
-    client.exchangeBytesWithRetries reference request (remainingRetries - 1) true transferDeadline
+    client.exchangeBytesWithRetries reference request (remainingRetries - 1) true transferDeadline safety
 
 private def Client.serialized (client : Client) (operation : IO α) : IO α := do
   let gate : IO.Promise Unit ← IO.Promise.new
@@ -216,10 +229,30 @@ def Client.rawExchange (client : Client) (reference : UInt16) (request : ByteArr
   client.serialized <| client.exchangeBytesWithRetries reference request client.config.reconnectRetries
 
 private def Client.exchangeUserData (client : Client) (reference : UInt16) (group subfunction : UInt8)
-    (request : ByteArray) : IO S7.UserDataResponse :=
+    (request : ByteArray) (safety : RetrySafety := .potentiallyMutating) : IO S7.UserDataResponse :=
   client.serialized do
-    let response ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries
-    decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction response
+    try
+      let response ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries false none safety
+      decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction response
+    catch error =>
+      if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
+        client.closeCurrent
+      throw error
+
+/-- Decode service payloads before releasing the operation gate: malformed typed
+    replies must poison the session before a queued request can begin. -/
+private def Client.readUserDataValue (client : Client) (reference : UInt16)
+    (group subfunction : UInt8) (request : ByteArray)
+    (decode : ByteArray → Except DecodeError α) : IO α :=
+  client.serialized do
+    try
+      let raw ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries false none .readOnly
+      let response ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction raw
+      decodeOrThrow <| decode response.payload
+    catch error =>
+      if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
+        client.closeCurrent
+      throw error
 
 private partial def Client.readSzlFragments (client : Client) (id index : UInt16)
     (state : UserDataAssembly.State (16 * 1024 * 1024) 256) (sequence : UInt8)
@@ -230,7 +263,7 @@ private partial def Client.readSzlFragments (client : Client) (id index : UInt16
   else
     inputOrThrow <| S7.encodeReadSzlContinuation reference sequence
   let raw ← client.exchangeBytesWithRetries reference request
-    (if state.count == 0 then client.config.reconnectRetries else 0) false deadline
+    (if state.count == 0 then client.config.reconnectRetries else 0) false deadline .readOnly
   let response ← decodeOrThrow <| S7.decodeUserDataResponse reference S7.szlGroup
     S7.readSzlSubfunction raw
   let nextPayload ← if state.count == 0 then
@@ -246,49 +279,53 @@ private partial def Client.readSzlFragments (client : Client) (id index : UInt16
   else
     return step.after.data
 
-def Client.readSzl (client : Client) (id : UInt16) (index : UInt16 := 0) : IO S7.Szl :=
+private def Client.readSzlValue (client : Client) (id index : UInt16)
+    (decode : S7.Szl → IO α) : IO α :=
   client.serialized do
     let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
     try
-      orThrow <| S7.decodeSzl id index
+      let szl ← orThrow <| S7.decodeSzl id index
         (← client.readSzlFragments id index (UserDataAssembly.empty _ _) 0 deadline)
+      decode szl
     catch error =>
       client.closeCurrent
       throw error
 
+def Client.readSzl (client : Client) (id : UInt16) (index : UInt16 := 0) : IO S7.Szl :=
+  client.readSzlValue id index pure
+
 def Client.readSzlList (client : Client) : IO (Array UInt16) := do
-  let szl ← client.readSzl 0 0
-  if szl.recordLength != 2 then
-    throw <| ClientError.protocol s!"SZL directory record length must be 2, got {szl.recordLength}"
-  let mut cursor : Cursor := { data := szl.data }
-  let mut result := #[]
-  for _ in [0:szl.recordCount.toNat] do
-    let (id, next) ← orThrow cursor.readUInt16BE
-    cursor := next
-    result := result.push id
-  orThrow cursor.finish
-  return result
+  client.readSzlValue 0 0 fun szl => do
+    if szl.recordLength != 2 then
+      throw <| ClientError.protocol s!"SZL directory record length must be 2, got {szl.recordLength}"
+    let mut cursor : Cursor := { data := szl.data }
+    let mut result := #[]
+    for _ in [0:szl.recordCount.toNat] do
+      let (id, next) ← orThrow cursor.readUInt16BE
+      cursor := next
+      result := result.push id
+    orThrow cursor.finish
+    return result
 
 def Client.getOrderCode (client : Client) : IO S7.OrderCode := do
-  orThrow <| S7.parseOrderCode (← client.readSzl 0x0011 0)
+  client.readSzlValue 0x0011 0 fun szl => orThrow <| S7.parseOrderCode szl
 
 def Client.getCpuInfo (client : Client) : IO S7.CpuInfo := do
-  orThrow <| S7.parseCpuInfo (← client.readSzl 0x001c 0)
+  client.readSzlValue 0x001c 0 fun szl => orThrow <| S7.parseCpuInfo szl
 
 def Client.getCpInfo (client : Client) : IO S7.CpInfo := do
-  orThrow <| S7.parseCpInfo (← client.readSzl 0x0131 1)
+  client.readSzlValue 0x0131 1 fun szl => orThrow <| S7.parseCpInfo szl
 
 def Client.getProtection (client : Client) : IO S7.Protection := do
-  orThrow <| S7.parseProtection (← client.readSzl 0x0232 4)
+  client.readSzlValue 0x0232 4 fun szl => orThrow <| S7.parseProtection szl
 
 def Client.getCpuState (client : Client) : IO S7.CpuState := do
-  orThrow <| S7.parseCpuState (← client.readSzl 0x0424 0)
+  client.readSzlValue 0x0424 0 fun szl => orThrow <| S7.parseCpuState szl
 
 def Client.getPlcDateTime (client : Client) : IO S7.PlcDateTime := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeReadClock reference
-  let response ← client.exchangeUserData reference S7.clockGroup S7.readClockSubfunction request
-  orThrow <| S7.decodePlcDateTime response.payload
+  client.readUserDataValue reference S7.clockGroup S7.readClockSubfunction request S7.decodePlcDateTime
 
 def Client.setPlcDateTime (client : Client) (value : S7.PlcDateTime) : IO Unit := do
   let reference ← client.freshReference
@@ -300,8 +337,14 @@ private def Client.plcControl (client : Client) (function : UInt8)
     (encode : UInt16 → Except S7.EncodeError ByteArray) : IO Unit := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| encode reference
-  let response ← client.exchange reference request
-  decodeOrThrow <| S7.decodePlcControl reference function response
+  client.serialized do
+    try
+      let response ← client.exchangeWithRetries reference request client.config.reconnectRetries
+      decodeOrThrow <| S7.decodePlcControl reference function response
+    catch error =>
+      if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
+        client.closeCurrent
+      throw error
 
 def Client.plcHotStart (client : Client) : IO Unit :=
   client.plcControl S7.startFunction S7.encodePlcHotStart
@@ -331,7 +374,7 @@ private partial def Client.userDataFragments (client : Client) (group subfunctio
   let request ← if state.count == 0 then inputOrThrow <| firstRequest reference
     else inputOrThrow <| S7.encodeUserDataContinuation reference group subfunction sequence
   let raw ← client.exchangeBytesWithRetries reference request
-    (if state.count == 0 then client.config.reconnectRetries else 0) false deadline
+    (if state.count == 0 then client.config.reconnectRetries else 0) false deadline .readOnly
   let response ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction raw
   let step ← orThrow <| UserDataAssembly.accept state response.payload response.hasMoreData
   if response.hasMoreData then
@@ -341,9 +384,7 @@ private partial def Client.userDataFragments (client : Client) (group subfunctio
 def Client.listBlocks (client : Client) : IO S7.BlockCounts := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeListBlocks reference
-  let response ← client.exchangeUserData reference S7.blocksInfoGroup
-    S7.listBlocksSubfunction request
-  orThrow <| S7.decodeBlockCounts response.payload
+  client.readUserDataValue reference S7.blocksInfoGroup S7.listBlocksSubfunction request S7.decodeBlockCounts
 
 def Client.listBlocksOfType (client : Client) (blockType : S7.BlockType) :
     IO (Array S7.BlockEntry) :=
@@ -362,8 +403,7 @@ def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : N
     IO S7.BlockInfo := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeGetBlockInfo reference blockType number
-  let response ← client.exchangeUserData reference S7.blocksInfoGroup S7.blockInfoSubfunction request
-  orThrow <| S7.decodeBlockInfo response.payload
+  client.readUserDataValue reference S7.blocksInfoGroup S7.blockInfoSubfunction request S7.decodeBlockInfo
 
 private def uploadSafetyLimit : Nat := 64 * 1024 * 1024
 
@@ -380,8 +420,8 @@ private partial def Client.uploadFragments (client : Client) (uploadId : UInt8)
   if fragment.isLast then return accepted.after
   client.uploadFragments uploadId (fragmentNumber + 1) accepted.after deadline
 
-private def Client.uploadBlockData (client : Client) (blockType : S7.BlockType)
-    (number : Nat) : IO ByteArray :=
+private def Client.uploadBlockValue (client : Client) (blockType : S7.BlockType)
+    (number : Nat) (decode : ByteArray → IO α) : IO α :=
   client.serialized do
     try
       let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
@@ -406,22 +446,22 @@ private def Client.uploadBlockData (client : Client) (blockType : S7.BlockType)
       let endResponse ← client.exchangeWithRetries endReference endRequest 0 false deadline
       decodeOrThrow <| S7.decodeEndUpload endReference endResponse
       let completed ← decodeOrThrow <| Upload.finish transferred
-      return completed.assembly.data
+      decode completed.assembly.data
     catch error =>
       client.closeCurrent
       throw error
 
 def Client.fullUpload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray :=
-  client.uploadBlockData blockType number
+  client.uploadBlockValue blockType number pure
 
 def Client.upload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray := do
-  let full ← client.uploadBlockData blockType number
-  if full.size < 36 then
-    throw <| ClientError.protocol "full block upload omitted its 36-byte compact header"
-  let (mc7Size, _) ← orThrow <| ({ data := full, offset := 34 } : Cursor).readUInt16BE
-  if full.size < 36 + mc7Size.toNat then
-    throw <| ClientError.protocol s!"block upload contains fewer than {mc7Size} MC7 bytes"
-  return full.extract 36 (36 + mc7Size.toNat)
+  client.uploadBlockValue blockType number fun full => do
+    if full.size < 36 then
+      throw <| ClientError.protocol "full block upload omitted its 36-byte compact header"
+    let (mc7Size, _) ← orThrow <| ({ data := full, offset := 34 } : Cursor).readUInt16BE
+    if full.size < 36 + mc7Size.toNat then
+      throw <| ClientError.protocol s!"block upload contains fewer than {mc7Size} MC7 bytes"
+    return full.extract 36 (36 + mc7Size.toNat)
 
 private def Client.controlService (client : Client)
     (encode : UInt16 → Except S7.EncodeError ByteArray) : IO Unit :=
@@ -510,7 +550,7 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
       throw error
 
 def Client.readForceTable (client : Client) : IO (Array S7.ForceEntry) := do
-  orThrow <| S7.decodeForceTable (← client.readSzl 0x0025 0)
+  client.readSzlValue 0x0025 0 fun szl => orThrow <| S7.decodeForceTable szl
 
 private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange)
     (deadline : Option Nat) (retries : Nat) :
@@ -523,7 +563,7 @@ private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange)
   let expectedSize := range.count * range.area.elementSize
   if expectedSize + 18 > pduLength.toNat then
     throw <| ClientError.invalidInput s!"response would exceed negotiated PDU length {pduLength}"
-  let response ← client.exchangeWithRetries reference request retries false deadline
+  let response ← client.exchangeWithRetries reference request retries false deadline .readOnly
   match hdecode : S7.decodeAreaRead reference range.area expectedSize response with
   | .error (.remoteFailure _ message) => throw <| ClientError.plcRejected message
   | .error error => throw <| ClientError.protocol (reprStr error)
@@ -538,8 +578,15 @@ private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
     throw <| ClientError.invalidInput s!"request exceeds negotiated PDU length {pduLength}"
-  let response ← client.exchangeWithRetries reference request retries false deadline
+  Transport.checkReceiveDeadline deadline
+  unless ← client.isConnected do throw <| ClientError.disconnected "S7 client is disconnected"
+  let response ← client.exchangeWithRetries reference request retries false deadline .potentiallyMutating
+    (client.writeProgress.modify fun p => { p with
+      replayedUncertain := p.replayedUncertain ++ p.uncertain, uncertain := #[] })
+    (client.writeProgress.modify fun p => { p with uncertain := #[range] })
   decodeOrThrow <| S7.decodeDbWrite reference response
+  client.writeProgress.modify fun p => {
+    p with acknowledged := p.acknowledged.push { range, result := .success }, uncertain := #[] }
 
 private def Client.readAreaChunks (client : Client) (area : S7.Area)
     (dbNumber : UInt16) (start : Nat) (consumed : Nat) (chunks : List Nat)
@@ -576,8 +623,13 @@ private def Client.readAreaChecked (client : Client) (area : S7.Area) (dbNumber 
 def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start count : Nat) : IO ByteArray := do
   client.serialized do
-    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
-    return (← client.readAreaChecked area dbNumber start count deadline client.config.reconnectRetries).val
+    try
+      let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+      return (← client.readAreaChecked area dbNumber start count deadline client.config.reconnectRetries).val
+    catch error =>
+      if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
+        client.closeCurrent
+      throw error
 
 private def Client.writeAreaChunks (client : Client) (area : S7.Area)
     (dbNumber : UInt16) (start offset : Nat) (payload : ByteArray)
@@ -625,11 +677,27 @@ private def Client.writeAreaChecked (client : Client) (area : S7.Area) (dbNumber
         (Chunking.counts (payload.size / area.elementSize) maxCount) (by
           simpa [Chunking.counts_sum _ _ hmaximum] using hsize) deadline retries
 
-def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
-    (start : Nat) (payload : ByteArray) : IO Unit :=
+/-- Structured wire-chunk progress, including an uncertain final write after
+    acknowledgement loss. Earlier successful chunks are not rolled back. -/
+def Client.writeAreaDetailed (client : Client) (area : S7.Area) (dbNumber : UInt16)
+    (start : Nat) (payload : ByteArray) : IO (Except WriteFailure WriteProgress) :=
   client.serialized do
-    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
-    client.writeAreaChecked area dbNumber start payload deadline client.config.reconnectRetries
+    client.writeProgress.set {}
+    try
+      let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+      client.writeAreaChecked area dbNumber start payload deadline client.config.reconnectRetries
+      return .ok (← client.writeProgress.get)
+    catch error =>
+      if classifyClientError error == .plcRejected then
+        client.writeProgress.modify fun p => { p with rejected := p.rejected ++ p.uncertain, uncertain := #[] }
+      else if classifyClientError error != .invalidInput then client.closeCurrent
+      return .error { error, progress := ← client.writeProgress.get }
+
+def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
+    (start : Nat) (payload : ByteArray) : IO Unit := do
+  match ← client.writeAreaDetailed area dbNumber start payload with
+  | .ok _ => pure ()
+  | .error failure => throw failure.error
 
 def Client.dbRead (client : Client) (dbNumber : UInt16) (start size : Nat) : IO ByteArray :=
   client.readArea .dataBlocks dbNumber start size
@@ -873,7 +941,7 @@ private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRan
   if request.size > pduLength.toNat then
     throw <| ClientError.invalidInput
       s!"multi-read request exceeds negotiated PDU length {pduLength}"
-  let response ← client.exchangeWithRetries reference request retries false deadline
+  let response ← client.exchangeWithRetries reference request retries false deadline .readOnly
   decodeOrThrow <| S7.decodeAreaReadMany reference ranges response
 
 private def Client.readMultiChunks (client : Client) (range : S7.MemoryRange)
@@ -1131,8 +1199,19 @@ private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem
   if request.size > pduLength.toNat then
     throw <| ClientError.invalidInput
       s!"multi-write request exceeds negotiated PDU length {pduLength}"
-  let response ← client.exchangeWithRetries reference request retries false deadline
-  decodeOrThrow <| S7.decodeAreaWriteMany reference items.size response
+  Transport.checkReceiveDeadline deadline
+  unless ← client.isConnected do throw <| ClientError.disconnected "S7 client is disconnected"
+  let response ← client.exchangeWithRetries reference request retries false deadline .potentiallyMutating
+    (client.writeProgress.modify fun p => { p with
+      replayedUncertain := p.replayedUncertain ++ p.uncertain, uncertain := #[] })
+    (client.writeProgress.modify fun p => { p with uncertain := items.map (·.range) })
+  let results ← decodeOrThrow <| S7.decodeAreaWriteMany reference items.size response
+  let acknowledgements : Array WriteAcknowledgement :=
+    (items.zip results).map fun (item, result) => { range := item.range, result := result }
+  client.writeProgress.modify fun p => { p with
+    acknowledged := p.acknowledged ++ acknowledgements
+    uncertain := #[] }
+  return results
 
 private def Client.writeMultiChunks (client : Client) (item : S7.WriteItem)
     (offset : Nat) (chunks : List Nat) (deadline : Option Nat)
@@ -1171,19 +1250,30 @@ private partial def Client.writeMultiLoop (client : Client) (pending : List S7.W
         let batchResults ← client.writeMultiBatch batch.toArray deadline retries
         client.writeMultiLoop remaining (results ++ batchResults) deadline 0
 
-/-- Locally validate the whole request before sending any writes. Successful
-    chunks preceding a PLC rejection remain written: this is not an atomic API. -/
-def Client.writeMulti (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) :=
+/-- Both success and failure retain per-wire-item progress. A PLC item rejection
+    may follow acknowledged chunks of the same logical item. Wire ranges retain
+    addresses rather than claiming that a whole logical item was atomic. -/
+def Client.writeMultiDetailed (client : Client) (items : Array S7.WriteItem) :
+    IO (Except WriteFailure (Array S7.WriteItemResult × WriteProgress)) :=
   client.serialized do
-    if items.isEmpty then return #[]
-    let pduLength ← client.negotiatedPduLength
-    inputOrThrow <| MultiValidation.writes pduLength.toNat items
-    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    client.writeProgress.set {}
     try
-      client.writeMultiLoop items.toList #[] deadline client.config.reconnectRetries
+      if items.isEmpty then return .ok (#[], {})
+      let pduLength ← client.negotiatedPduLength
+      inputOrThrow <| MultiValidation.writes pduLength.toNat items
+      let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+      let results ← client.writeMultiLoop items.toList #[] deadline client.config.reconnectRetries
+      return .ok (results, ← client.writeProgress.get)
     catch error =>
-      client.closeCurrent
-      throw error
+      if classifyClientError error != .invalidInput then client.closeCurrent
+      if classifyClientError error == .plcRejected then
+        client.writeProgress.modify fun p => { p with rejected := p.rejected ++ p.uncertain, uncertain := #[] }
+      return .error { error, progress := ← client.writeProgress.get }
+
+def Client.writeMulti (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
+  match ← client.writeMultiDetailed items with
+  | .ok (results, _) => return results
+  | .error failure => throw failure.error
 
 def Client.dbReadUInt8 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt8 := do
   orThrow <| Value.getUInt8 (← client.dbRead dbNumber start 1)

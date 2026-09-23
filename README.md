@@ -137,6 +137,23 @@ Only the initial exchange can automatically reconnect; subsequent chunks and
 batches are not retried after a partially completed transfer. Download completion
 and insertion acknowledgements remain inside the original receive budget.
 These deadlines do not cancel socket sends or connection establishment.
+
+Reconnect retries also depend on operation safety. Typed read-only operations
+may retry their initial exchange when `reconnectRetries` is nonzero. Writes,
+CPU/clock/security commands, raw exchanges, and upload-session allocation do not
+replay by default: a missing acknowledgement does not mean the PLC did nothing.
+`allowPotentiallyMutatingRetries := true` explicitly accepts possible duplicate
+side effects; it does not provide exactly-once execution or retry later chunks.
+
+`writeAreaDetailed` and `writeMultiDetailed` return structured wire-level
+progress on success and failure. `acknowledged` retains validated per-chunk/item
+results, including item rejection codes; `rejected` records scalar/global PLC
+rejections, and `uncertain` identifies outstanding writes whose outcome is
+unknown. With explicit replay enabled, `replayedUncertain` retains earlier
+unacknowledged attempts even if a later attempt succeeds or rejects. Earlier
+acknowledged writes are not rolled back. The existing
+`writeArea`/`writeMulti` APIs retain their signatures and raise the underlying
+error when the detailed call fails.
 SZL/USER_DATA assembly checks byte and fragment limits before appending; its
 order, bounds, fragment progress, and continuation-room properties are proved.
 Empty metadata fragments remain legal and consume a fragment slot.
@@ -145,6 +162,10 @@ The deterministic test suite also mutates valid corpus seeds with byte
 substitutions, bit flips, truncations, and trailing bytes. It checks structural
 and correlation invariants for accepted mutations rather than assuming every
 mutation is malformed. Discovered failures become focused corpus regressions.
+Short stateful conversations additionally compare production transfer state
+machines to independent phase/size/order oracles. Barrier-synchronized peers
+exercise concurrent calls, queued failures, disconnect, and reconnect; other
+peers inject faults at every upload and segmented SZL receive phase.
 
 ## Build and test
 

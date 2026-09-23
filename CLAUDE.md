@@ -22,6 +22,10 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/Chunking.lean`: proved transfer chunk plans and coverage bounds.
 - `LeanS7/MultiValidation.lean`: whole logical-range/write-request validation before IO.
 - `LeanS7/BatchEncoderAssurance.lean`: actual multi-item encoder sizes and planner correspondence.
+- `LeanS7/RetryPolicy.lean`: conservative operation-aware replay policy.
+- `LeanS7/WriteProgress.lean`: structured acknowledged/rejected/uncertain wire writes.
+- `LeanS7/ValueCodecAssurance.lean`: actual surrounded value-codec round-trip proofs.
+- `LeanS7/SequenceConformance.lean`: mixed multi-item and USER_DATA conversation vectors.
 - `LeanS7/Download.lean`: PLC-driven download phases and fragment-prefix proofs.
 - `LeanS7/Upload.lean`: upload phases, bounded accumulation, and completion proofs.
 - `LeanS7/UserDataAssembly.lean`: bounded SZL/USER_DATA fragment assembly and order proofs.

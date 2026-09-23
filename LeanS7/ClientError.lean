@@ -31,8 +31,8 @@ def classifyClientError : IO.Error → ClientErrorKind
   | .unexpectedEof => .disconnected
   | _ => .other
 
-/-- Only failures that plausibly occurred before a complete response are safe
-    candidates for the client's bounded reconnect-and-retry policy. -/
+/-- Transport failures eligible for retry consideration. This does not establish
+    replay safety: operation-aware policy must also permit resending the request. -/
 def isRetryableClientError (error : IO.Error) : Bool :=
   match classifyClientError error with
   | .timeout | .disconnected | .transport => true
