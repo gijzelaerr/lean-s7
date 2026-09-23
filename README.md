@@ -52,6 +52,8 @@ Implemented:
 - machine-checked COTP connection-confirmation reference and class validation
 - bounded, order-independent COTP TLV parameter decoding with last-duplicate lookup
 - machine-checked COTP TPDU-size bounds and confirmation negotiation validation
+- live-stack rejection tests for invalid COTP references, transport class, TPDU
+  size, and incompatible S7 PDU negotiation
 - COTP data TPDU encoding and decoding
 - ordered COTP data-TPDU reassembly with machine-checked append/EOT invariants
 - S7 job framing and setup-communication request encoding
@@ -70,6 +72,8 @@ Implemented:
 - multi-variable reads and writes with item-count and PDU-aware batching
 - IPv4, IPv6, and hostname endpoints with configurable deadlines and TSAP routing
 - serialized requests, stale-response filtering, bounded reconnect, and COTP disconnect
+- reconnect rejection when a smaller negotiated PDU would invalidate an
+  already-planned request or transfer chunk
 - strict COTP disconnect decoding with fixed connection/disconnect request sizes
 - a machine-checked lifecycle transition system used by connect, reconnect, transport close, and disconnect
 - machine-checked response-reference, PLC-status, and function validation invariants
@@ -87,6 +91,9 @@ Implemented:
 - block counts, block lists, and typed block metadata
 - fragmented MC7 and full load-memory block uploads
 - PLC-driven fragmented block downloads, insertion, and deletion
+- exact machine-checked PLC-driven download-fragment size
+- live-stack rejection of malformed SZL and upload fragments, including
+  continuation limits and end-upload cleanup
 - memory compression and RAM-to-ROM copy commands
 - force-table reads and input/output process-image bit overrides
 - a validated raw S7 PDU exchange escape hatch
@@ -150,12 +157,20 @@ python integration/cotp_conformance.py
 python integration/s7_conformance.py
 ```
 
-The S7 corpus covers valid and malformed single-read/write responses, two-byte
-element chunking, and multi-write payload preservation. Its generator checks
-fixed expectations against the Lean codecs and chunk planner before exporting.
-The Python runner exercises public client methods with an in-memory peer and
-exits nonzero for divergences. See [the corpus contract](conformance/v1/README.md)
-for field meanings and the limits of cross-implementation comparisons.
+The S7 corpus covers valid and malformed single-read/write responses, USER_DATA
+metadata and payloads, block-upload fragments, two-byte element chunking, and
+multi-write payload preservation. It also contains complete clock-read,
+block-list, CPU-control, and upload lifecycle request packets. The request
+vectors additionally cover fixed clock setting, password entry and
+clear, block metadata lookup, and PLC-driven download exchange packets. Typed
+block-count response cases reject truncation, trailing data, and unknown types.
+Block-list records must be four-byte aligned, and block metadata must be exactly
+78 bytes; metadata now rejects trailing bytes as well as truncation.
+The generator checks fixed expectations against the Lean codecs and chunk
+planner before exporting. The Python runner exercises client and protocol
+methods with an in-memory peer and exits nonzero
+for divergences. See [the corpus contract](conformance/v1/README.md) for field
+meanings and the limits of cross-implementation comparisons.
 
 `S7.decodeAreaRead_size` proves that a successful single-area response decode
 returns exactly the requested byte count. The internal read loop retains this
@@ -234,7 +249,12 @@ Requests on a client are serialized without occupying worker threads while they
 wait. `Client.isConnected` reports lifecycle state, and `Client.disconnect`
 sends a COTP disconnect request before shutting down the socket. TSAPs, COTP
 references/class/TPDU size, deadlines, stale-response allowance, and bounded
-reconnect attempts are configurable through `ClientConfig`.
+reconnect attempts are configurable through `ClientConfig`. The initial
+post-handshake PDU reference is configurable for deterministic correlation and
+wraparound testing; normal clients retain the default reference 2.
+Reconnect retries are limited to timeout, disconnect, and transport failures.
+Protocol violations, PLC-declared rejection, lifecycle misuse, and invalid
+caller input are never automatically resent.
 
 Management methods include `readSzl`, `readSzlList`, `getOrderCode`,
 `getCpuInfo`, `getCpInfo`, `getProtection`, `getCpuState`, `getPlcDateTime`,
@@ -259,7 +279,9 @@ may overwrite their values.
 
 The deterministic suite covers golden wire vectors, malformed responses, the
 python-snap7 emulator, fragmented uploads, and a dedicated PLC-driven download
-peer. No real Siemens controller has been validated yet. In particular, block
+peer. It also interrupts a PLC-driven download between fragments and verifies
+that the client reports a disconnected transport and closes its lifecycle.
+No real Siemens controller has been validated yet. In particular, block
 download/delete, CPU start/stop, clock setting, password sessions, compression,
 RAM-to-ROM copy, and process-image overrides must be validated on each target
 CPU family and firmware before operational use.
@@ -269,6 +291,14 @@ CPU family and firmware before operational use.
 Pure codecs are kept separate from networking. Parsers return structured errors
 instead of indexing packet buffers unsafely. Protocol properties will be added
 next to the executable definitions they describe.
+
+The stateful client preserves its existing `IO` API while raising structured
+`IO.Error` constructors at its boundaries: invalid caller input, protocol
+violations, PLC-reported rejections, receive/connect timeouts, disconnected
+transports, and illegal lifecycle transitions are distinct. `classifyClientError` maps those and native
+socket failures to the stable `ClientErrorKind` enum, so applications do not
+need to parse rendered error messages. The original diagnostic text and OS code
+remain available on the caught `IO.Error`.
 
 The existing [python-snap7](https://github.com/gijzelaerr/python-snap7) test
 suite and packet behavior currently serve as compatibility evidence, but not as

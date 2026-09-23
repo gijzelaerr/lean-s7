@@ -11,6 +11,33 @@ def isOkEq [BEq α] (result : Except ε α) (expected : α) : Bool :=
   | .ok value => value == expected
   | .error _ => false
 
+def testClientErrorCategories : IO Unit := do
+  check (classifyClientError (ClientError.protocol "bad packet") == .protocol)
+    "protocol error classification failed"
+  check (classifyClientError (ClientError.plcRejected "denied") == .plcRejected)
+    "PLC rejection classification failed"
+  check (classifyClientError (ClientError.timeout "deadline") == .timeout)
+    "timeout error classification failed"
+  check (classifyClientError (ClientError.disconnected "closed") == .disconnected)
+    "disconnected error classification failed"
+  check (classifyClientError (ClientError.lifecycle "wrong state") == .lifecycle)
+    "lifecycle error classification failed"
+  check (isRetryableClientError (ClientError.timeout "deadline") &&
+      isRetryableClientError (ClientError.disconnected "closed") &&
+      !isRetryableClientError (ClientError.protocol "malformed") &&
+      !isRetryableClientError (ClientError.plcRejected "denied") &&
+      !isRetryableClientError (ClientError.invalidInput "bad argument"))
+    "client retryability classification failed"
+  let rejected ← try
+    discard <| Client.connect {
+      endpoint := .hostname "unused.invalid"
+      rack := 8
+    }
+    pure false
+  catch error =>
+    pure (classifyClientError error == .invalidInput)
+  check rejected "invalid client configuration did not raise a structured invalid-input error"
+
 def testBinary : IO Unit := do
   let cursor : Cursor := { data := bytes #[0x12, 0x34, 0x56] }
   match cursor.readUInt16BE with
@@ -111,6 +138,7 @@ def tpktDecodeErrorName : DecodeError → String
         "length-below-minimum"
       else
         "length-mismatch"
+  | .remoteFailure _ _ => "other-decode-error"
   | .invalidField _ _ | .trailingBytes _ _ => "other-decode-error"
 
 def testTPKTConformanceCorpus : IO Unit := do
@@ -237,7 +265,7 @@ def cotpDecodeErrorName : DecodeError → String
   | .invalidField 0 _ => "invalid-header-length"
   | .invalidField 1 _ => "invalid-tpdu-code"
   | .invalidField 2 _ => "nonzero-tpdu-number"
-  | .invalidField _ _ | .trailingBytes _ _ => "other-decode-error"
+  | .invalidField _ _ | .remoteFailure _ _ | .trailingBytes _ _ => "other-decode-error"
 
 def testCOTPConformanceCorpus : IO Unit := do
   for test in Conformance.COTP.encodeCases do
@@ -326,7 +354,8 @@ def testS7ResponseDecoding : IO Unit := do
         | .error _ => true | .ok _ => false) "mismatched S7 response reference was accepted"
       check (match S7.validateResponse { response with errorClass := 0x81 }
           1 S7.setupCommunicationFunction with
-        | .error _ => true | .ok _ => false) "S7 PLC error status was accepted"
+        | .error (.remoteFailure 10 _) => true | _ => false)
+        "S7 PLC error status was not classified as a remote failure"
       check (match S7.validateResponse response 1 S7.readFunction with
         | .error _ => true | .ok _ => false) "wrong S7 response function was accepted"
       match S7.decodeSetupCommunication 1 response with
@@ -707,6 +736,7 @@ def testS7AdvancedVectors : IO Unit := do
     "force-table entries were decoded incorrectly"
 
 def main : IO Unit := do
+  testClientErrorCategories
   testBinary
   testChunking
   testLifecycle

@@ -6,6 +6,7 @@ import argparse
 import json
 import struct
 from ctypes import POINTER, c_uint8, cast
+from datetime import datetime, timezone
 from pathlib import Path
 
 from snap7.client import Client
@@ -79,6 +80,166 @@ def response_case(test):
         client.disconnect()
 
 
+def userdata_case(test):
+    client = Client()
+    expected = test["expected"]
+    try:
+        try:
+            response = client.protocol.parse_response(bytes(test["pdu"]))
+        except S7Error:
+            return None if expected["status"] == "reject" else "valid response rejected"
+        if expected["status"] == "reject":
+            return "malformed USER_DATA response accepted"
+        parameters = response.get("parameters") or {}
+        data = response.get("data") or {}
+        if parameters.get("group") != test["expected_group"]:
+            return "USER_DATA function group differs"
+        if parameters.get("subfunction") != test["expected_subfunction"]:
+            return "USER_DATA subfunction differs"
+        if parameters.get("sequence_number") != expected["sequence"]:
+            return "USER_DATA sequence differs"
+        if bool(parameters.get("last_data_unit")) != expected["has_more_data"]:
+            return "USER_DATA continuation flag differs"
+        if bytes(data.get("data", b"")) != bytes(expected["payload"]):
+            return "USER_DATA payload differs"
+    finally:
+        client.disconnect()
+
+
+def upload_case(test):
+    client = Client()
+    expected = test["expected"]
+    try:
+        try:
+            response = client.protocol.parse_response(bytes(test["pdu"]))
+            payload = client.protocol.parse_upload_response(response)
+        except S7Error:
+            return None if expected["status"] == "reject" else "valid response rejected"
+        if expected["status"] == "reject":
+            return "malformed upload response accepted"
+        if bytes(payload) != bytes(expected["payload"]):
+            return "upload payload differs"
+    finally:
+        client.disconnect()
+
+
+def request_case(test):
+    protocol = Client().protocol
+    operation = test["operation"]
+    if operation == "read_clock":
+        packet = protocol.build_get_clock_request()
+    elif operation == "list_blocks":
+        packet = protocol.build_list_blocks_request()
+    elif operation == "list_data_blocks":
+        packet = protocol.build_list_blocks_of_type_request(0x41)
+    elif operation == "plc_stop":
+        packet = protocol.build_plc_control_request("stop")
+    elif operation == "plc_hot_start":
+        packet = protocol.build_plc_control_request("hot_start")
+    elif operation == "plc_cold_start":
+        packet = protocol.build_plc_control_request("cold_start")
+    elif operation == "start_db_upload":
+        packet = protocol.build_start_upload_request(0x41, 1)
+    elif operation == "upload_fragment":
+        packet = protocol.build_upload_request(7)
+    elif operation == "end_upload":
+        packet = protocol.build_end_upload_request(7)
+    elif operation == "set_clock":
+        packet = protocol.build_set_clock_request(
+            datetime(2026, 9, 23, 12, 34, 56, 789000, tzinfo=timezone.utc)
+        )
+    elif operation in {
+        "set_password",
+        "clear_password",
+        "download_fragment_response",
+        "final_download_fragment_response",
+        "download_ended_response",
+    }:
+        return "operation is not implemented by python-snap7 protocol"
+    elif operation == "get_db_info":
+        packet = protocol.build_get_block_info_request(0x41, 1)
+    elif operation == "request_db_download":
+        packet = protocol.build_download_request(0x41, 1, bytes(64))
+    else:
+        raise ValueError(f"unsupported request operation: {operation}")
+    if bytes(packet) != bytes(test["expected_packet"]):
+        return f"request packet differs: {bytes(packet).hex()}"
+
+
+def block_count_case(test):
+    protocol = Client().protocol
+    expected = test["expected"]
+    try:
+        actual = protocol.parse_list_blocks_response(
+            {"data": {"data": bytes(test["payload"])}}
+        )
+    except S7Error:
+        return None if expected["status"] == "reject" else "valid block counts rejected"
+    if expected["status"] == "reject":
+        return "malformed block counts accepted"
+    counts = expected["counts"]
+    expected_python = {
+        "OBCount": counts["organization_blocks"],
+        "FBCount": counts["function_blocks"],
+        "FCCount": counts["functions"],
+        "DBCount": counts["data_blocks"],
+        "SDBCount": counts["system_data_blocks"],
+        "SFCCount": counts["system_functions"],
+        "SFBCount": counts["system_function_blocks"],
+    }
+    if actual != expected_python:
+        return f"decoded block counts differ: {actual}"
+
+
+def block_list_case(test):
+    protocol = Client().protocol
+    expected = test["expected"]
+    try:
+        actual = protocol.parse_list_blocks_of_type_response(
+            {"data": {"data": bytes(test["payload"])}}
+        )
+    except S7Error:
+        return None if expected["status"] == "reject" else "valid block list rejected"
+    if expected["status"] == "reject":
+        return "malformed block list accepted"
+    expected_numbers = [entry["number"] for entry in expected["entries"]]
+    if actual != expected_numbers:
+        return f"decoded block list differs: {actual}"
+
+
+def block_info_case(test):
+    protocol = Client().protocol
+    expected = test["expected"]
+    try:
+        actual = protocol.parse_get_block_info_response(
+            {"data": {"data": bytes(test["payload"])}}
+        )
+    except S7Error:
+        return None if expected["status"] == "reject" else "valid block info rejected"
+    if expected["status"] == "reject":
+        return "malformed block info accepted"
+    info = expected["info"]
+    comparable = {
+        "block_type": actual["block_type"],
+        "number": actual["block_number"],
+        "language": actual["block_lang"],
+        "flags": actual["block_flags"],
+        "mc7_size": actual["mc7_size"],
+        "load_size": actual["load_size"],
+        "local_data_size": actual["local_data"],
+        "sbb_size": actual["sbb_length"],
+        "checksum": actual["checksum"],
+        "version": actual["version"],
+        "code_date": list(actual["code_date"]),
+        "interface_date": list(actual["intf_date"]),
+        "author": bytes(actual["author"]).rstrip(b" \x00").decode("ascii"),
+        "family": bytes(actual["family"]).rstrip(b" \x00").decode("ascii"),
+        "name": bytes(actual["header"]).rstrip(b" \x00").decode("ascii"),
+    }
+    if comparable != info:
+        return f"decoded block info differs: {comparable}"
+
+
 def chunk_case(test):
     width = test["element_bytes"]
     if width != 2:
@@ -140,15 +301,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("corpus", nargs="?", type=Path, default=DEFAULT_CORPUS)
     corpus = json.loads(parser.parse_args().corpus.read_text())
-    if (
-        corpus["schema_version"] != 1
-        or corpus["protocol"] != "classic S7 read/write semantics"
-    ):
+    if corpus["schema_version"] != 1 or corpus["protocol"] != "classic S7 semantics":
         raise ValueError("unsupported corpus")
     failures = []
     total = 0
     for group, run in (
         ("response_cases", response_case),
+        ("userdata_cases", userdata_case),
+        ("upload_cases", upload_case),
+        ("request_cases", request_case),
+        ("block_count_cases", block_count_case),
+        ("block_list_cases", block_list_case),
+        ("block_info_cases", block_info_case),
         ("chunk_cases", chunk_case),
         ("write_cases", write_case),
     ):

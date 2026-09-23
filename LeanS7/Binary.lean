@@ -4,6 +4,8 @@ namespace LeanS7
 inductive DecodeError where
   | unexpectedEnd (offset needed available : Nat)
   | invalidField (offset : Nat) (message : String)
+  /-- A syntactically valid response in which the remote PLC reports failure. -/
+  | remoteFailure (offset : Nat) (message : String)
   | trailingBytes (offset count : Nat)
   deriving Repr, BEq
 

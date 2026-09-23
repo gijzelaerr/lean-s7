@@ -1,4 +1,5 @@
 import LeanS7.Transport
+import LeanS7.ClientError
 import LeanS7.Advanced
 import LeanS7.Value
 import LeanS7.Chunking
@@ -23,6 +24,9 @@ structure ClientConfig where
   operationTimeoutMs : Option Nat := some 5000
   reconnectRetries : Nat := 0
   maxStaleResponses : Nat := 4
+  /-- First post-handshake PDU reference. Primarily useful for deterministic
+      wraparound and peer-correlation testing. -/
+  initialRequestReference : UInt16 := 2
 
 structure Client where
   private connection : IO.Ref (Option Transport.Connection)
@@ -36,13 +40,24 @@ structure Client where
 private def orThrow [Repr ε] (result : Except ε α) : IO α :=
   match result with
   | .ok value => pure value
-  | .error error => throw <| IO.userError (reprStr error)
+  | .error error => throw <| ClientError.protocol (reprStr error)
+
+private def inputOrThrow [Repr ε] (result : Except ε α) : IO α :=
+  match result with
+  | .ok value => pure value
+  | .error error => throw <| ClientError.invalidInput (reprStr error)
+
+private def decodeOrThrow (result : Except DecodeError α) : IO α :=
+  match result with
+  | .ok value => pure value
+  | .error (.remoteFailure _ message) => throw <| ClientError.plcRejected message
+  | .error error => throw <| ClientError.protocol (reprStr error)
 
 private def remoteTsap (rack slot : Nat) : IO UInt16 := do
   if rack > 7 then
-    throw <| IO.userError s!"rack must be between 0 and 7, got {rack}"
+    throw <| ClientError.invalidInput s!"rack must be between 0 and 7, got {rack}"
   if slot > 31 then
-    throw <| IO.userError s!"slot must be between 0 and 31, got {slot}"
+    throw <| ClientError.invalidInput s!"slot must be between 0 and 31, got {slot}"
   return UInt16.ofNat (0x0100 + rack * 32 + slot)
 
 private def connectSession (config : ClientConfig) : IO (Transport.Connection × S7.SetupCommunication) := do
@@ -59,11 +74,11 @@ private def connectSession (config : ClientConfig) : IO (Transport.Connection ×
   } config.connectTimeoutMs
   try
     let reference : UInt16 := 1
-    let request ← orThrow <| S7.encodeSetupCommunication reference
+    let request ← inputOrThrow <| S7.encodeSetupCommunication reference
     Transport.sendData connection.socket request config.operationTimeoutMs
     let response ← orThrow <| S7.decodeResponse
       (← Transport.receiveData connection.socket config.operationTimeoutMs)
-    let setup ← orThrow <| S7.decodeSetupCommunication reference response
+    let setup ← decodeOrThrow <| S7.decodeSetupCommunication reference response
     orThrow <| COTP.validateDataPayloadBudget connection.tpduSizeExponent
       setup.pduLength.toNat
     return (connection, setup)
@@ -77,7 +92,7 @@ def Client.connect (config : ClientConfig) : IO Client := do
   let requestTail ← IO.mkRef (Task.pure (some ()))
   let state ← IO.mkRef Lifecycle.State.connected
   let currentPduLength ← IO.mkRef setup.pduLength
-  let nextReference ← IO.mkRef 2
+  let nextReference ← IO.mkRef config.initialRequestReference
   return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
@@ -95,7 +110,7 @@ private def Client.applyLifecycleEvent (client : Client) (event : Lifecycle.Even
     | some next => (true, next)
     | none => (false, current)
   unless accepted do
-    throw <| IO.userError s!"illegal S7 client lifecycle event {repr event}"
+    throw <| ClientError.lifecycle s!"illegal S7 client lifecycle event {repr event}"
 
 private def Client.closeCurrent (client : Client) : IO Unit := do
   let previous ← client.connection.modifyGet fun connection => (connection, none)
@@ -106,7 +121,7 @@ private def Client.closeCurrent (client : Client) : IO Unit := do
 private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
     (request : ByteArray) : IO ByteArray := do
   let some connection ← client.connection.get
-    | throw <| IO.userError "S7 client is disconnected"
+    | throw <| ClientError.disconnected "S7 client is disconnected"
   Transport.sendData connection.socket request client.config.operationTimeoutMs
   let pduLength ← client.currentPduLength.get
   let deadline ← Transport.receiveDeadline client.config.operationTimeoutMs
@@ -115,7 +130,7 @@ private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
       pduLength.toNat
     if (← orThrow <| S7.decodePduReference response) == reference then
       return response
-  throw <| IO.userError s!"too many stale S7 responses while waiting for reference {reference}"
+  throw <| ClientError.protocol s!"too many stale S7 responses while waiting for reference {reference}"
 
 private def Client.exchangeCurrent (client : Client) (reference : UInt16)
     (request : ByteArray) : IO S7.Response := do
@@ -123,7 +138,12 @@ private def Client.exchangeCurrent (client : Client) (reference : UInt16)
 
 private def Client.reconnect (client : Client) : IO Unit := do
   client.closeCurrent
+  let previousPduLength ← client.currentPduLength.get
   let (connection, setup) ← connectSession client.config
+  if setup.pduLength < previousPduLength then
+    try Transport.disconnect connection client.config.operationTimeoutMs catch _ => pure ()
+    throw <| ClientError.protocol
+      s!"reconnected PDU length shrank from {previousPduLength} to {setup.pduLength}"
   client.connection.set (some connection)
   client.applyLifecycleEvent .reconnected
   client.currentPduLength.set setup.pduLength
@@ -136,7 +156,8 @@ private partial def Client.exchangeWithRetries (client : Client) (reference : UI
     client.exchangeCurrent reference request
   catch error =>
     client.closeCurrent
-    if remainingRetries == 0 || (← client.state.get) == .closed then
+    if remainingRetries == 0 || (← client.state.get) == .closed ||
+        !isRetryableClientError error then
       throw error
     client.exchangeWithRetries reference request (remainingRetries - 1) true
 
@@ -148,7 +169,8 @@ private partial def Client.exchangeBytesWithRetries (client : Client) (reference
     client.exchangeBytesCurrent reference request
   catch error =>
     client.closeCurrent
-    if remainingRetries == 0 || (← client.state.get) == .closed then
+    if remainingRetries == 0 || (← client.state.get) == .closed ||
+        !isRetryableClientError error then
       throw error
     client.exchangeBytesWithRetries reference request (remainingRetries - 1) true
 
@@ -172,38 +194,42 @@ private def Client.exchange (client : Client) (reference : UInt16)
 def Client.rawExchange (client : Client) (reference : UInt16) (request : ByteArray) : IO ByteArray := do
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
-    throw <| IO.userError s!"raw request exceeds negotiated PDU length {pduLength}"
+    throw <| ClientError.invalidInput s!"raw request exceeds negotiated PDU length {pduLength}"
+  let embeddedReference ← inputOrThrow <| S7.decodePduReference request
+  if embeddedReference != reference then
+    throw <| ClientError.invalidInput
+      s!"raw request embeds PDU reference {embeddedReference}, caller supplied {reference}"
   client.serialized <| client.exchangeBytesWithRetries reference request client.config.reconnectRetries
 
 private def Client.exchangeUserData (client : Client) (reference : UInt16) (group subfunction : UInt8)
     (request : ByteArray) : IO S7.UserDataResponse :=
   client.serialized do
     let response ← client.exchangeBytesWithRetries reference request client.config.reconnectRetries
-    orThrow <| S7.decodeUserDataResponse reference group subfunction response
+    decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction response
 
 private partial def Client.readSzlFragments (client : Client) (id index : UInt16)
     (fragmentNumber : Nat) (sequence : UInt8) (payload : ByteArray) : IO ByteArray := do
   if fragmentNumber >= 256 then
-    throw <| IO.userError "SZL response exceeded the 256-fragment safety limit"
+    throw <| ClientError.protocol "SZL response exceeded the 256-fragment safety limit"
   let reference ← client.freshReference
   let request ← if fragmentNumber == 0 then
-    orThrow <| S7.encodeReadSzl reference id index
+    inputOrThrow <| S7.encodeReadSzl reference id index
   else
-    orThrow <| S7.encodeReadSzlContinuation reference sequence
+    inputOrThrow <| S7.encodeReadSzlContinuation reference sequence
   let raw ← client.exchangeBytesWithRetries reference request
     (if fragmentNumber == 0 then client.config.reconnectRetries else 0)
-  let response ← orThrow <| S7.decodeUserDataResponse reference S7.szlGroup
+  let response ← decodeOrThrow <| S7.decodeUserDataResponse reference S7.szlGroup
     S7.readSzlSubfunction raw
   let nextPayload ← if fragmentNumber == 0 then
     let (actualId, actualIndex, firstPayload) ← orThrow <| S7.decodeSzlFirst response
     if actualId != id || actualIndex != index then
-      throw <| IO.userError s!"PLC returned SZL {actualId}/{actualIndex}, expected {id}/{index}"
+      throw <| ClientError.protocol s!"PLC returned SZL {actualId}/{actualIndex}, expected {id}/{index}"
     pure firstPayload
   else
     pure response.payload
   let accumulated := payload ++ nextPayload
   if accumulated.size > 16 * 1024 * 1024 then
-    throw <| IO.userError "SZL response exceeded the 16 MiB safety limit"
+    throw <| ClientError.protocol "SZL response exceeded the 16 MiB safety limit"
   if response.hasMoreData then
     client.readSzlFragments id index (fragmentNumber + 1) response.sequence accumulated
   else
@@ -216,7 +242,7 @@ def Client.readSzl (client : Client) (id : UInt16) (index : UInt16 := 0) : IO S7
 def Client.readSzlList (client : Client) : IO (Array UInt16) := do
   let szl ← client.readSzl 0 0
   if szl.recordLength != 2 then
-    throw <| IO.userError s!"SZL directory record length must be 2, got {szl.recordLength}"
+    throw <| ClientError.protocol s!"SZL directory record length must be 2, got {szl.recordLength}"
   let mut cursor : Cursor := { data := szl.data }
   let mut result := #[]
   for _ in [0:szl.recordCount.toNat] do
@@ -243,22 +269,22 @@ def Client.getCpuState (client : Client) : IO S7.CpuState := do
 
 def Client.getPlcDateTime (client : Client) : IO S7.PlcDateTime := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeReadClock reference
+  let request ← inputOrThrow <| S7.encodeReadClock reference
   let response ← client.exchangeUserData reference S7.clockGroup S7.readClockSubfunction request
   orThrow <| S7.decodePlcDateTime response.payload
 
 def Client.setPlcDateTime (client : Client) (value : S7.PlcDateTime) : IO Unit := do
   let reference ← client.freshReference
-  let payload ← orThrow <| S7.encodePlcDateTime value
-  let request ← orThrow <| S7.encodeSetClock reference payload
+  let payload ← inputOrThrow <| S7.encodePlcDateTime value
+  let request ← inputOrThrow <| S7.encodeSetClock reference payload
   discard <| client.exchangeUserData reference S7.clockGroup S7.setClockSubfunction request
 
 private def Client.plcControl (client : Client) (function : UInt8)
     (encode : UInt16 → Except S7.EncodeError ByteArray) : IO Unit := do
   let reference ← client.freshReference
-  let request ← orThrow <| encode reference
+  let request ← inputOrThrow <| encode reference
   let response ← client.exchange reference request
-  orThrow <| S7.decodePlcControl reference function response
+  decodeOrThrow <| S7.decodePlcControl reference function response
 
 def Client.plcHotStart (client : Client) : IO Unit :=
   client.plcControl S7.startFunction S7.encodePlcHotStart
@@ -271,29 +297,29 @@ def Client.plcStop (client : Client) : IO Unit :=
 
 def Client.setSessionPassword (client : Client) (password : String) : IO Unit := do
   let reference ← client.freshReference
-  let encoded ← orThrow <| S7.encodePassword password
-  let request ← orThrow <| S7.encodeSetPassword reference encoded
+  let encoded ← inputOrThrow <| S7.encodePassword password
+  let request ← inputOrThrow <| S7.encodeSetPassword reference encoded
   discard <| client.exchangeUserData reference S7.securityGroup S7.enterPasswordSubfunction request
 
 def Client.clearSessionPassword (client : Client) : IO Unit := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeClearPassword reference
+  let request ← inputOrThrow <| S7.encodeClearPassword reference
   discard <| client.exchangeUserData reference S7.securityGroup S7.clearPasswordSubfunction request
 
 private partial def Client.userDataFragments (client : Client) (group subfunction : UInt8)
     (firstRequest : UInt16 → Except S7.EncodeError ByteArray) (fragmentNumber : Nat)
     (sequence : UInt8) (payload : ByteArray) : IO ByteArray := do
   if fragmentNumber >= 256 then
-    throw <| IO.userError "USER_DATA response exceeded the 256-fragment safety limit"
+    throw <| ClientError.protocol "USER_DATA response exceeded the 256-fragment safety limit"
   let reference ← client.freshReference
-  let request ← if fragmentNumber == 0 then orThrow <| firstRequest reference
-    else orThrow <| S7.encodeUserDataContinuation reference group subfunction sequence
+  let request ← if fragmentNumber == 0 then inputOrThrow <| firstRequest reference
+    else inputOrThrow <| S7.encodeUserDataContinuation reference group subfunction sequence
   let raw ← client.exchangeBytesWithRetries reference request
     (if fragmentNumber == 0 then client.config.reconnectRetries else 0)
-  let response ← orThrow <| S7.decodeUserDataResponse reference group subfunction raw
+  let response ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction raw
   let accumulated := payload ++ response.payload
   if accumulated.size > 16 * 1024 * 1024 then
-    throw <| IO.userError "USER_DATA response exceeded the 16 MiB safety limit"
+    throw <| ClientError.protocol "USER_DATA response exceeded the 16 MiB safety limit"
   if response.hasMoreData then
     client.userDataFragments group subfunction firstRequest (fragmentNumber + 1)
       response.sequence accumulated
@@ -301,7 +327,7 @@ private partial def Client.userDataFragments (client : Client) (group subfunctio
 
 def Client.listBlocks (client : Client) : IO S7.BlockCounts := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeListBlocks reference
+  let request ← inputOrThrow <| S7.encodeListBlocks reference
   let response ← client.exchangeUserData reference S7.blocksInfoGroup
     S7.listBlocksSubfunction request
   orThrow <| S7.decodeBlockCounts response.payload
@@ -316,21 +342,21 @@ def Client.listBlocksOfType (client : Client) (blockType : S7.BlockType) :
 def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : Nat) :
     IO S7.BlockInfo := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeGetBlockInfo reference blockType number
+  let request ← inputOrThrow <| S7.encodeGetBlockInfo reference blockType number
   let response ← client.exchangeUserData reference S7.blocksInfoGroup S7.blockInfoSubfunction request
   orThrow <| S7.decodeBlockInfo response.payload
 
 private partial def Client.uploadFragments (client : Client) (uploadId : UInt8)
     (fragmentNumber : Nat) (payload : ByteArray) : IO ByteArray := do
   if fragmentNumber >= 65536 then
-    throw <| IO.userError "block upload exceeded the 65536-fragment safety limit"
+    throw <| ClientError.protocol "block upload exceeded the 65536-fragment safety limit"
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeUpload reference uploadId
+  let request ← inputOrThrow <| S7.encodeUpload reference uploadId
   let response ← client.exchangeWithRetries reference request 0
-  let fragment ← orThrow <| S7.decodeUploadFragment reference response
+  let fragment ← decodeOrThrow <| S7.decodeUploadFragment reference response
   let accumulated := payload ++ fragment.data
   if accumulated.size > 64 * 1024 * 1024 then
-    throw <| IO.userError "block upload exceeded the 64 MiB safety limit"
+    throw <| ClientError.protocol "block upload exceeded the 64 MiB safety limit"
   if fragment.isLast then return accumulated
   client.uploadFragments uploadId (fragmentNumber + 1) accumulated
 
@@ -338,21 +364,21 @@ private def Client.uploadBlockData (client : Client) (blockType : S7.BlockType)
     (number : Nat) : IO ByteArray :=
   client.serialized do
     let startReference ← client.freshReference
-    let startRequest ← orThrow <| S7.encodeStartUpload startReference blockType number
+    let startRequest ← inputOrThrow <| S7.encodeStartUpload startReference blockType number
     let startResponse ← client.exchangeWithRetries startReference startRequest client.config.reconnectRetries
-    let upload ← orThrow <| S7.decodeStartUpload startReference startResponse
+    let upload ← decodeOrThrow <| S7.decodeStartUpload startReference startResponse
     let payload ← try client.uploadFragments upload.uploadId 0 ByteArray.empty
       catch error =>
         let endReference ← client.freshReference
         try
-          let endRequest ← orThrow <| S7.encodeEndUpload endReference upload.uploadId
+          let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
           discard <| client.exchangeWithRetries endReference endRequest 0
         catch _ => pure ()
         throw error
     let endReference ← client.freshReference
-    let endRequest ← orThrow <| S7.encodeEndUpload endReference upload.uploadId
+    let endRequest ← inputOrThrow <| S7.encodeEndUpload endReference upload.uploadId
     let endResponse ← client.exchangeWithRetries endReference endRequest 0
-    orThrow <| S7.decodeEndUpload endReference endResponse
+    decodeOrThrow <| S7.decodeEndUpload endReference endResponse
     return payload
 
 def Client.fullUpload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray :=
@@ -361,10 +387,10 @@ def Client.fullUpload (client : Client) (blockType : S7.BlockType) (number : Nat
 def Client.upload (client : Client) (blockType : S7.BlockType) (number : Nat) : IO ByteArray := do
   let full ← client.uploadBlockData blockType number
   if full.size < 36 then
-    throw <| IO.userError "full block upload omitted its 36-byte compact header"
+    throw <| ClientError.protocol "full block upload omitted its 36-byte compact header"
   let (mc7Size, _) ← orThrow <| ({ data := full, offset := 34 } : Cursor).readUInt16BE
   if full.size < 36 + mc7Size.toNat then
-    throw <| IO.userError s!"block upload contains fewer than {mc7Size} MC7 bytes"
+    throw <| ClientError.protocol s!"block upload contains fewer than {mc7Size} MC7 bytes"
   return full.extract 36 (36 + mc7Size.toNat)
 
 private def Client.controlService (client : Client)
@@ -382,28 +408,28 @@ def Client.copyRamToRom (client : Client) : IO Unit :=
 
 private def Client.receiveServerJob (client : Client) : IO S7.JobPdu := do
   let some connection ← client.connection.get
-    | throw <| IO.userError "S7 client is disconnected"
+    | throw <| ClientError.disconnected "S7 client is disconnected"
   let pduLength ← client.currentPduLength.get
   orThrow <| S7.decodeJobPdu
     (← Transport.receiveData connection.socket client.config.operationTimeoutMs pduLength.toNat)
 
 private def Client.sendServerResponse (client : Client) (response : ByteArray) : IO Unit := do
   let some connection ← client.connection.get
-    | throw <| IO.userError "S7 client is disconnected"
+    | throw <| ClientError.disconnected "S7 client is disconnected"
   Transport.sendData connection.socket response client.config.operationTimeoutMs
 
 private partial def Client.serveDownloadFragments (client : Client) (blockData : ByteArray)
     (offset maxSlice fragmentNumber : Nat) : IO Unit := do
   if fragmentNumber >= 65536 then
-    throw <| IO.userError "block download exceeded the 65536-fragment safety limit"
+    throw <| ClientError.protocol "block download exceeded the 65536-fragment safety limit"
   let job ← client.receiveServerJob
   let (function, _) ← orThrow <| ({ data := job.parameters } : Cursor).readUInt8
   if function != S7.downloadFunction then
-    throw <| IO.userError s!"expected PLC download request, got function {function}"
+    throw <| ClientError.protocol s!"expected PLC download request, got function {function}"
   let remaining := blockData.size - offset
   let size := min remaining maxSlice
   let isLast := size == remaining
-  let response ← orThrow <| S7.encodeDownloadFragmentResponse job.reference isLast
+  let response ← inputOrThrow <| S7.encodeDownloadFragmentResponse job.reference isLast
     (blockData.extract offset (offset + size))
   client.sendServerResponse response
   unless isLast do
@@ -417,29 +443,30 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
   client.serialized do
     try
       if blockData.size < 36 then
-        throw <| IO.userError "download data must contain a 36-byte compact block header"
+        throw <| ClientError.invalidInput "download data must contain a 36-byte compact block header"
       let (mc7Size, _) ← orThrow <| ({ data := blockData, offset := 34 } : Cursor).readUInt16BE
       if 36 + mc7Size.toNat > blockData.size then
-        throw <| IO.userError "compact block header declares more MC7 data than supplied"
+        throw <| ClientError.invalidInput "compact block header declares more MC7 data than supplied"
       let startReference ← client.freshReference
-      let startRequest ← orThrow <| S7.encodeRequestDownload startReference blockType number
+      let startRequest ← inputOrThrow <| S7.encodeRequestDownload startReference blockType number
         blockData.size mc7Size.toNat
       let startResponse ← client.exchangeWithRetries startReference startRequest
         client.config.reconnectRetries
-      orThrow <| S7.validateResponse startResponse startReference S7.requestDownloadFunction
+      decodeOrThrow <| S7.validateResponse startResponse startReference S7.requestDownloadFunction
       let pduLength ← client.negotiatedPduLength
       if pduLength.toNat <= 18 then
-        throw <| IO.userError "negotiated PDU is too small for block download"
+        throw <| ClientError.protocol "negotiated PDU is too small for block download"
       client.serveDownloadFragments blockData 0 (pduLength.toNat - 18) 0
       let ended ← client.receiveServerJob
       let (endedFunction, _) ← orThrow <| ({ data := ended.parameters } : Cursor).readUInt8
       if endedFunction != S7.downloadEndedFunction then
-        throw <| IO.userError s!"expected PLC download-ended request, got function {endedFunction}"
-      client.sendServerResponse (← orThrow <| S7.encodeDownloadEndedResponse ended.reference)
+        throw <| ClientError.protocol
+          s!"expected PLC download-ended request, got function {endedFunction}"
+      client.sendServerResponse (← inputOrThrow <| S7.encodeDownloadEndedResponse ended.reference)
       let insertReference ← client.freshReference
-      let insertRequest ← orThrow <| S7.encodeInsertBlock insertReference blockType number
+      let insertRequest ← inputOrThrow <| S7.encodeInsertBlock insertReference blockType number
       let insertResponse ← client.exchangeWithRetries insertReference insertRequest 0
-      orThrow <| S7.decodePlcControl insertReference S7.startFunction insertResponse
+      decodeOrThrow <| S7.decodePlcControl insertReference S7.startFunction insertResponse
     catch error =>
       client.closeCurrent
       throw error
@@ -450,16 +477,17 @@ def Client.readForceTable (client : Client) : IO (Array S7.ForceEntry) := do
 private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) :
     IO { data : ByteArray // data.size = range.count * range.area.elementSize } := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeAreaRead reference range
+  let request ← inputOrThrow <| S7.encodeAreaRead reference range
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
-    throw <| IO.userError s!"request exceeds negotiated PDU length {pduLength}"
+    throw <| ClientError.invalidInput s!"request exceeds negotiated PDU length {pduLength}"
   let expectedSize := range.count * range.area.elementSize
   if expectedSize + 18 > pduLength.toNat then
-    throw <| IO.userError s!"response would exceed negotiated PDU length {pduLength}"
+    throw <| ClientError.invalidInput s!"response would exceed negotiated PDU length {pduLength}"
   let response ← client.exchange reference request
   match hdecode : S7.decodeAreaRead reference range.area expectedSize response with
-  | .error error => throw <| IO.userError (reprStr error)
+  | .error (.remoteFailure _ message) => throw <| ClientError.plcRejected message
+  | .error error => throw <| ClientError.protocol (reprStr error)
   | .ok payload =>
       return ⟨payload, S7.decodeAreaRead_size reference range.area expectedSize response
         payload hdecode⟩
@@ -467,12 +495,12 @@ private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) :
 private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
     (payload : ByteArray) : IO Unit := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeAreaWrite reference range payload
+  let request ← inputOrThrow <| S7.encodeAreaWrite reference range payload
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
-    throw <| IO.userError s!"request exceeds negotiated PDU length {pduLength}"
+    throw <| ClientError.invalidInput s!"request exceeds negotiated PDU length {pduLength}"
   let response ← client.exchange reference request
-  orThrow <| S7.decodeDbWrite reference response
+  decodeOrThrow <| S7.decodeDbWrite reference response
 
 private def Client.readAreaChunks (client : Client) (area : S7.Area)
     (dbNumber : UInt16) (start : Nat) (consumed : Nat) (chunks : List Nat)
@@ -497,7 +525,7 @@ private def Client.readAreaChecked (client : Client) (area : S7.Area) (dbNumber 
   let availableBytes := pduLength.toNat - 18
   let maxCount := min S7.maxSectionSize (availableBytes / area.elementSize)
   if hmaximum : maxCount = 0 then
-    throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a read item"
+    throw <| ClientError.protocol s!"negotiated PDU length {pduLength} cannot hold a read item"
   else
     let assembled ← client.readAreaChunks area dbNumber start 0
       (Chunking.counts count maxCount) (Chunking.ReadAssembly.empty area.elementSize)
@@ -528,7 +556,8 @@ def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
   if payload.isEmpty then
     return
   if haligned : payload.size % area.elementSize ≠ 0 then
-    throw <| IO.userError s!"payload size {payload.size} is not aligned to {area.elementSize}-byte elements"
+    throw <| ClientError.invalidInput
+      s!"payload size {payload.size} is not aligned to {area.elementSize}-byte elements"
   else
     have hsize : payload.size / area.elementSize * area.elementSize = payload.size := by
       have hmod : payload.size % area.elementSize = 0 := by omega
@@ -543,7 +572,7 @@ def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     let maxCount := min S7.maxSectionSize
       (min availableBytes lengthLimitedBytes / area.elementSize)
     if hmaximum : maxCount = 0 then
-      throw <| IO.userError s!"negotiated PDU length {pduLength} cannot hold a write item"
+      throw <| ClientError.protocol s!"negotiated PDU length {pduLength} cannot hold a write item"
     else
       client.writeAreaChunks area dbNumber start 0 payload
         (Chunking.counts (payload.size / area.elementSize) maxCount) (by
@@ -713,12 +742,13 @@ theorem takeReadBatch_fits (pduLength : Nat) (pending : List S7.MemoryRange)
 
 private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeAreaReadMany reference ranges
+  let request ← inputOrThrow <| S7.encodeAreaReadMany reference ranges
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
-    throw <| IO.userError s!"multi-read request exceeds negotiated PDU length {pduLength}"
+    throw <| ClientError.invalidInput
+      s!"multi-read request exceeds negotiated PDU length {pduLength}"
   let response ← client.exchange reference request
-  orThrow <| S7.decodeAreaReadMany reference ranges response
+  decodeOrThrow <| S7.decodeAreaReadMany reference ranges response
 
 private partial def Client.readMultiLoop (client : Client) (pending : List S7.MemoryRange)
     (results : Array S7.ReadItemResult) : IO (Array S7.ReadItemResult) := do
@@ -865,12 +895,13 @@ theorem takeWriteBatch_fits (pduLength : Nat) (pending : List S7.WriteItem)
 
 private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
-  let request ← orThrow <| S7.encodeAreaWriteMany reference items
+  let request ← inputOrThrow <| S7.encodeAreaWriteMany reference items
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
-    throw <| IO.userError s!"multi-write request exceeds negotiated PDU length {pduLength}"
+    throw <| ClientError.invalidInput
+      s!"multi-write request exceeds negotiated PDU length {pduLength}"
   let response ← client.exchange reference request
-  orThrow <| S7.decodeAreaWriteMany reference items.size response
+  decodeOrThrow <| S7.decodeAreaWriteMany reference items.size response
 
 private partial def Client.writeMultiLoop (client : Client) (pending : List S7.WriteItem)
     (results : Array S7.WriteItemResult) : IO (Array S7.WriteItemResult) := do
@@ -879,7 +910,8 @@ private partial def Client.writeMultiLoop (client : Client) (pending : List S7.W
   | item :: rest =>
       let expectedSize := item.range.count * item.range.area.elementSize
       if item.payload.size != expectedSize then
-        throw <| IO.userError s!"multi-write payload size {item.payload.size} does not match expected {expectedSize}"
+        throw <| ClientError.invalidInput
+          s!"multi-write payload size {item.payload.size} does not match expected {expectedSize}"
       let pduLength ← client.negotiatedPduLength
       let (batch, remaining) := takeWriteBatch pduLength.toNat pending 0 12 14 []
       if batch.isEmpty then
@@ -923,6 +955,8 @@ def Client.dbReadLReal (client : Client) (dbNumber : UInt16) (start : Nat) : IO 
   orThrow <| Value.getLReal (← client.dbRead dbNumber start 8)
 
 def Client.dbReadBit (client : Client) (dbNumber : UInt16) (byteOffset bitIndex : Nat) : IO Bool := do
+  if bitIndex > 7 then
+    throw <| ClientError.invalidInput s!"bit index must be between 0 and 7, got {bitIndex}"
   orThrow <| Value.getBit (← client.dbRead dbNumber byteOffset 1) 0 bitIndex
 
 def Client.dbWriteUInt8 (client : Client) (dbNumber : UInt16) (start : Nat) (value : UInt8) : IO Unit :=
@@ -957,40 +991,45 @@ def Client.dbWriteLReal (client : Client) (dbNumber : UInt16) (start : Nat) (val
 
 def Client.dbWriteBit (client : Client) (dbNumber : UInt16) (byteOffset bitIndex : Nat)
     (enabled : Bool) : IO Unit := do
+  if bitIndex > 7 then
+    throw <| ClientError.invalidInput s!"bit index must be between 0 and 7, got {bitIndex}"
   let current ← client.dbReadUInt8 dbNumber byteOffset
-  let updated ← orThrow <| Value.setBit current bitIndex enabled
+  let updated ← inputOrThrow <| Value.setBit current bitIndex enabled
   client.dbWriteUInt8 dbNumber byteOffset updated
 
 def Client.dbReadString (client : Client) (dbNumber : UInt16) (start : Nat) : IO String := do
   let header ← client.dbRead dbNumber start 2
   let maximum ← orThrow <| Value.getUInt8 header
   if maximum.toNat > Value.maxStringLength then
-    throw <| IO.userError s!"invalid S7 STRING maximum length {maximum}"
+    throw <| ClientError.protocol s!"invalid S7 STRING maximum length {maximum}"
   orThrow <| Value.decodeString (← client.dbRead dbNumber start (maximum.toNat + 2))
 
 def Client.dbWriteString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
     (value : String) : IO Unit := do
-  client.dbWrite dbNumber start (← orThrow <| Value.encodeString maximum value)
+  client.dbWrite dbNumber start (← inputOrThrow <| Value.encodeString maximum value)
 
 def Client.dbReadWString (client : Client) (dbNumber : UInt16) (start : Nat) : IO String := do
   let header ← client.dbRead dbNumber start 4
   let maximum ← orThrow <| Value.getUInt16 header
   if maximum.toNat > Value.maxWStringLength then
-    throw <| IO.userError s!"invalid S7 WSTRING maximum length {maximum}"
+    throw <| ClientError.protocol s!"invalid S7 WSTRING maximum length {maximum}"
   orThrow <| Value.decodeWString (← client.dbRead dbNumber start (maximum.toNat * 2 + 4))
 
 def Client.dbWriteWString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
     (value : String) : IO Unit := do
-  client.dbWrite dbNumber start (← orThrow <| Value.encodeWString maximum value)
+  client.dbWrite dbNumber start (← inputOrThrow <| Value.encodeWString maximum value)
 
 /-- Write an input/output process-image bit. This is not a persistent CPU force
     table operation; a PLC scan may overwrite it. -/
 def Client.forceBit (client : Client) (area : S7.Area) (byteOffset bit : Nat)
     (value : Bool) : IO Unit := do
   if area != .processInputs && area != .processOutputs then
-    throw <| IO.userError "process-image bit override only supports input and output areas"
+    throw <| ClientError.invalidInput
+      "process-image bit override only supports input and output areas"
+  if bit > 7 then
+    throw <| ClientError.invalidInput s!"bit index must be between 0 and 7, got {bit}"
   let current ← client.readArea area 0 byteOffset 1
-  let updated ← orThrow <| Value.setBit current[0]! bit value
+  let updated ← inputOrThrow <| Value.setBit current[0]! bit value
   client.writeArea area 0 byteOffset (bytes #[updated])
 
 def Client.cancelForceBit (client : Client) (area : S7.Area) (byteOffset bit : Nat) : IO Unit :=

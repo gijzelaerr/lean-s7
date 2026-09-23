@@ -19,6 +19,43 @@ zero bytes. An accepted read must return exactly `expected.payload`; an accepted
 write must report success (its expected payload is empty). A `reject` expectation
 requires a protocol rejection, not a crash or accidental indexing exception.
 
+## USER_DATA cases
+
+`userdata_cases` contains complete S7 USER_DATA response PDUs. Decode each PDU
+for the specified function group and subfunction. Accepted cases expose the
+exact payload, sequence number, and continuation flag. Rejected cases cover a
+wrong group or subfunction, USER_DATA and item error codes, truncated declared
+payloads, and trailing bytes. A rejection must occur while parsing or validating
+the response rather than through unchecked indexing.
+
+## Upload cases
+
+`upload_cases` contains complete S7 ACK_DATA PDUs for block-upload fragments.
+Accepted cases expose the exact fragment payload and end-of-upload flag.
+Rejected cases cover an invalid data marker, inconsistent declared length, and
+the wrong service function. These are fragment-codec cases; they do not claim
+that a controller contains or serves a particular block.
+
+## Request cases
+
+`request_cases` contains complete management, CPU-control, and block-transfer
+request PDUs generated with reference 1. Consumers should build the named
+operation from a fresh protocol session and compare the complete packet.
+
+## Block-count cases
+
+`block_count_cases` contains raw list-blocks response payloads. Accepted cases
+must expose the seven typed counts exactly; rejected cases cover truncation,
+trailing bytes, and an unknown block type.
+
+`block_list_cases` contains raw list-blocks-of-type response payloads. Accepted
+cases expose ordered block numbers, flags, and language codes; rejected cases
+cover partial four-byte records.
+
+`block_info_cases` contains raw 78-byte block-metadata response payloads with
+typed size, identity, date, and text fields. Both truncation and trailing bytes
+must be rejected.
+
 ## Chunk cases
 
 Read `count` two-byte WORD elements from DB 1 at byte zero with the given
@@ -42,8 +79,9 @@ Run `python integration/addressing_conformance.py` with `tshark` installed to
 dissect synthetic Ethernet/IPv4/TCP envelopes offline. The runner checks the raw
 address and Wireshark's number-versus-byte interpretation, records its version,
 and exits nonzero for mismatches. It does not use the python-snap7 emulator or
-contact controllers. The separate `s7_conformance.py` checks the eight response,
-chunk, and write cases; it does not run these five address cases.
+contact controllers. The separate `s7_conformance.py` checks response,
+USER_DATA, upload, request, chunk, and write cases; it does not run these five address
+cases.
 
 Native Snap7 source agrees with the direct counter/timer address encoding.
 Wireshark interprets these fields as counter/timer numbers. Neither establishes

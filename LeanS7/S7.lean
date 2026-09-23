@@ -494,7 +494,7 @@ def validateResponse (response : Response) (reference : UInt16) (function : UInt
   if response.reference != reference then
     throw (.invalidField 4 s!"expected PDU reference {reference}, got {response.reference}")
   if response.errorClass != 0 || response.errorCode != 0 then
-    throw (.invalidField 10 s!"PLC error {response.errorClass}:{response.errorCode}")
+    throw (.remoteFailure 10 s!"PLC error {response.errorClass}:{response.errorCode}")
   let (actualFunction, _) ← ({ data := response.parameters } : Cursor).readUInt8
   if actualFunction != function then
     throw (.invalidField responseHeaderSize "unexpected S7 response function")
@@ -893,7 +893,7 @@ def decodeAreaRead (reference : UInt16) (area : Area) (expectedSize : Nat)
   let cursor : Cursor := { data := response.data }
   let (returnCode, cursor) ← cursor.readUInt8
   if returnCode != 0xff then
-    throw (.invalidField (responseHeaderSize + 2) s!"read item failed with code {returnCode}")
+    throw (.remoteFailure (responseHeaderSize + 2) s!"read item failed with code {returnCode}")
   let (transportSize, cursor) ← cursor.readUInt8
   let compatibleByteEncoding := area.usesElementAddress && transportSize == byteTransportSize
   if transportSize != area.dataTransportSize && !compatibleByteEncoding then
@@ -1027,6 +1027,6 @@ def decodeDbWrite (reference : UInt16) (response : Response) : Except DecodeErro
   let (returnCode, dataCursor) ← ({ data := response.data } : Cursor).readUInt8
   dataCursor.finish
   if returnCode != 0xff then
-    throw (.invalidField (responseHeaderSize + 2) s!"write item failed with code {returnCode}")
+    throw (.remoteFailure (responseHeaderSize + 2) s!"write item failed with code {returnCode}")
 
 end LeanS7.S7

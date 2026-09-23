@@ -18,8 +18,6 @@ from snap7.type import SrvArea
 class MultiItemServer(Server):
     """Add multi-item handling missing from the python-snap7 3.0 emulator."""
 
-    stale_once = False
-
     def __init__(self) -> None:
         super().__init__()
         self._lean_szl_fragments: dict[tuple[str, int], list[bytes]] = {}
@@ -89,11 +87,6 @@ class MultiItemServer(Server):
             S7WordLen.COUNTER,
         ):
             response = super()._handle_read_area(request, client_address)
-            if self.stale_once:
-                self.stale_once = False
-                stale = bytearray(response)
-                stale[4:6] = struct.pack(">H", (request["sequence"] + 1) & 0xFFFF)
-                return bytes(stale)
             return response
         data = bytearray()
         specs = self._multi_specs(request)
@@ -448,6 +441,359 @@ def _s7_job(reference: int, parameters: bytes) -> bytes:
     )
 
 
+def serve_handshake_rejection(
+    listener: socket.socket, mode: str, errors: list[Exception]
+) -> None:
+    try:
+        connection, _ = listener.accept()
+        with connection:
+            connection.settimeout(2)
+            cr = _receive_tpkt(connection)
+            cc = bytearray([0x11, 0xD0, cr[4], cr[5], 0, 1, 0]) + bytearray(cr[7:])
+            if mode == "wrong-reference":
+                reference = (int.from_bytes(cr[4:6], "big") + 1) & 0xFFFF
+                cc[2:4] = reference.to_bytes(2, "big")
+            elif mode == "wrong-class":
+                cc[6] = 1
+            elif mode == "oversized-tpdu":
+                cc[-1] = 0x0B
+            elif mode == "pdu-too-small":
+                pass
+            elif mode == "pdu-exceeds-tpdu":
+                cc[-1] = 0x08
+            else:
+                raise ValueError(f"unknown handshake case: {mode}")
+            _send_tpkt(connection, bytes(cc))
+            if mode in ("pdu-too-small", "pdu-exceeds-tpdu"):
+                setup = _receive_s7(connection)
+                reference = int.from_bytes(setup[4:6], "big")
+                pdu_length = 239 if mode == "pdu-too-small" else 480
+                _send_s7(
+                    connection,
+                    _s7_response(
+                        reference,
+                        bytes([0xF0, 0, 0, 1, 0, 1]) + pdu_length.to_bytes(2, "big"),
+                    ),
+                )
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_handshake_rejections(root: Path) -> None:
+    for mode, expected in (
+        ("wrong-reference", "expected COTP destination reference"),
+        ("wrong-class", "expected COTP class option"),
+        ("oversized-tpdu", "exceeds requested"),
+        ("pdu-too-small", "negotiated PDU length is too small"),
+        ("pdu-exceeds-tpdu", "cannot contain 480 payload bytes"),
+    ):
+        errors: list[Exception] = []
+        with socket.socket() as listener:
+            listener.settimeout(3)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            thread = threading.Thread(
+                target=serve_handshake_rejection, args=(listener, mode, errors)
+            )
+            thread.start()
+            subprocess.run(
+                [
+                    str(root / ".lake/build/bin/lean-s7"),
+                    "expect-connect-rejection",
+                    "127.0.0.1",
+                    str(listener.getsockname()[1]),
+                    expected,
+                ],
+                cwd=root,
+                check=True,
+                timeout=5,
+            )
+            thread.join(timeout=3)
+        if thread.is_alive():
+            raise RuntimeError(f"handshake peer did not finish: {mode}")
+        if errors:
+            raise errors[0]
+
+
+def _userdata_response(
+    reference: int,
+    group: int,
+    subfunction: int,
+    payload: bytes,
+    *,
+    declared_length: int | None = None,
+    sequence: int = 0,
+    has_more_data: bool = False,
+    error_code: int = 0,
+) -> bytes:
+    parameters = bytes(
+        [
+            0,
+            1,
+            0x12,
+            8,
+            0x12,
+            0x80 | group,
+            subfunction,
+            sequence,
+            0,
+            int(has_more_data),
+            (error_code >> 8) & 0xFF,
+            error_code & 0xFF,
+        ]
+    )
+    length = len(payload) if declared_length is None else declared_length
+    data = bytes([0xFF, 9]) + length.to_bytes(2, "big") + payload
+    return (
+        struct.pack(">BBHHHH", 0x32, 7, 0, reference, len(parameters), len(data))
+        + parameters
+        + data
+    )
+
+
+def serve_service_rejection(
+    listener: socket.socket, mode: str, errors: list[Exception]
+) -> None:
+    try:
+        connection, _ = listener.accept()
+        with connection:
+            connection.settimeout(3)
+            cr = _receive_tpkt(connection)
+            _send_tpkt(connection, bytes([0x11, 0xD0, cr[4], cr[5], 0, 1, 0]) + cr[7:])
+            setup = _receive_s7(connection)
+            reference = int.from_bytes(setup[4:6], "big")
+            _send_s7(
+                connection,
+                _s7_response(reference, bytes([0xF0, 0, 0, 1, 0, 1, 1, 0xE0])),
+            )
+            request = _receive_s7(connection)
+            reference = int.from_bytes(request[4:6], "big")
+            if mode == "szl-wrong-group":
+                _send_s7(
+                    connection,
+                    _userdata_response(reference, 3, 1, bytes([4, 0x24, 0, 0])),
+                )
+                return
+            if mode == "szl-truncated-payload":
+                _send_s7(
+                    connection,
+                    _userdata_response(reference, 4, 1, b"\xaa\xbb", declared_length=4),
+                )
+                return
+            if mode == "szl-plc-error":
+                _send_s7(
+                    connection,
+                    _userdata_response(reference, 4, 1, b"", error_code=0x8104),
+                )
+                listener.settimeout(0.5)
+                try:
+                    retried, _ = listener.accept()
+                except TimeoutError:
+                    pass
+                else:
+                    retried.close()
+                    raise RuntimeError("client retried a PLC-rejected request")
+                return
+            if mode == "szl-endless-fragments":
+                for fragment in range(256):
+                    payload = b"\x04\x24\x00\x00" if fragment == 0 else b""
+                    _send_s7(
+                        connection,
+                        _userdata_response(
+                            reference,
+                            4,
+                            1,
+                            payload,
+                            sequence=fragment & 0xFF,
+                            has_more_data=True,
+                        ),
+                    )
+                    if fragment != 255:
+                        request = _receive_s7(connection)
+                        reference = int.from_bytes(request[4:6], "big")
+                return
+            if not mode.startswith("upload-"):
+                raise ValueError(f"unknown service rejection case: {mode}")
+            _send_s7(
+                connection,
+                _s7_response(reference, bytes([0x1D, 0, 0, 0, 0, 0, 0, 1])),
+            )
+            upload = _receive_s7(connection)
+            reference = int.from_bytes(upload[4:6], "big")
+            if mode == "upload-invalid-marker":
+                parameters = bytes([0x1E, 0])
+                data = b"\x00\x02\x00\xfa\xde\xad"
+            elif mode == "upload-length-mismatch":
+                parameters = bytes([0x1E, 0])
+                data = b"\x00\x03\x00\xfb\xde\xad"
+            elif mode == "upload-wrong-function":
+                parameters = bytes([0x1D, 0])
+                data = b"\x00\x02\x00\xfb\xde\xad"
+            else:
+                raise ValueError(f"unknown service rejection case: {mode}")
+            _send_s7(connection, _s7_response(reference, parameters, data))
+            cleanup = _receive_s7(connection)
+            if cleanup[10] != 0x1F:
+                raise RuntimeError("client omitted end-upload cleanup after rejection")
+            cleanup_reference = int.from_bytes(cleanup[4:6], "big")
+            _send_s7(connection, _s7_response(cleanup_reference, bytes([0x1F])))
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_service_rejections(root: Path) -> None:
+    for mode, operation, expected in (
+        ("szl-wrong-group", "szl", "unexpected USER_DATA type or function group"),
+        ("szl-truncated-payload", "szl", "unexpectedEnd"),
+        ("szl-plc-error", "szl", "request failed with code"),
+        ("szl-endless-fragments", "szl", "256-fragment safety limit"),
+        ("upload-invalid-marker", "upload", "invalid upload data marker"),
+        (
+            "upload-length-mismatch",
+            "upload",
+            "upload data length does not match its section",
+        ),
+        ("upload-wrong-function", "upload", "unexpected S7 response function"),
+    ):
+        errors: list[Exception] = []
+        with socket.socket() as listener:
+            listener.settimeout(3)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            thread = threading.Thread(
+                target=serve_service_rejection, args=(listener, mode, errors)
+            )
+            thread.start()
+            subprocess.run(
+                [
+                    str(root / ".lake/build/bin/lean-s7"),
+                    "integration-service-rejection",
+                    "127.0.0.1",
+                    str(listener.getsockname()[1]),
+                    operation,
+                    expected,
+                ],
+                cwd=root,
+                check=True,
+                timeout=10,
+            )
+            thread.join(timeout=3)
+        if thread.is_alive():
+            raise RuntimeError(f"service rejection peer did not finish: {mode}")
+        if errors:
+            raise errors[0]
+
+
+def _accept_session(listener: socket.socket, pdu_length: int) -> socket.socket:
+    connection, _ = listener.accept()
+    connection.settimeout(3)
+    cr = _receive_tpkt(connection)
+    _send_tpkt(connection, bytes([0x11, 0xD0, cr[4], cr[5], 0, 1, 0]) + cr[7:])
+    setup = _receive_s7(connection)
+    reference = int.from_bytes(setup[4:6], "big")
+    _send_s7(
+        connection,
+        _s7_response(
+            reference,
+            bytes([0xF0, 0, 0, 1, 0, 1]) + pdu_length.to_bytes(2, "big"),
+        ),
+    )
+    return connection
+
+
+def serve_reconnect_shrink(listener: socket.socket, errors: list[Exception]) -> None:
+    try:
+        with _accept_session(listener, 480) as connection:
+            _receive_s7(connection)
+        with _accept_session(listener, 240) as connection:
+            disconnect = _receive_tpkt(connection)
+            if len(disconnect) < 2 or disconnect[1] != 0x80:
+                raise RuntimeError("shrinking reconnect was not disconnected")
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_reconnect_shrink(root: Path) -> None:
+    errors: list[Exception] = []
+    with socket.socket() as listener:
+        listener.settimeout(3)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(2)
+        thread = threading.Thread(
+            target=serve_reconnect_shrink, args=(listener, errors)
+        )
+        thread.start()
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-reconnect-shrink",
+                "127.0.0.1",
+                str(listener.getsockname()[1]),
+            ],
+            cwd=root,
+            check=True,
+            timeout=10,
+        )
+        thread.join(timeout=3)
+    if thread.is_alive():
+        raise RuntimeError("shrinking-reconnect peer did not finish")
+    if errors:
+        raise errors[0]
+
+
+def serve_reconnect_recovery(listener: socket.socket, errors: list[Exception]) -> None:
+    try:
+        with _accept_session(listener, 480) as first:
+            first_request = _receive_s7(first)
+            first_reference = int.from_bytes(first_request[4:6], "big")
+        with _accept_session(listener, 480) as second:
+            retried_request = _receive_s7(second)
+            retried_reference = int.from_bytes(retried_request[4:6], "big")
+            if retried_reference != first_reference or retried_request != first_request:
+                raise RuntimeError("reconnect did not retry the original request")
+            _send_s7(
+                second,
+                _s7_response(
+                    retried_reference,
+                    bytes([4, 1]),
+                    bytes([0xFF, 4, 0, 32, 0xDE, 0xAD, 0xBE, 0xEF]),
+                ),
+            )
+            disconnect = _receive_tpkt(second)
+            if len(disconnect) < 2 or disconnect[1] != 0x80:
+                raise RuntimeError("reconnect-recovery client omitted disconnect")
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_reconnect_recovery(root: Path) -> None:
+    errors: list[Exception] = []
+    with socket.socket() as listener:
+        listener.settimeout(3)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(2)
+        thread = threading.Thread(
+            target=serve_reconnect_recovery, args=(listener, errors)
+        )
+        thread.start()
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-reconnect-recovery",
+                "127.0.0.1",
+                str(listener.getsockname()[1]),
+            ],
+            cwd=root,
+            check=True,
+            timeout=10,
+        )
+        thread.join(timeout=3)
+    if thread.is_alive():
+        raise RuntimeError("reconnect-recovery peer did not finish")
+    if errors:
+        raise errors[0]
+
+
 def serve_plc_driven_download(
     listener: socket.socket, expected: bytes, errors: list[Exception]
 ) -> None:
@@ -534,6 +880,153 @@ def run_download_integration(root: Path) -> None:
         thread.join(timeout=3)
     if thread.is_alive():
         raise RuntimeError("PLC-driven download server did not finish")
+    if errors:
+        raise errors[0]
+
+
+def serve_interrupted_download(
+    listener: socket.socket, errors: list[Exception]
+) -> None:
+    try:
+        with _accept_session(listener, 480) as connection:
+            start = _receive_s7(connection)
+            reference = int.from_bytes(start[4:6], "big")
+            _send_s7(connection, _s7_response(reference, bytes([0x1A])))
+            _send_s7(connection, _s7_job(0x7000, bytes([0x1B])))
+            fragment = _receive_s7(connection)
+            if fragment[12:13] != bytes([0x1B]):
+                raise RuntimeError("interrupted download returned an invalid fragment")
+            # Closing here interrupts the PLC-driven exchange between fragments.
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_download_interruption(root: Path) -> None:
+    errors: list[Exception] = []
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        thread = threading.Thread(
+            target=serve_interrupted_download, args=(listener, errors)
+        )
+        thread.start()
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-download-interruption",
+                "127.0.0.1",
+                str(listener.getsockname()[1]),
+            ],
+            cwd=root,
+            check=True,
+            timeout=10,
+        )
+        thread.join(timeout=3)
+    if thread.is_alive():
+        raise RuntimeError("interrupted-download peer did not finish")
+    if errors:
+        raise errors[0]
+
+
+def serve_interrupted_userdata(
+    listener: socket.socket, errors: list[Exception]
+) -> None:
+    try:
+        with _accept_session(listener, 480) as connection:
+            request = _receive_s7(connection)
+            reference = int.from_bytes(request[4:6], "big")
+            _send_s7(
+                connection,
+                _userdata_response(
+                    reference,
+                    3,
+                    2,
+                    bytes([0, 1, 0x10, 2]),
+                    sequence=7,
+                    has_more_data=True,
+                ),
+            )
+            continuation = _receive_s7(connection)
+            if continuation[1] != 7 or continuation[15:18] != bytes([0x43, 2, 7]):
+                raise RuntimeError("client sent an invalid USER_DATA continuation")
+            # Closing here interrupts the exchange after a valid first fragment.
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_userdata_interruption(root: Path) -> None:
+    errors: list[Exception] = []
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        thread = threading.Thread(
+            target=serve_interrupted_userdata, args=(listener, errors)
+        )
+        thread.start()
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-userdata-interruption",
+                "127.0.0.1",
+                str(listener.getsockname()[1]),
+            ],
+            cwd=root,
+            check=True,
+            timeout=10,
+        )
+        thread.join(timeout=3)
+    if thread.is_alive():
+        raise RuntimeError("interrupted-USER_DATA peer did not finish")
+    if errors:
+        raise errors[0]
+
+
+def serve_reference_wrap(listener: socket.socket, errors: list[Exception]) -> None:
+    try:
+        with _accept_session(listener, 480) as connection:
+            for expected_reference, value in ((0xFFFF, 0xAA), (0, 0xBB)):
+                request = _receive_s7(connection)
+                reference = int.from_bytes(request[4:6], "big")
+                if reference != expected_reference:
+                    raise RuntimeError(
+                        f"expected reference {expected_reference}, got {reference}"
+                    )
+                _send_s7(
+                    connection,
+                    _s7_response(
+                        reference,
+                        bytes([4, 1]),
+                        bytes([0xFF, 4, 0, 8, value]),
+                    ),
+                )
+            disconnect = _receive_tpkt(connection)
+            if len(disconnect) < 2 or disconnect[1] != 0x80:
+                raise RuntimeError("reference-wrap client omitted COTP disconnect")
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_reference_wrap(root: Path) -> None:
+    errors: list[Exception] = []
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        thread = threading.Thread(target=serve_reference_wrap, args=(listener, errors))
+        thread.start()
+        subprocess.run(
+            [
+                str(root / ".lake/build/bin/lean-s7"),
+                "integration-reference-wrap",
+                "127.0.0.1",
+                str(listener.getsockname()[1]),
+            ],
+            cwd=root,
+            check=True,
+            timeout=10,
+        )
+        thread.join(timeout=3)
+    if thread.is_alive():
+        raise RuntimeError("reference-wrap peer did not finish")
     if errors:
         raise errors[0]
 
@@ -685,6 +1178,15 @@ def serve_transport_case(
             # EOT must hit its receive deadline, not pass due to server-side EOF.
             while connection.recv(1024):
                 pass
+        if mode == "stale-flood":
+            listener.settimeout(0.5)
+            try:
+                retried, _ = listener.accept()
+            except TimeoutError:
+                pass
+            else:
+                retried.close()
+                raise RuntimeError("client retried a malformed stale-response exchange")
     except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
         errors.append(error)
 
@@ -806,18 +1308,14 @@ def main() -> None:
                 thread.join(timeout=2)
         except OSError:
             pass
-        server.stale_once = True
-        subprocess.run(
-            [
-                str(root / ".lake/build/bin/lean-s7"),
-                "integration-reconnect",
-                "localhost",
-                str(port),
-            ],
-            cwd=root,
-            check=True,
-        )
+        run_handshake_rejections(root)
+        run_service_rejections(root)
+        run_reconnect_shrink(root)
+        run_reconnect_recovery(root)
         run_download_integration(root)
+        run_download_interruption(root)
+        run_userdata_interruption(root)
+        run_reference_wrap(root)
         run_segmented_integration(root)
         run_transport_failures(root)
     finally:

@@ -8,6 +8,10 @@ namespace LeanS7
     classic S7 protocol core. It does not claim coverage of S7comm Plus or
     controller-specific service semantics. -/
 structure CoreProtocolAssurance : Prop where
+  tpktCodec : ∀ frame packet,
+    TPKT.minFrameSize ≤ TPKT.headerSize + frame.payload.size →
+    TPKT.headerSize + frame.payload.size ≤ TPKT.maxFrameSize →
+    TPKT.encode frame = .ok packet → TPKT.decode packet = .ok frame
   cotpReassemblyBudget : ∀ state next segment maximum complete,
     COTP.Reassembly.pushBounded state segment maximum = .ok (next, complete) →
       next.payload.size ≤ maximum
@@ -77,12 +81,24 @@ structure CoreProtocolAssurance : Prop where
         parameters := setup.parameters
         data := ByteArray.empty
       }
+  userDataSize : ∀ reference parameters data packet,
+    S7.encodeUserDataHeader reference parameters data = .ok packet →
+      packet.size = S7.jobHeaderSize + parameters.size + data.size
+  userDataReference : ∀ reference parameters data packet,
+    parameters.size ≤ S7.maxSectionSize →
+    data.size ≤ S7.maxSectionSize →
+    S7.encodeUserDataHeader reference parameters data = .ok packet →
+      S7.decodePduReference packet = .ok reference
   responseCorrelation : ∀ response reference function,
     S7.validateResponse response reference function = .ok () →
       response.reference = reference
   responseErrorFree : ∀ response reference function,
     S7.validateResponse response reference function = .ok () →
       response.errorClass = 0 ∧ response.errorCode = 0
+  responseFunction : ∀ response reference function,
+    S7.validateResponse response reference function = .ok () →
+      ∃ cursor, Cursor.readUInt8 { data := response.parameters } =
+        .ok (function, cursor)
   singleReadPayloadSize : ∀ reference area expectedSize response payload,
     S7.decodeAreaRead reference area expectedSize response = .ok payload →
       payload.size = expectedSize
@@ -104,6 +120,9 @@ structure CoreProtocolAssurance : Prop where
   singleWriteSize : ∀ reference range payload packet,
     S7.encodeAreaWrite reference range payload = .ok packet →
       packet.size = 28 + payload.size
+  downloadFragmentSize : ∀ reference isLast payload packet,
+    S7.encodeDownloadFragmentResponse reference isLast payload = .ok packet →
+      packet.size = S7.responseHeaderSize + 6 + payload.size
   chunkCoverage : ∀ total maximum,
     maximum ≠ 0 → (Chunking.counts total maximum).sum = total
   chunkBounds : ∀ total maximum chunk,
@@ -158,11 +177,15 @@ structure CoreProtocolAssurance : Prop where
   reconnectLegal : ∀ state next,
     Lifecycle.transition state .reconnected = some next →
       state = .disconnected ∧ next = .connected
+  transportClosureSafety : ∀ state next,
+    Lifecycle.transition state .transportClosed = some next →
+      next ≠ .connected
 
 /-- The implementation satisfies the complete formal contract stated by
     `CoreProtocolAssurance`. -/
 theorem coreProtocolAssurance : CoreProtocolAssurance := by
   constructor
+  · exact TPKT.decode_encode
   · exact COTP.Reassembly.pushBounded_size
   · exact COTP.decodeData_encodeData
   · exact COTP.decodeDisconnectRequest_encodeDisconnectRequest
@@ -185,14 +208,18 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Protocol.decodeJob_encodeJob
   · exact Protocol.decodeResponse_encodeAckData
   · exact S7.decodeJob_encodeSetupCommunication
+  · exact S7.encodedUserDataHeader_size
+  · exact S7.decodePduReference_encodeUserDataHeader
   · exact S7.validateResponse_reference_eq
   · exact S7.validateResponse_error_free
+  · exact S7.validateResponse_function_eq
   · exact S7.decodeAreaRead_size
   · exact S7.validateSetupPduLength_lower_bound
   · exact S7.validateMemoryRange_invariants
   · exact S7.encodedMemoryAddress_size
   · exact S7.encodedAreaRead_size
   · exact S7.encodedAreaWrite_size
+  · exact S7.encodedDownloadFragmentResponse_size
   · exact Chunking.counts_sum
   · exact Chunking.counts_bounds
   · exact fun _ _ _ => Chunking.ReadAssembly.append_data
@@ -210,5 +237,6 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition
+  · exact Lifecycle.transportClosed_not_connected
 
 end LeanS7

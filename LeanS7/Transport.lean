@@ -1,6 +1,7 @@
 import Std.Async.TCP
 import Std.Async.DNS
 import Std.Async.Timer
+import LeanS7.ClientError
 import LeanS7.TPKT
 import LeanS7.COTP
 
@@ -44,7 +45,7 @@ private def withTimeout (timeoutMs : Option Nat) (label : String) (operation : I
     if ← finished.modifyGet fun done => (!done, true) then
       result.resolve TimeoutResult.timedOut
   let some outcome ← IO.wait result.result?
-    | throw <| IO.userError s!"{label} timeout waiter was cancelled"
+    | throw <| ClientError.lifecycle s!"{label} timeout waiter was cancelled"
   match outcome with
   | .completed (.ok value) =>
       IO.cancel timerTask
@@ -54,7 +55,7 @@ private def withTimeout (timeoutMs : Option Nat) (label : String) (operation : I
       throw error
   | .timedOut =>
       IO.cancel operationTask
-      throw <| IO.userError s!"{label} timed out after {timeoutMs} ms"
+      throw <| ClientError.timeout s!"{label} timed out after {timeoutMs} ms"
 
 private def await (operation : Async α) : IO α := do
   let task ← operation.toIO
@@ -63,7 +64,7 @@ private def await (operation : Async α) : IO α := do
 private def orThrow [Repr ε] (result : Except ε α) : IO α :=
   match result with
   | .ok value => pure value
-  | .error error => throw <| IO.userError (reprStr error)
+  | .error error => throw <| ClientError.protocol (reprStr error)
 
 def sendBytes (socket : Socket) (data : ByteArray) (_timeoutMs : Option Nat := none) : IO Unit :=
   await (socket.send data)
@@ -78,7 +79,7 @@ private def remainingReceiveTime (deadline : Option Nat) : IO (Option Nat) := do
   let some deadline := deadline | return none
   let now ← IO.monoMsNow
   if now ≥ deadline then
-    throw <| IO.userError "socket receive timed out: operation deadline expired"
+    throw <| ClientError.timeout "socket receive timed out: operation deadline expired"
   return some (deadline - now)
 
 private def receiveSome (socket : Socket) (count : Nat) (deadline : Option Nat) : IO (Option ByteArray) := do
@@ -93,15 +94,16 @@ private def receiveSome (socket : Socket) (count : Nat) (deadline : Option Nat) 
   | .received data =>
       discard <| remainingReceiveTime deadline
       return data
-  | .timedOut => throw <| IO.userError s!"socket receive timed out after {timeoutMs} ms"
+  | .timedOut => throw <| ClientError.timeout s!"socket receive timed out after {timeoutMs} ms"
 
 private def receiveExactUntil (socket : Socket) (count : Nat) (deadline : Option Nat) : IO ByteArray := do
   let mut result := ByteArray.empty
   while result.size < count do
     let some chunk ← receiveSome socket (count - result.size) deadline
-      | throw <| IO.userError s!"connection closed with {count - result.size} bytes still expected"
+      | throw <| ClientError.disconnected
+          s!"connection closed with {count - result.size} bytes still expected"
     if chunk.size == 0 then
-      throw <| IO.userError "socket returned an empty chunk before EOF"
+      throw <| ClientError.disconnected "socket returned an empty chunk before EOF"
     result := result ++ chunk
   return result
 
@@ -117,7 +119,7 @@ private def receiveFrameUntil (socket : Socket) (deadline : Option Nat) : IO Byt
   let cursor : Cursor := { data := header, offset := 2 }
   let (length, _) ← orThrow cursor.readUInt16BE
   if length.toNat < TPKT.headerSize then
-    throw <| IO.userError s!"invalid TPKT frame length {length}"
+    throw <| ClientError.protocol s!"invalid TPKT frame length {length}"
   let payload ← receiveExactUntil socket (length.toNat - TPKT.headerSize) deadline
   let frame ← orThrow <| TPKT.decode (header ++ payload)
   return frame.payload
@@ -160,7 +162,7 @@ def resolve (endpoint : Endpoint) (port : UInt16) (timeoutMs : Option Nat := non
       let addresses ← withTimeout timeoutMs "hostname resolution" <|
         await (DNS.getAddrInfo name (toString port))
       if addresses.isEmpty then
-        throw <| IO.userError s!"hostname {name} resolved to no addresses"
+        throw <| IO.Error.noSuchThing none 0 s!"hostname {name} resolved to no addresses"
       return addresses.map fun address => socketAddress address port
 
 private def connectAddress (address : SocketAddress) (request : COTP.ConnectionRequest)
@@ -187,7 +189,7 @@ private def connectAddress (address : SocketAddress) (request : COTP.ConnectionR
 private def connectAddresses (addresses : List SocketAddress) (request : COTP.ConnectionRequest)
     (timeoutMs : Option Nat) : IO Connection := do
   match addresses with
-  | [] => throw <| IO.userError "could not connect to any resolved address"
+  | [] => throw <| IO.Error.noSuchThing none 0 "could not connect to any resolved address"
   | address :: rest =>
       try connectAddress address request timeoutMs
       catch error =>

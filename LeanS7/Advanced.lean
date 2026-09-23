@@ -195,6 +195,8 @@ private def fixedAscii (data : ByteArray) (offset length : Nat) : Except DecodeE
 def decodeBlockInfo (payload : ByteArray) : Except DecodeError BlockInfo := do
   if payload.size < 78 then
     throw (.unexpectedEnd 0 78 payload.size)
+  if payload.size > 78 then
+    throw (.trailingBytes 78 (payload.size - 78))
   let byteAt (offset : Nat) := (Cursor.readUInt8 { data := payload, offset }).map Prod.fst
   let wordAt (offset : Nat) := (Cursor.readUInt16BE { data := payload, offset }).map Prod.fst
   let dwordAt (offset : Nat) := (Cursor.readUInt32BE { data := payload, offset }).map Prod.fst
@@ -322,6 +324,34 @@ def encodeDownloadFragmentResponse (reference : UInt16) (isLast : Bool)
     (payload : ByteArray) : Except EncodeError ByteArray :=
   encodeAckData reference (bytes #[downloadFunction, if isLast then 0 else 1])
     (uint16BE (UInt16.ofNat payload.size) ++ bytes #[0, 0xfb] ++ payload)
+
+/-- Every successfully encoded PLC-driven download fragment has the exact S7
+    response overhead plus the fragment payload size. -/
+theorem encodedDownloadFragmentResponse_size (reference : UInt16) (isLast : Bool)
+    (payload packet : ByteArray)
+    (hencode : encodeDownloadFragmentResponse reference isLast payload = .ok packet) :
+    packet.size = responseHeaderSize + 6 + payload.size := by
+  cases isLast with
+  | false =>
+    have hparameters : (bytes #[downloadFunction, 1]).size = 2 := by rfl
+    have hmarker : (bytes #[0, 0xfb]).size = 2 := by rfl
+    have hsize := encodedAckData_size reference
+        (bytes #[downloadFunction, 1])
+        (uint16BE (UInt16.ofNat payload.size) ++ bytes #[0, 0xfb] ++ payload)
+        packet hencode
+    rw [hparameters, ByteArray.size_append, ByteArray.size_append, uint16BE_size,
+      hmarker] at hsize
+    omega
+  | true =>
+    have hparameters : (bytes #[downloadFunction, 0]).size = 2 := by rfl
+    have hmarker : (bytes #[0, 0xfb]).size = 2 := by rfl
+    have hsize := encodedAckData_size reference
+        (bytes #[downloadFunction, 0])
+        (uint16BE (UInt16.ofNat payload.size) ++ bytes #[0, 0xfb] ++ payload)
+        packet hencode
+    rw [hparameters, ByteArray.size_append, ByteArray.size_append, uint16BE_size,
+      hmarker] at hsize
+    omega
 
 def encodeDownloadEndedResponse (reference : UInt16) : Except EncodeError ByteArray :=
   encodeAckData reference (bytes #[downloadEndedFunction]) ByteArray.empty

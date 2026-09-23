@@ -247,6 +247,20 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
       | .error error => throw <| IO.userError s!"raw response decoding failed: {repr error}"
     unless rawPayload == bytes #[0xaa, 0xbb, 0xcc, 0xdd] do
       throw <| IO.userError "raw ISO exchange returned the wrong payload"
+    let mismatchedRawRejected ← try
+      discard <| client.rawExchange (rawReference + 1) rawRequest
+      pure false
+    catch error => pure (classifyClientError error == .invalidInput)
+    unless mismatchedRawRejected do
+      throw <| IO.userError "raw request/reference mismatch was not rejected as invalid input"
+    let invalidBitRejected ← try
+      discard <| client.dbReadBit 1 0 8
+      pure false
+    catch error => pure (classifyClientError error == .invalidInput)
+    unless invalidBitRejected do
+      throw <| IO.userError "invalid bit index was not rejected as invalid input"
+    unless ← client.isConnected do
+      throw <| IO.userError "local input validation disconnected the client"
     client.deleteBlock .function 99999
     client.disconnect
     unless !(← client.isConnected) do
@@ -262,20 +276,30 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
     try client.disconnect catch _ => pure ()
     throw error
 
-def expectConnectFailure (host portString : String) : IO Unit := do
+def expectConnectFailure (host portString : String) (expected : Option String := none) : IO Unit := do
   let some portNat := portString.toNat?
     | throw <| IO.userError s!"invalid TCP port: {portString}"
-  let result ← try
-    some <$> Client.connect {
-      endpoint := endpointOfString host
-      port := UInt16.ofNat portNat
-      connectTimeoutMs := some 200
-      operationTimeoutMs := some 200
-    }
-  catch _ => pure none
+  let result : Except IO.Error Client ← try
+    let client ← Client.connect {
+        endpoint := endpointOfString host
+        port := UInt16.ofNat portNat
+        connectTimeoutMs := some 200
+        operationTimeoutMs := some 200
+      }
+    pure (.ok client)
+  catch error => pure (.error error)
   match result with
-  | none => IO.println s!"lean-s7 connect-timeout integration passed against {host}:{portNat}"
-  | some client =>
+  | .error error =>
+      let message := error.toString
+      let expectedKind := if expected.isSome then ClientErrorKind.protocol else .timeout
+      unless classifyClientError error == expectedKind do
+        throw <| IO.userError
+          s!"unexpected connection error category {repr (classifyClientError error)}: {message}"
+      if let some expected := expected then
+        unless (message.splitOn expected).length > 1 do
+          throw <| IO.userError s!"unexpected connection failure: {message}"
+      IO.println s!"lean-s7 connection rejection passed against {host}:{portNat}"
+  | .ok client =>
       client.disconnect
       throw <| IO.userError "connection unexpectedly succeeded"
 
@@ -293,6 +317,74 @@ def runDownloadIntegration (host portString : String) : IO Unit := do
     client.downloadBlock .dataBlock 7 (compact ++ mc7)
     client.disconnect
     IO.println s!"lean-s7 PLC-driven download integration passed against {host}:{portNat}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
+def runDownloadInterruptionIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host
+    port := UInt16.ofNat portNat
+    operationTimeoutMs := some 1000
+  }
+  let mc7 := ByteArray.mk <| (Array.range 600).map fun index => UInt8.ofNat (index * 29 + 7)
+  let compact := ByteArray.mk (Array.replicate 34 0) ++ uint16BE (UInt16.ofNat mc7.size)
+  let outcome ← try
+    client.downloadBlock .dataBlock 7 (compact ++ mc7)
+    pure (none : Option IO.Error)
+  catch error => pure (some error)
+  match outcome with
+  | none => throw <| IO.userError "interrupted block download unexpectedly succeeded"
+  | some error =>
+      unless classifyClientError error == .disconnected do
+        throw <| IO.userError
+          s!"unexpected download interruption category {repr (classifyClientError error)}: {error}"
+  if ← client.isConnected then
+    throw <| IO.userError "interrupted block download left the client connected"
+  client.disconnect
+  IO.println "block-download interruption passed"
+
+def runUserDataInterruptionIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host
+    port := UInt16.ofNat portNat
+    operationTimeoutMs := some 1000
+  }
+  let outcome ← try
+    discard <| client.listBlocksOfType .dataBlock
+    pure (none : Option IO.Error)
+  catch error => pure (some error)
+  match outcome with
+  | none => throw <| IO.userError "interrupted USER_DATA exchange unexpectedly succeeded"
+  | some error =>
+      unless classifyClientError error == .disconnected do
+        throw <| IO.userError
+          s!"unexpected USER_DATA interruption category {repr (classifyClientError error)}: {error}"
+  if ← client.isConnected then
+    throw <| IO.userError "interrupted USER_DATA exchange left the client connected"
+  client.disconnect
+  IO.println "USER_DATA continuation interruption passed"
+
+def runReferenceWrapIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host
+    port := UInt16.ofNat portNat
+    operationTimeoutMs := some 1000
+    initialRequestReference := 0xffff
+  }
+  try
+    let before ← client.dbRead 1 0 1
+    let after ← client.dbRead 1 1 1
+    unless before == bytes #[0xaa] && after == bytes #[0xbb] do
+      throw <| IO.userError "reference-wraparound reads returned incorrect data"
+    client.disconnect
+    IO.println "PDU-reference wraparound passed"
   catch error =>
     try client.disconnect catch _ => pure ()
     throw error
@@ -320,18 +412,29 @@ def runTransportFailureIntegration (host portString expected : String) : IO Unit
     | throw <| IO.userError s!"invalid TCP port: {portString}"
   let client ← Client.connect {
     endpoint := endpointOfString host, port := UInt16.ofNat portNat,
-    operationTimeoutMs := some 300, reconnectRetries := 0
+    operationTimeoutMs := some 300,
+    reconnectRetries := if (expected.splitOn "too many stale").length > 1 then 1 else 0
   }
   try
     let outcome ← try
       let payload ← client.dbRead 1 0 (if expected == "accept" then 462 else 4)
-      pure (.ok payload : Except String ByteArray)
-    catch error => pure (.error error.toString)
+      pure (.ok payload : Except IO.Error ByteArray)
+    catch error => pure (.error error)
     match outcome with
     | .ok payload =>
         unless expected == "accept" && payload == ByteArray.mk (Array.replicate 462 0xaa) do
           throw <| IO.userError "invalid transport response was accepted"
-    | .error message =>
+    | .error error =>
+        let message := error.toString
+        let expectedKind := if (expected.splitOn "timed out").length > 1 then
+          ClientErrorKind.timeout
+        else if (expected.splitOn "bytes still expected").length > 1 then
+          .disconnected
+        else
+          .protocol
+        unless classifyClientError error == expectedKind do
+          throw <| IO.userError
+            s!"unexpected transport error category {repr (classifyClientError error)}: {message}"
         unless expected != "accept" && (message.splitOn expected).length > 1 do
           throw <| IO.userError s!"unexpected transport failure: {message}"
         if ← client.isConnected then
@@ -342,14 +445,107 @@ def runTransportFailureIntegration (host portString expected : String) : IO Unit
     try client.disconnect catch _ => pure ()
     throw error
 
+def runServiceRejectionIntegration (host portString operation expected : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host, port := UInt16.ofNat portNat,
+    operationTimeoutMs := some 500,
+    reconnectRetries := if (expected.splitOn "failed with code").length > 1 then 1 else 0
+  }
+  try
+    let outcome ← try
+      if operation == "szl" then
+        discard <| client.readSzl 0x0424 0
+      else if operation == "upload" then
+        discard <| client.fullUpload .dataBlock 1
+      else
+        throw <| IO.userError s!"unknown rejection operation: {operation}"
+      pure (none : Option IO.Error)
+    catch error => pure (some error)
+    match outcome with
+    | some error =>
+        let message := error.toString
+        let expectedKind := if (expected.splitOn "failed with code").length > 1 then
+          ClientErrorKind.plcRejected
+        else
+          .protocol
+        unless classifyClientError error == expectedKind do
+          throw <| IO.userError
+            s!"unexpected service error category {repr (classifyClientError error)}: {message}"
+        unless (message.splitOn expected).length > 1 do
+          throw <| IO.userError s!"unexpected service failure: {message}"
+    | none => throw <| IO.userError "malformed service response was accepted"
+    client.disconnect
+    IO.println s!"service rejection passed: {operation}: {expected}"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
+def runReconnectShrinkIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host, port := UInt16.ofNat portNat,
+    operationTimeoutMs := some 500, reconnectRetries := 1
+  }
+  let outcome ← try
+    discard <| client.dbRead 1 0 300
+    pure (none : Option IO.Error)
+  catch error => pure (some error)
+  match outcome with
+  | some error =>
+      let message := error.toString
+      unless classifyClientError error == .protocol do
+        throw <| IO.userError
+          s!"unexpected reconnect error category {repr (classifyClientError error)}: {message}"
+      unless (message.splitOn "reconnected PDU length shrank from 480 to 240").length > 1 do
+        throw <| IO.userError s!"unexpected reconnect failure: {message}"
+  | none => throw <| IO.userError "shrinking reconnect was accepted"
+  if ← client.isConnected then
+    throw <| IO.userError "rejected shrinking reconnect left the client connected"
+  client.disconnect
+  IO.println "shrinking reconnect rejection passed"
+
+def runReconnectRecoveryIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host, port := UInt16.ofNat portNat,
+    operationTimeoutMs := some 500, reconnectRetries := 1
+  }
+  try
+    let payload ← client.dbRead 1 0 4
+    unless payload == bytes #[0xde, 0xad, 0xbe, 0xef] do
+      throw <| IO.userError "reconnected read returned the wrong payload"
+    client.disconnect
+    IO.println "transport reconnect recovery passed"
+  catch error =>
+    try client.disconnect catch _ => pure ()
+    throw error
+
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
   | ["integration-reconnect", host, port] => runIntegration host port true
   | ["integration-download", host, port] => runDownloadIntegration host port
+  | ["integration-download-interruption", host, port] =>
+      runDownloadInterruptionIntegration host port
+  | ["integration-userdata-interruption", host, port] =>
+      runUserDataInterruptionIntegration host port
+  | ["integration-reference-wrap", host, port] =>
+      runReferenceWrapIntegration host port
   | ["integration-segmented", host, port] => runSegmentedIntegration host port
   | ["integration-transport", host, port, expected] =>
       runTransportFailureIntegration host port expected
+  | ["integration-service-rejection", host, port, operation, expected] =>
+      runServiceRejectionIntegration host port operation expected
+  | ["integration-reconnect-shrink", host, port] =>
+      runReconnectShrinkIntegration host port
+  | ["integration-reconnect-recovery", host, port] =>
+      runReconnectRecoveryIntegration host port
   | ["expect-connect-failure", host, port] => expectConnectFailure host port
+  | ["expect-connect-rejection", host, port, expected] =>
+      expectConnectFailure host port (some expected)
   | [] => runDemo
   | _ => throw <| IO.userError "usage: lean-s7 [integration <host-or-address> <port>]"

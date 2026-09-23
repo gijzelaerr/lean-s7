@@ -148,7 +148,7 @@ def decodeUserDataResponse (expectedReference : UInt16) (expectedGroup expectedS
   let (error, parameterCursor) ← parameterCursor.readUInt16BE
   parameterCursor.finish
   if error != 0 then
-    throw (.invalidField (jobHeaderSize + 10) s!"USER_DATA request failed with code {error}")
+    throw (.remoteFailure (jobHeaderSize + 10) s!"USER_DATA request failed with code {error}")
   if data.size < 4 then
     throw (.unexpectedEnd (jobHeaderSize + parameterLength.toNat) 4 data.size)
   let dataCursor : Cursor := { data }
@@ -156,7 +156,7 @@ def decodeUserDataResponse (expectedReference : UInt16) (expectedGroup expectedS
   let (transportSize, dataCursor) ← dataCursor.readUInt8
   let (payloadLength, dataCursor) ← dataCursor.readUInt16BE
   if returnCode != 0xff then
-    throw (.invalidField (jobHeaderSize + parameterLength.toNat)
+    throw (.remoteFailure (jobHeaderSize + parameterLength.toNat)
       s!"USER_DATA item failed with code {returnCode}")
   let (payload, dataCursor) ← dataCursor.readBytes payloadLength.toNat
   dataCursor.finish
