@@ -96,6 +96,7 @@ def decodeBlockCounts (payload : ByteArray) : Except DecodeError BlockCounts := 
     throw (.invalidField 0 s!"block-count response must contain 28 bytes, got {payload.size}")
   let mut cursor : Cursor := { data := payload }
   let mut result : BlockCounts := {}
+  let mut seen : List UInt8 := []
   for _ in [0:7] do
     let (markerPrefix, next) ← cursor.readUInt8
     cursor := next
@@ -106,6 +107,9 @@ def decodeBlockCounts (payload : ByteArray) : Except DecodeError BlockCounts := 
     cursor := next
     let some blockType := BlockType.ofCode typeCode
       | throw (.invalidField (cursor.offset - 3) s!"unknown block type {typeCode}")
+    if seen.contains typeCode then
+      throw (.invalidField (cursor.offset - 3) s!"duplicate block-count type {typeCode}")
+    seen := typeCode :: seen
     result := match blockType with
       | .organizationBlock => { result with organizationBlocks := count }
       | .dataBlock => { result with dataBlocks := count }

@@ -265,6 +265,11 @@ def blockCountsCases : Array BlockCountsCase := #[
     systemFunctionBlocks := 7
   }⟩,
   ⟨"truncated-block-counts", completeBlockCounts.extract 0 27, none⟩,
+  ⟨"duplicate-block-count-type",
+    completeBlockCounts.extract 0 5 ++ bytes #[0x44] ++ completeBlockCounts.extract 6 28, none⟩,
+  ⟨"duplicate-identical-block-count",
+    completeBlockCounts.extract 0 4 ++ completeBlockCounts.extract 0 4 ++
+      completeBlockCounts.extract 8 28, none⟩,
   ⟨"trailing-block-counts", completeBlockCounts ++ bytes #[0], none⟩,
   ⟨"unknown-block-count-type",
     bytes #[0x30, 0x39, 0, 1] ++ completeBlockCounts.extract 4 28, none⟩

@@ -127,11 +127,15 @@ segments; stale responses share the same deadline within an exchange attempt.
 Continuous small or empty segments cannot refresh that deadline. This bounds
 receiving, not sending or the total duration of multiple reconnect attempts.
 
-Uploads, SZL reads, and segmented block lists additionally share one absolute
+Uploads, downloads, chunked memory reads/writes, multi-item calls, SZL reads,
+and segmented block lists additionally share one absolute
 receive deadline for the whole transfer. `ClientConfig.transferReceiveTimeoutMs`
 defaults to 30000 ms; `none` disables this whole-transfer budget but retains
 `operationTimeoutMs` for each exchange. The earlier deadline applies, and a
 continuation, retry, or upload cleanup does not refresh the transfer budget.
+Only the initial exchange can automatically reconnect; subsequent chunks and
+batches are not retried after a partially completed transfer. Download completion
+and insertion acknowledgements remain inside the original receive budget.
 These deadlines do not cancel socket sends or connection establishment.
 SZL/USER_DATA assembly checks byte and fragment limits before appending; its
 order, bounds, fragment progress, and continuation-room properties are proved.
@@ -265,6 +269,16 @@ must serialize concurrent writes to the same byte when that distinction matters.
 `Client.readMulti` and `Client.writeMulti` preserve caller item order, expose
 per-item PLC failures, enforce the classic 20-item limit per telegram, and split
 larger calls according to both request and response PDU budgets.
+Oversized individual items are chunked while retaining item-level PLC failure
+codes. A failed item's remaining chunks are skipped, and later items continue
+in order. Before sending writes, the entire logical request is validated,
+including payload sizes and final addresses, so locally invalid later items
+cannot cause earlier writes. This is not atomic: successful write chunks before
+a PLC rejection remain written.
+Machine-checked encoder/planner correspondence now bounds actual read/write
+request bytes, including odd-payload inter-item padding, by their plan budgets.
+Planning also respects each transport's 16-bit length field: byte-transport
+payloads beyond 8,191 bytes are chunked even when a larger PDU has space.
 
 Requests on a client are serialized without occupying worker threads while they
 wait. `Client.isConnected` reports lifecycle state, and `Client.disconnect`

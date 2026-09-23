@@ -1,4 +1,5 @@
 import LeanS7
+import LeanS7.MultiSemanticsTests
 
 open LeanS7 Std.Net
 
@@ -568,7 +569,7 @@ def runTransferDeadlineIntegration (host portString operation operationMs transf
     operationTimeoutMs := some operationTimeout,
     connectTimeoutMs := some 1000,
     transferReceiveTimeoutMs := transferTimeout,
-    reconnectRetries := 0
+    reconnectRetries := if operation.endsWith "-retry" then 1 else 0
   }
   try
     let outcome ← try
@@ -584,6 +585,33 @@ def runTransferDeadlineIntegration (host portString operation operationMs transf
         let result ← client.listBlocksOfType .dataBlock
         unless result.size == 1 && result[0]!.number == 1 do
           throw <| IO.userError "deadline USER_DATA returned incorrect result"
+      else if operation == "read-invalid-range" then
+        discard <| client.dbRead 1 (0x1fffff - 100) 1000
+      else if operation == "write-invalid-range" then
+        client.dbWrite 1 (0x1fffff - 100) (bytes (Array.replicate 1000 0xaa))
+      else if operation == "read" || operation == "read-retry" || operation == "read-continuation-retry" then
+        let payload ← client.dbRead 1 0 1000
+        unless payload == bytes (Array.replicate 1000 0xaa) do
+          throw <| IO.userError "deadline read returned incorrect bytes"
+      else if operation == "write" || operation == "write-retry" || operation == "write-continuation-retry" then
+        client.dbWrite 1 0 (bytes (Array.replicate 1000 0xaa))
+      else if operation == "readmulti" then
+        let ranges := (Array.range 4).map fun index =>
+          ({ area := .dataBlocks, dbNumber := 1, start := index * 200, count := 200 } : S7.MemoryRange)
+        let results ← client.readMulti ranges
+        unless results == Array.replicate 4 (.success (bytes (Array.replicate 200 0xaa))) do
+          throw <| IO.userError "deadline multi-read returned incorrect results"
+      else if operation == "writemulti" then
+        let items := (Array.range 4).map fun index =>
+          let range : S7.MemoryRange :=
+            { area := .dataBlocks, dbNumber := 1, start := index * 200, count := 200 }
+          ({ range, payload := bytes (Array.replicate 200 0xaa) } : S7.WriteItem)
+        let results ← client.writeMulti items
+        unless results == Array.replicate 4 .success do
+          throw <| IO.userError "deadline multi-write returned incorrect results"
+      else if operation == "download" then
+        let block := (bytes (Array.replicate 1000 0xaa)).set! 34 3 |>.set! 35 0xc4
+        client.downloadBlock .dataBlock 1 block
       else throw <| IO.userError s!"unknown transfer: {operation}"
       pure (none : Option IO.Error)
     catch error => pure (some error)
@@ -591,9 +619,14 @@ def runTransferDeadlineIntegration (host portString operation operationMs transf
     | none => unless expected == "accept" do
         throw <| IO.userError "slow transfer unexpectedly completed"
     | some error =>
-        unless expected == "timeout" && classifyClientError error == .timeout do
+        let expectedKind := if expected == "invalid-input" then ClientErrorKind.invalidInput else .timeout
+        unless (expected == "timeout" || expected == "invalid-input") &&
+            classifyClientError error == expectedKind do
           throw <| IO.userError s!"unexpected transfer failure: {error}"
-        if ← client.isConnected then
+        if expected == "invalid-input" then
+          unless ← client.isConnected do
+            throw <| IO.userError "local range validation disconnected the client"
+        else if ← client.isConnected then
           throw <| IO.userError "timed out transfer left the client connected"
     client.disconnect
     IO.println s!"transfer deadline passed: {operation}: {expected}"
@@ -637,6 +670,8 @@ def runMultiBatchingIntegration (host portString pduString countString sizeStrin
 def main (args : List String) : IO Unit := do
   match args with
   | ["integration", host, port] => runIntegration host port
+  | ["integration-multi-semantics", host, port, mode] =>
+      MultiSemanticsTests.runIntegration host port mode
   | ["integration-multi-batching", host, port, pdu, count, size] =>
       runMultiBatchingIntegration host port pdu count size
   | ["integration-transfer-deadline", host, port, operation, operationMs, transferMs, expected] =>

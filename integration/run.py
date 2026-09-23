@@ -10,7 +10,9 @@ import threading
 import time
 from pathlib import Path
 
+from extended_deadlines import run_extended_deadlines
 from multi_batching import run_multi_batching
+from multi_semantics import run_multi_semantics
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
 from snap7.type import SrvArea
@@ -1553,7 +1555,9 @@ def main() -> None:
         run_handshake_rejections(root)
         run_service_rejections(root)
         run_transfer_deadlines(root)
+        run_extended_deadlines(root)
         run_multi_batching(root)
+        run_multi_semantics(root)
         run_reconnect_shrink(root)
         run_reconnect_recovery(root)
         run_download_integration(root)

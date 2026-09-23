@@ -46,7 +46,9 @@ operation from a fresh protocol session and compare the complete packet.
 
 ## Block-count cases
 
-`block_count_cases` contains raw list-blocks response payloads. Accepted cases
+`block_count_cases` contains raw list-blocks response payloads. Duplicate type
+records reject rather than silently overwriting a count, even when their counts
+are identical. Accepted cases
 must expose the seven typed counts exactly; rejected cases cover truncation,
 trailing bytes, and an unknown block type.
 
