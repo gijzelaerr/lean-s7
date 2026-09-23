@@ -155,3 +155,40 @@ These are cross-implementation observations, not formal claims about the Python 
   corpus comparisons, Ruff lint/format, whitespace checks, and the full pinned
   python-snap7 3.0.0 emulator/scripted-peer suite. No real-controller
   compatibility claim is made.
+
+## Extended assurance workstreams
+
+- Implemented logical-range and whole-request write validation before any
+  multi-item IO, without imposing the wire packet's 16-bit count limit on
+  chunkable logical transfers. Late invalid payloads, areas/DB numbers, and
+  final addresses are covered by no-write peers.
+- Oversized multi-item transfers now use singleton multi-item decoders for each
+  chunk, returning the original PLC item failure code, skipping the failed
+  item's remaining chunks, and preserving later item/result order. Successful
+  write chunks preceding a PLC rejection remain written; this is not atomic.
+- Extended absolute receive budgets to scalar chunked reads/writes, multi-item
+  calls, and PLC-driven downloads including final insertion acknowledgement.
+  Automatic reconnect retries are restricted to the initial exchange, avoiding
+  restarted partially completed transfers.
+- Added checked encoder/planner correspondence: actual read requests have
+  exactly the planned parameter size; actual write requests fit the conservative
+  planned size including inter-item padding. Both planned request-size theorems
+  are included in `CoreProtocolAssurance`.
+- Added 5,960 expanded mutation/sequence checks, including every bit position,
+  mixed multi-item replies, block counts/metadata/lists, clocks, STRING/WSTRING,
+  and continuation sequences. These found silent overwriting of duplicate
+  block-count types; ambiguous duplicates now reject, with two new corpus cases
+  (54 S7 cases).
+- Combined validation passed: clean build, all Lean tests, all three corpus
+  comparisons, Ruff lint/format, whitespace checks, the full pinned emulator
+  suite, and the expanded successful-oversized-transfer peer checks. Sends and
+  connection establishment remain outside cancellation guarantees; no
+  physical-controller claim is made.
+- The final wire-length audit also caught large-PDU planning that could exceed
+  the 16-bit bit-length field despite fitting the PDU budget. Byte-transport
+  reads/writes now chunk beyond 8,191 payload bytes; octet transport uses its
+  byte-length bound. Planner certificates prove representable selected lengths,
+  with exact-boundary and fallback tests included.
+- Independent new peer checks passed: 18 oversized-item success/failure/prevalidation
+  scenarios at PDU sizes 240/480 and 34 extended deadline/prevalidation scenarios,
+  including spent-budget reconnect and continuation-no-retry checks.

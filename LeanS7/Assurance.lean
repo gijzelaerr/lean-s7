@@ -1,6 +1,7 @@
 import LeanS7.Protocol
 import LeanS7.Client
 import LeanS7.Value
+import LeanS7.BatchEncoderAssurance
 
 namespace LeanS7
 
@@ -224,6 +225,20 @@ structure CoreProtocolAssurance : Prop where
   plannedWritePayloads : ∀ pduLength pending item,
     item ∈ (planWriteBatch pduLength pending).selected →
       0 < item.range.count ∧ item.payload.size = item.range.count * item.range.area.elementSize
+  plannedReadLength : ∀ pduLength pending range,
+    range ∈ (planReadBatch pduLength pending).selected →
+      MultiValidation.readLengthRepresentable range = true
+  plannedWriteLength : ∀ pduLength pending item,
+    item ∈ (planWriteBatch pduLength pending).selected →
+      MultiValidation.readLengthRepresentable item.range = true
+  encodedReadPlanBudget : ∀ reference pduLength pending
+      (plan : ReadBatchPlan pduLength pending) packet,
+    14 ≤ pduLength → S7.encodeAreaReadMany reference plan.selected.toArray = .ok packet →
+      packet.size ≤ pduLength
+  encodedWritePlanBudget : ∀ reference pduLength pending
+      (plan : WriteBatchPlan pduLength pending) packet,
+    14 ≤ pduLength → S7.encodeAreaWriteMany reference plan.selected.toArray = .ok packet →
+      packet.size ≤ pduLength
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -306,6 +321,10 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact takeWriteBatch_count_le
   · exact fun pdu pending => (planReadBatch pdu pending).positive
   · exact fun pdu pending => (planWriteBatch pdu pending).payloads
+  · exact fun pdu pending => (planReadBatch pdu pending).lengths
+  · exact fun pdu pending => (planWriteBatch pdu pending).lengths
+  · exact S7.plannedReadBatch_fits
+  · exact S7.plannedWriteBatch_fits
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition

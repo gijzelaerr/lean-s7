@@ -3,6 +3,7 @@ import LeanS7.ClientError
 import LeanS7.Advanced
 import LeanS7.Value
 import LeanS7.Chunking
+import LeanS7.MultiValidation
 import LeanS7.Download
 import LeanS7.Upload
 import LeanS7.UserDataAssembly
@@ -25,7 +26,8 @@ structure ClientConfig where
   tpduSizeExponent : UInt8 := 0x0a
   connectTimeoutMs : Option Nat := some 5000
   operationTimeoutMs : Option Nat := some 5000
-  /-- Whole upload, SZL, and segmented USER_DATA receive budget, starting after
+  /-- Whole chunked read/write, multi-item, download, upload, SZL, and segmented
+      USER_DATA receive budget, starting after
       the request enters the serialization gate. Does not cancel sends/connects. -/
   transferReceiveTimeoutMs : Option Nat := some 30000
   reconnectRetries : Nat := 0
@@ -434,12 +436,15 @@ def Client.compress (client : Client) : IO Unit :=
 def Client.copyRamToRom (client : Client) : IO Unit :=
   client.controlService S7.encodeCopyRamToRom
 
-private def Client.receiveServerJob (client : Client) : IO S7.JobPdu := do
+private def Client.receiveServerJob (client : Client) (transferDeadline : Option Nat) : IO S7.JobPdu := do
+  Transport.checkReceiveDeadline transferDeadline
   let some connection ← client.connection.get
     | throw <| ClientError.disconnected "S7 client is disconnected"
   let pduLength ← client.currentPduLength.get
   orThrow <| S7.decodeJobPdu
-    (← Transport.receiveData connection.socket client.config.operationTimeoutMs pduLength.toNat)
+    (← Transport.receiveDataUntil connection.socket
+      (Transport.earlierReceiveDeadline
+        (← Transport.receiveDeadline client.config.operationTimeoutMs) transferDeadline) pduLength.toNat)
 
 private def Client.sendServerResponse (client : Client) (response : ByteArray) : IO Unit := do
   let some connection ← client.connection.get
@@ -448,19 +453,20 @@ private def Client.sendServerResponse (client : Client) (response : ByteArray) :
 
 private partial def Client.serveDownloadFragments (client : Client) (blockType : S7.BlockType)
     (number : Nat) (blockData : ByteArray) (state : Download.State blockData)
-    (maxSlice fragmentNumber : Nat) : IO (Download.State blockData) := do
+    (maxSlice fragmentNumber : Nat) (deadline : Option Nat) : IO (Download.State blockData) := do
   if fragmentNumber >= 65536 then
     throw <| ClientError.protocol "block download exceeded the 65536-fragment safety limit"
-  let job ← client.receiveServerJob
+  let job ← client.receiveServerJob deadline
   decodeOrThrow <| S7.validateDownloadServiceRequest job S7.downloadFunction blockType number
   let some fragment := Download.nextFragment blockData state maxSlice
     | throw <| ClientError.protocol "unexpected PLC download fragment request"
   let isLast := fragment.after.phase == .awaitingEnd
   let response ← inputOrThrow <|
     S7.encodeDownloadFragmentResponse job.reference isLast fragment.chunk
+  Transport.checkReceiveDeadline deadline
   client.sendServerResponse response
   if isLast then return fragment.after
-  client.serveDownloadFragments blockType number blockData fragment.after maxSlice (fragmentNumber + 1)
+  client.serveDownloadFragments blockType number blockData fragment.after maxSlice (fragmentNumber + 1) deadline
 
 /-- Download a complete load-memory block returned by `fullUpload`. Classic S7
     download is PLC-driven: after the initial request the PLC asks for each
@@ -474,11 +480,12 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
       let (mc7Size, _) ← orThrow <| ({ data := blockData, offset := 34 } : Cursor).readUInt16BE
       if 36 + mc7Size.toNat > blockData.size then
         throw <| ClientError.invalidInput "compact block header declares more MC7 data than supplied"
+      let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
       let startReference ← client.freshReference
       let startRequest ← inputOrThrow <| S7.encodeRequestDownload startReference blockType number
         blockData.size mc7Size.toNat
       let startResponse ← client.exchangeWithRetries startReference startRequest
-        client.config.reconnectRetries
+        client.config.reconnectRetries false deadline
       decodeOrThrow <| S7.decodeRequestDownloadAck startReference startResponse
       let pduLength ← client.negotiatedPduLength
       if pduLength.toNat <= 18 then
@@ -486,16 +493,17 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
       let some ready := Download.acknowledge (Download.start blockData)
         | throw <| ClientError.lifecycle "download request acknowledgement was not accepted"
       let transferred ← client.serveDownloadFragments blockType number blockData ready
-        (pduLength.toNat - 18) 0
-      let ended ← client.receiveServerJob
+        (pduLength.toNat - 18) 0 deadline
+      let ended ← client.receiveServerJob deadline
       decodeOrThrow <| S7.validateDownloadServiceRequest ended S7.downloadEndedFunction
         blockType number
       let some _ := Download.finish blockData transferred
         | throw <| ClientError.protocol "PLC ended an incomplete block download"
+      Transport.checkReceiveDeadline deadline
       client.sendServerResponse (← inputOrThrow <| S7.encodeDownloadEndedResponse ended.reference)
       let insertReference ← client.freshReference
       let insertRequest ← inputOrThrow <| S7.encodeInsertBlock insertReference blockType number
-      let insertResponse ← client.exchangeWithRetries insertReference insertRequest 0
+      let insertResponse ← client.exchangeWithRetries insertReference insertRequest 0 false deadline
       decodeOrThrow <| S7.decodePlcControl insertReference S7.startFunction insertResponse
     catch error =>
       client.closeCurrent
@@ -504,7 +512,8 @@ def Client.downloadBlock (client : Client) (blockType : S7.BlockType) (number : 
 def Client.readForceTable (client : Client) : IO (Array S7.ForceEntry) := do
   orThrow <| S7.decodeForceTable (← client.readSzl 0x0025 0)
 
-private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) :
+private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange)
+    (deadline : Option Nat) (retries : Nat) :
     IO { data : ByteArray // data.size = range.count * range.area.elementSize } := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaRead reference range
@@ -514,7 +523,7 @@ private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) :
   let expectedSize := range.count * range.area.elementSize
   if expectedSize + 18 > pduLength.toNat then
     throw <| ClientError.invalidInput s!"response would exceed negotiated PDU length {pduLength}"
-  let response ← client.exchange reference request
+  let response ← client.exchangeWithRetries reference request retries false deadline
   match hdecode : S7.decodeAreaRead reference range.area expectedSize response with
   | .error (.remoteFailure _ message) => throw <| ClientError.plcRejected message
   | .error error => throw <| ClientError.protocol (reprStr error)
@@ -523,52 +532,57 @@ private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange) :
         payload hdecode⟩
 
 private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
-    (payload : ByteArray) : IO Unit := do
+    (payload : ByteArray) (deadline : Option Nat) (retries : Nat) : IO Unit := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaWrite reference range payload
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
     throw <| ClientError.invalidInput s!"request exceeds negotiated PDU length {pduLength}"
-  let response ← client.exchange reference request
+  let response ← client.exchangeWithRetries reference request retries false deadline
   decodeOrThrow <| S7.decodeDbWrite reference response
 
 private def Client.readAreaChunks (client : Client) (area : S7.Area)
     (dbNumber : UInt16) (start : Nat) (consumed : Nat) (chunks : List Nat)
-    (result : Chunking.ReadAssembly area.elementSize consumed) :
+    (result : Chunking.ReadAssembly area.elementSize consumed) (deadline : Option Nat)
+    (retries : Nat) :
     IO (Chunking.ReadAssembly area.elementSize (consumed + chunks.sum)) := do
   match hchunks : chunks with
   | [] => return (by simpa [hchunks] using result)
   | count :: rest =>
       let chunk ← client.readAreaChunk {
         area, dbNumber, start := result.nextStart start, count
-      }
+      } deadline retries
       let assembled ← client.readAreaChunks area dbNumber start (consumed + count)
-        rest (result.append chunk)
+        rest (result.append chunk) deadline 0
       return (by simpa [hchunks, List.sum_cons, Nat.add_assoc] using assembled)
 
 /-- Internal transfer result retains the byte-count proof through the IO loop. -/
 private def Client.readAreaChecked (client : Client) (area : S7.Area) (dbNumber : UInt16)
-    (start count : Nat) : IO { data : ByteArray // data.size = count * area.elementSize } := do
+    (start count : Nat) (deadline : Option Nat) (retries : Nat) :
+    IO { data : ByteArray // data.size = count * area.elementSize } := do
   if hzero : count = 0 then
     return ⟨ByteArray.empty, by simp [hzero]⟩
+  inputOrThrow <| MultiValidation.range { area, dbNumber, start, count }
   let pduLength ← client.negotiatedPduLength
-  let availableBytes := pduLength.toNat - 18
-  let maxCount := min S7.maxSectionSize (availableBytes / area.elementSize)
+  let maxCount := MultiValidation.readMaximum pduLength.toNat area
   if hmaximum : maxCount = 0 then
     throw <| ClientError.protocol s!"negotiated PDU length {pduLength} cannot hold a read item"
   else
     let assembled ← client.readAreaChunks area dbNumber start 0
-      (Chunking.counts count maxCount) (Chunking.ReadAssembly.empty area.elementSize)
+      (Chunking.counts count maxCount) (Chunking.ReadAssembly.empty area.elementSize) deadline retries
     return ⟨assembled.data, Chunking.ReadAssembly.complete_size count maxCount
       area.elementSize hmaximum assembled⟩
 
 def Client.readArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start count : Nat) : IO ByteArray := do
-  return (← client.readAreaChecked area dbNumber start count).val
+  client.serialized do
+    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    return (← client.readAreaChecked area dbNumber start count deadline client.config.reconnectRetries).val
 
 private def Client.writeAreaChunks (client : Client) (area : S7.Area)
     (dbNumber : UInt16) (start offset : Nat) (payload : ByteArray)
-    (chunks : List Nat) (hcoverage : offset + chunks.sum * area.elementSize = payload.size) :
+    (chunks : List Nat) (hcoverage : offset + chunks.sum * area.elementSize = payload.size)
+    (deadline : Option Nat) (retries : Nat) :
     IO Unit := do
   match hchunks : chunks with
   | [] => pure ()
@@ -577,18 +591,21 @@ private def Client.writeAreaChunks (client : Client) (area : S7.Area)
       have htail : offset + byteCount + rest.sum * area.elementSize = payload.size := by
         simpa [hchunks, byteCount, Nat.add_mul, Nat.add_assoc] using hcoverage
       let chunk := Chunking.writeSlice payload offset count area.elementSize (by omega)
-      client.writeAreaChunk { area, dbNumber, start := start + offset, count } chunk.val
+      client.writeAreaChunk { area, dbNumber, start := start + offset, count } chunk.val deadline retries
       client.writeAreaChunks area dbNumber start (offset + byteCount)
-        payload rest htail
+        payload rest htail deadline 0
 
-def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
-    (start : Nat) (payload : ByteArray) : IO Unit := do
+private def Client.writeAreaChecked (client : Client) (area : S7.Area) (dbNumber : UInt16)
+    (start : Nat) (payload : ByteArray) (deadline : Option Nat) (retries : Nat) : IO Unit := do
   if payload.isEmpty then
     return
   if haligned : payload.size % area.elementSize ≠ 0 then
     throw <| ClientError.invalidInput
       s!"payload size {payload.size} is not aligned to {area.elementSize}-byte elements"
   else
+    inputOrThrow <| MultiValidation.range {
+      area, dbNumber, start, count := payload.size / area.elementSize
+    }
     have hsize : payload.size / area.elementSize * area.elementSize = payload.size := by
       have hmod : payload.size % area.elementSize = 0 := by omega
       have := Nat.div_add_mod payload.size area.elementSize
@@ -606,7 +623,13 @@ def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     else
       client.writeAreaChunks area dbNumber start 0 payload
         (Chunking.counts (payload.size / area.elementSize) maxCount) (by
-          simpa [Chunking.counts_sum _ _ hmaximum] using hsize)
+          simpa [Chunking.counts_sum _ _ hmaximum] using hsize) deadline retries
+
+def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
+    (start : Nat) (payload : ByteArray) : IO Unit :=
+  client.serialized do
+    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    client.writeAreaChecked area dbNumber start payload deadline client.config.reconnectRetries
 
 def Client.dbRead (client : Client) (dbNumber : UInt16) (start size : Nat) : IO ByteArray :=
   client.readArea .dataBlocks dbNumber start size
@@ -654,7 +677,7 @@ def takeReadBatch (pduLength : Nat) : List S7.MemoryRange →
   | pending@(range :: rest), count, requestSize, responseSize, selected =>
       let nextRequestSize := requestSize + 12
       let nextResponseSize := responseSize + readResponseContribution range
-      if range.count > 0 && count < S7.maxItemCount &&
+      if range.count > 0 && MultiValidation.readLengthRepresentable range && count < S7.maxItemCount &&
           nextRequestSize ≤ pduLength && nextResponseSize ≤ pduLength then
         takeReadBatch pduLength rest (count + 1) nextRequestSize nextResponseSize (range :: selected)
       else
@@ -790,7 +813,31 @@ theorem takeReadBatch_positive (pduLength : Nat)
       intro item hitem
       rcases List.mem_cons.mp hitem with heq | hmem
       · subst item
-        exact hproperties.1.1.1
+        exact hproperties.1.1.1.1
+      · exact hselected item hmem
+    case isFalse => simpa using hselected
+
+/-- Every selected read can represent its successful response's length field. -/
+theorem takeReadBatch_lengths (pduLength : Nat)
+    (pending : List S7.MemoryRange) (count requestSize responseSize : Nat)
+    (selected : List S7.MemoryRange)
+    (hselected : ∀ range ∈ selected, MultiValidation.readLengthRepresentable range = true) :
+    ∀ range ∈ (takeReadBatch pduLength pending count requestSize responseSize selected).1,
+      MultiValidation.readLengthRepresentable range = true := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeReadBatch] using hselected
+  | cons range rest ih =>
+    simp only [takeReadBatch]
+    split
+    case isTrue hcondition =>
+      have hproperties := hcondition
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hproperties
+      apply ih (count + 1) (requestSize + 12)
+        (responseSize + readResponseContribution range) (range :: selected)
+      intro item hitem
+      rcases List.mem_cons.mp hitem with heq | hmem
+      · subst item
+        exact hproperties.1.1.1.2
       · exact hselected item hmem
     case isFalse => simpa using hselected
 
@@ -802,6 +849,7 @@ structure ReadBatchPlan (pduLength : Nat) (pending : List S7.MemoryRange) where
   partition : selected ++ remaining = pending
   countBound : selected.length ≤ S7.maxItemCount
   positive : ∀ range ∈ selected, 0 < range.count
+  lengths : ∀ range ∈ selected, MultiValidation.readLengthRepresentable range = true
   budgets : 14 ≤ pduLength →
     12 + 12 * selected.length ≤ pduLength ∧
       14 + readResponseContributions selected ≤ pduLength
@@ -814,20 +862,37 @@ def planReadBatch (pduLength : Nat) (pending : List S7.MemoryRange) :
     countBound := takeReadBatch_count_le pduLength pending 0 12 14 [] (by simp)
       (by decide)
     positive := takeReadBatch_positive pduLength pending 0 12 14 [] (by simp)
+    lengths := takeReadBatch_lengths pduLength pending 0 12 14 [] (by simp)
     budgets := fun h => takeReadBatch_fits pduLength pending (by omega) h }
 
-private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) := do
+private def Client.readMultiBatch (client : Client) (ranges : Array S7.MemoryRange)
+    (deadline : Option Nat) (retries : Nat) : IO (Array S7.ReadItemResult) := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaReadMany reference ranges
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
     throw <| ClientError.invalidInput
       s!"multi-read request exceeds negotiated PDU length {pduLength}"
-  let response ← client.exchange reference request
+  let response ← client.exchangeWithRetries reference request retries false deadline
   decodeOrThrow <| S7.decodeAreaReadMany reference ranges response
 
+private def Client.readMultiChunks (client : Client) (range : S7.MemoryRange)
+    (offset : Nat) (chunks : List Nat) (payload : ByteArray)
+    (deadline : Option Nat) (retries : Nat) : IO S7.ReadItemResult := do
+  match chunks with
+  | [] => return .success payload
+  | count :: rest =>
+      let results ← client.readMultiBatch #[{ range with start := range.start + offset, count }] deadline retries
+      match results[0]? with
+      | some (S7.ReadItemResult.failure code) => return .failure code
+      | some (S7.ReadItemResult.success fragment) =>
+          client.readMultiChunks range (offset + count * range.area.elementSize)
+            rest (payload ++ fragment) deadline 0
+      | none => throw <| ClientError.protocol "singleton multi-read omitted its result"
+
 private partial def Client.readMultiLoop (client : Client) (pending : List S7.MemoryRange)
-    (results : Array S7.ReadItemResult) : IO (Array S7.ReadItemResult) := do
+    (results : Array S7.ReadItemResult) (deadline : Option Nat)
+    (retries : Nat) : IO (Array S7.ReadItemResult) := do
   match pending with
   | [] => return results
   | range :: rest =>
@@ -836,14 +901,26 @@ private partial def Client.readMultiLoop (client : Client) (pending : List S7.Me
       let batch := plan.selected
       let remaining := plan.remaining
       if batch.isEmpty then
-        let payload ← client.readArea range.area range.dbNumber range.start range.count
-        client.readMultiLoop rest (results.push (.success payload))
+        let maximum := MultiValidation.readMaximum pduLength.toNat range.area
+        if maximum = 0 then
+          throw <| ClientError.invalidInput "negotiated PDU cannot hold a multi-read item"
+        let result ← client.readMultiChunks range 0 (Chunking.counts range.count maximum)
+          ByteArray.empty deadline retries
+        client.readMultiLoop rest (results.push result) deadline 0
       else
-        let batchResults ← client.readMultiBatch batch.toArray
-        client.readMultiLoop remaining (results ++ batchResults)
+        let batchResults ← client.readMultiBatch batch.toArray deadline retries
+        client.readMultiLoop remaining (results ++ batchResults) deadline 0
 
 def Client.readMulti (client : Client) (ranges : Array S7.MemoryRange) : IO (Array S7.ReadItemResult) :=
-  client.readMultiLoop ranges.toList #[]
+  client.serialized do
+    for range in ranges do
+      inputOrThrow <| MultiValidation.range range
+    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    try
+      client.readMultiLoop ranges.toList #[] deadline client.config.reconnectRetries
+    catch error =>
+      client.closeCurrent
+      throw error
 
 def writeRequestContribution (item : S7.WriteItem) : Nat :=
   12 + 4 + item.payload.size + item.payload.size % 2
@@ -856,6 +933,7 @@ def takeWriteBatch (pduLength : Nat) : List S7.WriteItem →
       let nextResponseSize := responseSize + 1
       let expectedSize := item.range.count * item.range.area.elementSize
       if item.range.count > 0 && item.payload.size == expectedSize &&
+          MultiValidation.readLengthRepresentable item.range &&
           count < S7.maxItemCount && nextRequestSize ≤ pduLength && nextResponseSize ≤ pduLength then
         takeWriteBatch pduLength rest (count + 1) nextRequestSize nextResponseSize (item :: selected)
       else
@@ -993,7 +1071,31 @@ theorem takeWriteBatch_payloads (pduLength : Nat)
       intro next hnext
       rcases List.mem_cons.mp hnext with heq | hmem
       · subst next
-        exact hproperties.1.1.1
+        exact hproperties.1.1.1.1
+      · exact hselected next hmem
+    case isFalse => simpa using hselected
+
+/-- Every selected write has a representable data-length field. -/
+theorem takeWriteBatch_lengths (pduLength : Nat)
+    (pending : List S7.WriteItem) (count requestSize responseSize : Nat)
+    (selected : List S7.WriteItem)
+    (hselected : ∀ item ∈ selected, MultiValidation.readLengthRepresentable item.range = true) :
+    ∀ item ∈ (takeWriteBatch pduLength pending count requestSize responseSize selected).1,
+      MultiValidation.readLengthRepresentable item.range = true := by
+  induction pending generalizing count requestSize responseSize selected with
+  | nil => simpa [takeWriteBatch] using hselected
+  | cons item rest ih =>
+    simp only [takeWriteBatch]
+    split
+    case isTrue hcondition =>
+      have hproperties := hcondition
+      simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hproperties
+      apply ih (count + 1) (requestSize + writeRequestContribution item)
+        (responseSize + 1) (item :: selected)
+      intro next hnext
+      rcases List.mem_cons.mp hnext with heq | hmem
+      · subst next
+        exact hproperties.1.1.1.2
       · exact hselected next hmem
     case isFalse => simpa using hselected
 
@@ -1005,6 +1107,7 @@ structure WriteBatchPlan (pduLength : Nat) (pending : List S7.WriteItem) where
   countBound : selected.length ≤ S7.maxItemCount
   payloads : ∀ item ∈ selected, 0 < item.range.count ∧
     item.payload.size = item.range.count * item.range.area.elementSize
+  lengths : ∀ item ∈ selected, MultiValidation.readLengthRepresentable item.range = true
   budgets : 14 ≤ pduLength →
     12 + writeRequestContributions selected ≤ pduLength ∧
       14 + selected.length ≤ pduLength
@@ -1017,40 +1120,70 @@ def planWriteBatch (pduLength : Nat) (pending : List S7.WriteItem) :
     countBound := takeWriteBatch_count_le pduLength pending 0 12 14 [] (by simp)
       (by decide)
     payloads := takeWriteBatch_payloads pduLength pending 0 12 14 [] (by simp)
+    lengths := takeWriteBatch_lengths pduLength pending 0 12 14 [] (by simp)
     budgets := fun h => takeWriteBatch_fits pduLength pending (by omega) h }
 
-private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
+private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem)
+    (deadline : Option Nat) (retries : Nat) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaWriteMany reference items
   let pduLength ← client.negotiatedPduLength
   if request.size > pduLength.toNat then
     throw <| ClientError.invalidInput
       s!"multi-write request exceeds negotiated PDU length {pduLength}"
-  let response ← client.exchange reference request
+  let response ← client.exchangeWithRetries reference request retries false deadline
   decodeOrThrow <| S7.decodeAreaWriteMany reference items.size response
 
+private def Client.writeMultiChunks (client : Client) (item : S7.WriteItem)
+    (offset : Nat) (chunks : List Nat) (deadline : Option Nat)
+    (retries : Nat) : IO S7.WriteItemResult := do
+  match chunks with
+  | [] => return .success
+  | count :: rest =>
+      let byteCount := count * item.range.area.elementSize
+      let chunk : S7.WriteItem := {
+        range := { item.range with start := item.range.start + offset, count }
+        payload := item.payload.extract offset (offset + byteCount)
+      }
+      let results ← client.writeMultiBatch #[chunk] deadline retries
+      match results[0]? with
+      | some (S7.WriteItemResult.failure code) => return .failure code
+      | some S7.WriteItemResult.success => client.writeMultiChunks item (offset + byteCount) rest deadline 0
+      | none => throw <| ClientError.protocol "singleton multi-write omitted its result"
+
 private partial def Client.writeMultiLoop (client : Client) (pending : List S7.WriteItem)
-    (results : Array S7.WriteItemResult) : IO (Array S7.WriteItemResult) := do
+    (results : Array S7.WriteItemResult) (deadline : Option Nat)
+    (retries : Nat) : IO (Array S7.WriteItemResult) := do
   match pending with
   | [] => return results
   | item :: rest =>
-      let expectedSize := item.range.count * item.range.area.elementSize
-      if item.payload.size != expectedSize then
-        throw <| ClientError.invalidInput
-          s!"multi-write payload size {item.payload.size} does not match expected {expectedSize}"
       let pduLength ← client.negotiatedPduLength
       let plan := planWriteBatch pduLength.toNat pending
       let batch := plan.selected
       let remaining := plan.remaining
       if batch.isEmpty then
-        client.writeArea item.range.area item.range.dbNumber item.range.start item.payload
-        client.writeMultiLoop rest (results.push .success)
+        let maximum := MultiValidation.writeMaximum pduLength.toNat item.range.area
+        if maximum = 0 then
+          throw <| ClientError.invalidInput "negotiated PDU cannot hold a multi-write item"
+        let result ← client.writeMultiChunks item 0 (Chunking.counts item.range.count maximum) deadline retries
+        client.writeMultiLoop rest (results.push result) deadline 0
       else
-        let batchResults ← client.writeMultiBatch batch.toArray
-        client.writeMultiLoop remaining (results ++ batchResults)
+        let batchResults ← client.writeMultiBatch batch.toArray deadline retries
+        client.writeMultiLoop remaining (results ++ batchResults) deadline 0
 
+/-- Locally validate the whole request before sending any writes. Successful
+    chunks preceding a PLC rejection remain written: this is not an atomic API. -/
 def Client.writeMulti (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) :=
-  client.writeMultiLoop items.toList #[]
+  client.serialized do
+    if items.isEmpty then return #[]
+    let pduLength ← client.negotiatedPduLength
+    inputOrThrow <| MultiValidation.writes pduLength.toNat items
+    let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
+    try
+      client.writeMultiLoop items.toList #[] deadline client.config.reconnectRetries
+    catch error =>
+      client.closeCurrent
+      throw error
 
 def Client.dbReadUInt8 (client : Client) (dbNumber : UInt16) (start : Nat) : IO UInt8 := do
   orThrow <| Value.getUInt8 (← client.dbRead dbNumber start 1)

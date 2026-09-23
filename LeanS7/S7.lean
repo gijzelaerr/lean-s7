@@ -761,12 +761,18 @@ theorem encodedAreaRead_size (reference : UInt16) (range : MemoryRange)
       simp [haddressSize, jobHeaderSize] at hsize
       omega
 
+def encodeReadAddresses : List MemoryRange → Except EncodeError ByteArray
+  | [] => .ok ByteArray.empty
+  | range :: rest => do
+      let address ← encodeMemoryAddress range
+      let tail ← encodeReadAddresses rest
+      return address ++ tail
+
 def encodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange) : Except EncodeError ByteArray := do
   if ranges.isEmpty || ranges.size > maxItemCount then
     throw (.invalidSize ranges.size)
-  let mut parameters := bytes #[readFunction, UInt8.ofNat ranges.size]
-  for range in ranges do
-    parameters := parameters ++ (← encodeMemoryAddress range)
+  let addresses ← encodeReadAddresses ranges.toList
+  let parameters := bytes #[readFunction, UInt8.ofNat ranges.size] ++ addresses
   encodeJob { reference, parameters }
 
 def encodeAreaWrite (reference : UInt16) (range : MemoryRange)
@@ -830,15 +836,10 @@ theorem encodedAreaWrite_size (reference : UInt16) (range : MemoryRange)
           simp [haddressSize, jobHeaderSize] at hsize
           omega
 
-def encodeAreaWriteMany (reference : UInt16) (items : Array WriteItem) : Except EncodeError ByteArray := do
-  if items.isEmpty || items.size > maxItemCount then
-    throw (.invalidSize items.size)
-  let mut parameters := bytes #[writeFunction, UInt8.ofNat items.size]
-  let mut data := ByteArray.empty
-  let mut index := 0
-  for item in items do
+def encodeWriteSections : List WriteItem → Except EncodeError (ByteArray × ByteArray)
+  | [] => .ok (ByteArray.empty, ByteArray.empty)
+  | item :: rest => do
     let address ← encodeMemoryAddress item.range
-    parameters := parameters ++ address
     let expectedSize := item.range.count * item.range.area.elementSize
     if item.payload.size != expectedSize then
       throw (.invalidPayloadSize item.payload.size expectedSize)
@@ -848,11 +849,18 @@ def encodeAreaWriteMany (reference : UInt16) (items : Array WriteItem) : Except 
       item.payload.size * 8
     if dataLength > maxSectionSize then
       throw (.invalidSize item.payload.size)
-    data := data ++ bytes #[0, item.range.area.dataTransportSize] ++
+    let itemData := bytes #[0, item.range.area.dataTransportSize] ++
       uint16BE (UInt16.ofNat dataLength) ++ item.payload
-    if index + 1 < items.size && item.payload.size % 2 != 0 then
-      data := data ++ bytes #[0]
-    index := index + 1
+    let padding := if !rest.isEmpty && item.payload.size % 2 != 0 then bytes #[0]
+      else ByteArray.empty
+    let (parameters, data) ← encodeWriteSections rest
+    return (address ++ parameters, itemData ++ padding ++ data)
+
+def encodeAreaWriteMany (reference : UInt16) (items : Array WriteItem) : Except EncodeError ByteArray := do
+  if items.isEmpty || items.size > maxItemCount then
+    throw (.invalidSize items.size)
+  let (addresses, data) ← encodeWriteSections items.toList
+  let parameters := bytes #[writeFunction, UInt8.ofNat items.size] ++ addresses
   encodeJob { reference, parameters, data }
 
 structure DbRange where

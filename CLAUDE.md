@@ -20,6 +20,8 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/S7.lean`: classic S7 PDU codecs and validation.
 - `LeanS7/Protocol.lean`: composed TPKT/COTP/S7 framing and stack-level proofs.
 - `LeanS7/Chunking.lean`: proved transfer chunk plans and coverage bounds.
+- `LeanS7/MultiValidation.lean`: whole logical-range/write-request validation before IO.
+- `LeanS7/BatchEncoderAssurance.lean`: actual multi-item encoder sizes and planner correspondence.
 - `LeanS7/Download.lean`: PLC-driven download phases and fragment-prefix proofs.
 - `LeanS7/Upload.lean`: upload phases, bounded accumulation, and completion proofs.
 - `LeanS7/UserDataAssembly.lean`: bounded SZL/USER_DATA fragment assembly and order proofs.
