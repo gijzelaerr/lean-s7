@@ -10,12 +10,16 @@ import threading
 import time
 from pathlib import Path
 
+import sequence_conformance
+from concurrency import run_concurrency
 from extended_deadlines import run_extended_deadlines
 from multi_batching import run_multi_batching
 from multi_semantics import run_multi_semantics
+from retry_progress import run_retry_progress
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
 from snap7.type import SrvArea
+from stateful_faults import run_stateful_faults
 from transfer_deadlines import run_transfer_deadlines
 
 
@@ -1553,9 +1557,13 @@ def main() -> None:
         except OSError:
             pass
         run_handshake_rejections(root)
+        sequence_conformance.run()
         run_service_rejections(root)
         run_transfer_deadlines(root)
         run_extended_deadlines(root)
+        run_concurrency(root)
+        run_stateful_faults(root)
+        run_retry_progress(root)
         run_multi_batching(root)
         run_multi_semantics(root)
         run_reconnect_shrink(root)

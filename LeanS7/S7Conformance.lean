@@ -3,6 +3,7 @@ import LeanS7.S7
 import LeanS7.Chunking
 import LeanS7.Protocol
 import LeanS7.Advanced
+import LeanS7.SequenceConformance
 
 namespace LeanS7.Conformance.S7
 
@@ -447,6 +448,7 @@ private def blockInfoCaseJson (test : BlockInfoCase) : Json := Json.mkObj [
 /-- Validate fixed expectations against executable codecs before exporting them.
     WORD cases model byte arithmetic, not a Lean DB WORD API. -/
 def validate : IO Unit := do
+  Sequences.validate
   for test in addressCases do
     let .ok packet := addressPacket test
       | throw <| IO.userError s!"address encoding failed: {test.id}"
@@ -537,6 +539,8 @@ def validate : IO Unit := do
 
 def corpus : Json := Json.mkObj [
   ("schema_version", 1), ("protocol", "classic S7 semantics"),
+  ("multi_item_cases", Sequences.multiJson),
+  ("userdata_conversation_cases", Sequences.continuationJson),
   ("response_cases", Json.arr (responseCases.map responseJson)),
   ("userdata_cases", Json.arr (userDataCases.map userDataJson)),
   ("upload_cases", Json.arr (uploadCases.map uploadJson)),

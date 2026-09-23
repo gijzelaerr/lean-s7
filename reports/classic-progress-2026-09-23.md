@@ -192,3 +192,61 @@ These are cross-implementation observations, not formal claims about the Python 
 - Independent new peer checks passed: 18 oversized-item success/failure/prevalidation
   scenarios at PDU sizes 240/480 and 34 extended deadline/prevalidation scenarios,
   including spent-budget reconnect and continuation-no-retry checks.
+
+## Operation safety and conversation assurance
+
+- Five follow-up items are being implemented in parallel: operation-aware
+  retries, concurrency/lifecycle peers, structured write progress, stateful
+  fault conversations, and broader value-codec proofs/conformance scenarios.
+- Retry and write-progress changes share an owner because they affect the
+  same client failure paths. Mutation/control/raw operations will not replay
+  automatically without explicit opt-in; session-allocating upload start is
+  treated conservatively too.
+- New exhaustive short conversations compare the production upload, download,
+  and USER_DATA state machines to independent arithmetic/phase oracles at each
+  accepted prefix. Independent peers inject disconnects and wrong services at
+  each upload and segmented SZL receive phase.
+- New concurrency peers use process barriers rather than timing guesses. After
+  correcting a Python peer framing assumption, the queued-failure test exposed
+  a real client defect: service-specific read decoding could fail after the
+  cleanup boundary without closing the session. The fix retains the gate
+  through typed read, USER_DATA, control-service, and SZL projection validation.
+- Codec work adds actual surrounded WORD/INT round-trip theorems and narrowly
+  stated floating-point bit interpretation theorems, plus mixed multi-item and
+  continuation corpus conversations. Focused tests passed for 31,310 stateful
+  conversations, all 65,536 WORD/INT values, 20 upload/SZL wire faults, and 12
+  independently decoded corpus conversations. Final combined checks remain pending.
+- The combined clean build passed all 82 jobs; the complete Lean test suite,
+  generated TPKT/COTP/S7 corpus comparisons, Python lint/format, and whitespace
+  checks passed. The full pinned emulator suite is now running with all new
+  peers wired in. No commit or push has been made for this follow-up.
+- Independent review found a write-progress edge case under explicit replay
+  opt-in: a validated rejection of the replay must not erase uncertainty about
+  an earlier attempt whose acknowledgement was lost. Earlier-attempt uncertainty
+  is being retained separately, with replay-then-rejection regression peers.
+- Concurrency failure assertions now distinguish the initiating protocol error
+  from disconnected queued calls. Task-creation barriers do not prove every
+  competitor has already entered the queue; disconnect and reconnect are
+  exercised separately, not as a combined disconnect-during-reconnect scenario.
+- Final source refinements preserve earlier write attempts in
+  `replayedUncertain`, mark current uncertainty only when sending starts, and
+  avoid inventing a write attempt when reconnect fails. Three extra regression
+  peers cover scalar/multi replay rejection and rejected reconnect diagnostics;
+  successful replay assertions are strengthened (15 retry/progress scenarios total).
+- Compact-header/MC7 decoding now stays inside the upload gate as well, with
+  a successful raw-transfer/invalid-compact-block regression (21 phase-fault
+  scenarios total). These final refinements await the final clean validation.
+- Final clean validation passed all 82 build jobs, all Lean tests, all three
+  generated corpus comparisons, lint/format, and whitespace checks. Independent
+  focused runs against this exact build passed all 15 retry/progress scenarios
+  and all four concurrency modes with strict initiating/queued error categories.
+  The focused 21-phase fault run also passed, including compact-upload closure.
+  The full final emulator suite remains underway.
+- Final complete pinned python-snap7 3.0.0 emulator/scripted-peer suite passed
+  against the final clean build, including all 15 retry/progress scenarios,
+  four concurrency modes, 21 phase faults, and all existing integration checks.
+  The complete local validation is green. No follow-up commit or push has
+  been made. Progress is wire-range/ordered-result based, not indexed by caller
+  item identity; replay uncertainty does not imply rollback or exactly-once IO.
+  Sends/connects remain outside cancellation guarantees, and no physical PLC
+  compatibility or safety certification is claimed.

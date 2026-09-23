@@ -92,6 +92,32 @@ Wireshark interprets these fields as counter/timer numbers. Neither establishes
 that Lean's byte-offset API matches physical controller indexing. See the
 [addressing investigation](../../reports/addressing-evidence-2026-09-09.md).
 
+## Multi-item and USERDATA conversations
+
+`multi_item_cases` pairs complete S7 `request_pdu` and `response_pdu` octet arrays,
+reference 1, and ordered DB ranges. These are unframed S7 PDUs (no TPKT/COTP).
+An accepted response's `items` preserve caller order: success, PLC item failure
+code 5, success. Read payloads are respectively `[170]` and `[187, 204]`;
+the odd first payload requires an inter-item padding byte. Missing padding,
+trailing response bytes, and missing/trailing write statuses must reject.
+An item-level PLC error is not a malformed packet and must not discard later
+successful items.
+
+`userdata_conversation_cases` supplies ordered, complete S7 `response_pdus`,
+the expected reference/group/subfunction, and explicit assembly byte/fragment
+bounds. Decode each response, append its payload in order, and stop only at
+the final-fragment flag. Empty continuations consume a fragment slot. Reject
+payload overflow, a continuation exhausting the fragment limit, any fragment
+after completion, and a conversation that ends before completion. These cases
+exercise bounded assembly, not request scheduling, retry policy, or validation
+of sequence/reference changes between fragments.
+
+The exporter checks fixed expectations against the actual decoders and assembly
+function before producing JSON. Run `python integration/sequence_conformance.py`
+to independently decode both sections using a strict standard-library-only
+byte-level oracle. It checks request ranges as well as ordered response results
+and bounded continuation assembly. This oracle does not validate python-snap7.
+
 ## Write cases
 
 Write `count` WORD elements to DB 1 at byte zero through the multi-write API.

@@ -2,6 +2,7 @@ import LeanS7.Protocol
 import LeanS7.Client
 import LeanS7.Value
 import LeanS7.BatchEncoderAssurance
+import LeanS7.ValueCodecAssurance
 
 namespace LeanS7
 
@@ -39,6 +40,14 @@ structure CoreProtocolAssurance : Prop where
   int16Codec : ∀ value, Value.getInt16 (Value.putInt16 value) = .ok value
   int32Codec : ∀ value, Value.getInt32 (Value.putInt32 value) = .ok value
   int64Codec : ∀ value, Value.getInt64 (Value.putInt64 value) = .ok value
+  surroundedWordCodec : ∀ pre suffix value,
+    Value.getUInt16 (pre ++ (Value.putUInt16 value ++ suffix)) pre.size = .ok value
+  surroundedIntCodec : ∀ pre suffix value,
+    Value.getInt16 (pre ++ (Value.putInt16 value ++ suffix)) pre.size = .ok value
+  realBitInterpretation : ∀ value,
+    Value.getReal (Value.putReal value) = .ok (Float32.ofBits value.toBits)
+  lrealBitInterpretation : ∀ value,
+    Value.getLReal (Value.putLReal value) = .ok (Float.ofBits value.toBits)
   s7JobCodec : ∀ job packet,
     job.parameters.size ≤ S7.maxSectionSize →
     job.data.size ≤ S7.maxSectionSize →
@@ -272,6 +281,10 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Value.getInt16_putInt16
   · exact Value.getInt32_putInt32
   · exact Value.getInt64_putInt64
+  · exact Value.getUInt16_putUInt16_surrounded
+  · exact Value.getInt16_putInt16_surrounded
+  · exact Value.getReal_putReal_bits
+  · exact Value.getLReal_putLReal_bits
   · exact S7.decodeJob_encodeJob
   · exact S7.decodeResponse_encodeAckData
   · exact Protocol.decodeJob_encodeJob

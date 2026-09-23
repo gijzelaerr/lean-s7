@@ -3,6 +3,9 @@ import LeanS7.S7Conformance
 import LeanS7.MutationTests
 import LeanS7.ExpandedMutationTests
 import LeanS7.MultiSemanticsTests
+import LeanS7.StatefulFaultTests
+import LeanS7.ValueCodecAssuranceTests
+import LeanS7.RetryProgressTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -885,6 +888,9 @@ def main : IO Unit := do
   Conformance.S7.validate
   MutationTests.run
   ExpandedMutationTests.run
+  StatefulFaultTests.run
+  ValueCodecAssuranceTests.run
+  RetryProgressTests.run
   MultiSemanticsTests.run
   BatchingTests.run
   testUserDataAssembly
