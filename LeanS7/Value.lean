@@ -261,4 +261,181 @@ def decodeWString (data : ByteArray) (offset : Nat := 0) : Except Error String :
   let _ ← fromDecode <| cursor.readBytes (maximum.toNat * 2)
   return String.ofList (← decodeUtf16Units units 0)
 
+/-- Successful STRING encoding reserves its entire declared capacity. -/
+theorem encodeString_size (maximum : Nat) (value : String) (encoded : ByteArray)
+    (h : encodeString maximum value = .ok encoded) : encoded.size = maximum + 2 := by
+  unfold encodeString at h
+  split at h
+  · contradiction
+  · cases he : encodeLatin1 value.toList with
+    | error error => simp [he, bind, Except.bind] at h
+    | ok characters =>
+      simp only [he, bind, Except.bind, pure, Except.pure] at h
+      split at h
+      · contradiction
+      · cases h
+        simp only [ByteArray.size_append, bytes_size]
+        change 2 + characters.toByteArray.size +
+          (zeros (maximum - characters.toByteArray.size)).size = maximum + 2
+        have hz (n : Nat) : (zeros n).size = n := by simp [zeros, ByteArray.size]
+        rw [hz]
+        omega
+
+private theorem encodeUtf16Units_size (units : List UInt16) :
+    (encodeUtf16Units units).size = units.length * 2 := by
+  induction units with
+  | nil => rfl
+  | cons unit rest ih => simp [encodeUtf16Units, ih]; omega
+
+/-- WSTRING reserves two bytes per declared UTF-16 code unit, including padding. -/
+theorem encodeWString_size (maximum : Nat) (value : String) (encoded : ByteArray)
+    (h : encodeWString maximum value = .ok encoded) : encoded.size = maximum * 2 + 4 := by
+  unfold encodeWString at h
+  split at h
+  · contradiction
+  · dsimp at h
+    split at h
+    · contradiction
+    · simp only [pure, Except.pure] at h
+      cases h
+      simp only [ByteArray.size_append, uint16BE_size, encodeUtf16Units_size]
+      have hz (n : Nat) : (zeros n).size = n := by simp [zeros, ByteArray.size]
+      rw [hz]
+      omega
+
+theorem encodeString_capacity_bound (maximum : Nat) (value : String) (encoded : ByteArray)
+    (h : encodeString maximum value = .ok encoded) : maximum ≤ maxStringLength := by
+  unfold encodeString at h
+  split at h
+  · contradiction
+  · omega
+
+theorem encodeWString_capacity_bound (maximum : Nat) (value : String) (encoded : ByteArray)
+    (h : encodeWString maximum value = .ok encoded) : maximum ≤ maxWStringLength := by
+  unfold encodeWString at h
+  split at h
+  · contradiction
+  · omega
+
+/-- Empty STRING values ignore unused reserved bytes but still require their
+    declared capacity to be present. -/
+theorem decodeString_empty_surrounded (pre storage suffix : ByteArray) (maximum : UInt8)
+    (hmax : maximum.toNat ≤ maxStringLength) (hstorage : maximum.toNat ≤ storage.size) :
+    decodeString (pre ++ (putUInt8 maximum ++ (putUInt8 0 ++ (storage ++ suffix))))
+      pre.size = .ok "" := by
+  unfold decodeString
+  simp only [cursorAt, putUInt8]
+  rw [Cursor.readUInt8_append_byte]
+  simp only [fromDecode, Except.mapError, bind, Except.bind]
+  have hsecond := Cursor.readUInt8_append_byte (pre ++ bytes #[maximum]) (storage ++ suffix) 0
+  simp only [ByteArray.size_append, bytes_size] at hsecond
+  change Cursor.readUInt8 {
+    data := (pre ++ bytes #[maximum]) ++ (bytes #[0] ++ (storage ++ suffix))
+    offset := pre.size + 1 } = _ at hsecond
+  rw [ByteArray.append_assoc] at hsecond
+  rw [hsecond]
+  have hcapacity : ¬ maxStringLength < maximum.toNat := by omega
+  have havailable : maximum.toNat ≤
+      pre.size + (1 + (1 + (storage.size + suffix.size))) - (pre.size + 1 + 1) := by omega
+  simp [hcapacity, Cursor.readBytes, Cursor.remaining, havailable,
+    pure, Except.pure, String.ofList_nil]
+
+/-- The entire active STRING content is interpreted independently of bytes
+    outside its declared storage, for arbitrary (including nonempty) content. -/
+theorem decodeString_surrounded_content (pre content suffix : ByteArray) (maximum current : UInt8)
+    (hmax : maximum.toNat ≤ maxStringLength) (hcurrent : current ≤ maximum)
+    (hsize : content.size = maximum.toNat) :
+    decodeString (pre ++ (putUInt8 maximum ++ (putUInt8 current ++ (content ++ suffix))))
+      pre.size = .ok (String.ofList <|
+        (content.extract 0 current.toNat).toList.map fun byte => Char.ofNat byte.toNat) := by
+  unfold decodeString
+  simp only [cursorAt, putUInt8]
+  rw [Cursor.readUInt8_append_byte]
+  simp only [fromDecode, Except.mapError, bind, Except.bind]
+  have hsecond := Cursor.readUInt8_append_byte (pre ++ bytes #[maximum]) (content ++ suffix) current
+  simp only [ByteArray.size_append, bytes_size] at hsecond
+  change Cursor.readUInt8 {
+    data := (pre ++ bytes #[maximum]) ++ (bytes #[current] ++ (content ++ suffix))
+    offset := pre.size + 1 } = _ at hsecond
+  rw [ByteArray.append_assoc] at hsecond
+  rw [hsecond]
+  have hcapacity : ¬ maximum.toNat > maxStringLength := by omega
+  have hactive : ¬ current > maximum := by
+    simp only [UInt8.le_iff_toNat_le] at hcurrent
+    simp only [UInt8.lt_iff_toNat_lt]
+    omega
+  have hsingle : (#[maximum] : Array UInt8).size = 1 := rfl
+  simp only [hsingle]
+  simp only [hcapacity, hactive, if_false]
+  have hread := Cursor.readBytes_append ((pre ++ bytes #[maximum]) ++ bytes #[current]) content suffix
+  simp only [ByteArray.size_append, bytes_size] at hread
+  change Cursor.readBytes {
+    data := ((pre ++ bytes #[maximum]) ++ bytes #[current]) ++ (content ++ suffix)
+    offset := pre.size + 1 + 1 } content.size = _ at hread
+  simp only [ByteArray.append_assoc] at hread
+  rw [hsize] at hread
+  rw [hread]
+  rfl
+
+/-- An empty WSTRING decodes independently of arbitrary unused storage and
+    surrounding DB bytes. The capacity is in UTF-16 units, not characters. -/
+theorem decodeWString_empty_surrounded (pre storage suffix : ByteArray) (maximum : UInt16)
+    (hmax : maximum.toNat ≤ maxWStringLength) (hstorage : maximum.toNat * 2 ≤ storage.size) :
+    decodeWString (pre ++ (uint16BE maximum ++ (uint16BE 0 ++ (storage ++ suffix))))
+      pre.size = .ok "" := by
+  unfold decodeWString
+  simp only [cursorAt]
+  rw [Cursor.readUInt16BE_append_uint16BE]
+  simp only [fromDecode, Except.mapError, bind, Except.bind]
+  have hsecond := Cursor.readUInt16BE_append_uint16BE (pre ++ uint16BE maximum)
+    (storage ++ suffix) 0
+  simp only [ByteArray.size_append, uint16BE_size] at hsecond
+  rw [ByteArray.append_assoc] at hsecond
+  rw [hsecond]
+  have hcapacity : ¬ maxWStringLength < maximum.toNat := by omega
+  have havailable : maximum.toNat * 2 ≤
+      pre.size + (2 + (2 + (storage.size + suffix.size))) - (pre.size + 2 + 2) := by omega
+  simp [hcapacity, readUtf16Units, Cursor.readBytes, Cursor.remaining, havailable,
+    decodeUtf16Units, pure, Except.pure, String.ofList_nil]
+
+/-- Actual empty STRING encoder/decoder composition, at arbitrary DB offsets. -/
+theorem decodeString_encodeString_empty_surrounded (pre suffix : ByteArray) (maximum : Nat)
+    (hmax : maximum ≤ maxStringLength) :
+    (encodeString maximum "" >>= fun encoded =>
+      decodeString (pre ++ (encoded ++ suffix)) pre.size) = .ok "" := by
+  have hcapacity : ¬ maximum > maxStringLength := by omega
+  have hencoded : encodeString maximum "" =
+      .ok (putUInt8 (UInt8.ofNat maximum) ++ (putUInt8 0 ++ zeros maximum)) := by
+    simp [encodeString, hcapacity, encodeLatin1, bind, Except.bind, pure, Except.pure]
+    rfl
+  rw [hencoded]
+  simp only [bind, Except.bind]
+  rw [ByteArray.append_assoc, ByteArray.append_assoc]
+  apply decodeString_empty_surrounded
+  · simp only [UInt8.toNat_ofNat']
+    unfold maxStringLength at *
+    omega
+  · simp [zeros, ByteArray.size, UInt8.toNat_ofNat']
+    omega
+
+/-- Empty WSTRING round trips for every legal code-unit capacity. -/
+theorem decodeWString_encodeWString_empty_surrounded (pre suffix : ByteArray) (maximum : Nat)
+    (hmax : maximum ≤ maxWStringLength) :
+    (encodeWString maximum "" >>= fun encoded =>
+      decodeWString (pre ++ (encoded ++ suffix)) pre.size) = .ok "" := by
+  have hcapacity : ¬ maximum > maxWStringLength := by omega
+  have hencoded : encodeWString maximum "" =
+      .ok (uint16BE (UInt16.ofNat maximum) ++ (uint16BE 0 ++ zeros (maximum * 2))) := by
+    simp [encodeWString, hcapacity, encodeUtf16, encodeUtf16Units,
+      pure, Except.pure, ByteArray.append_assoc]
+  rw [hencoded]
+  simp only [bind, Except.bind]
+  rw [ByteArray.append_assoc, ByteArray.append_assoc]
+  apply decodeWString_empty_surrounded
+  · simp only [UInt16.toNat_ofNat']
+    unfold maxWStringLength at *
+    omega
+  · simp [zeros, ByteArray.size, UInt16.toNat_ofNat']
+    omega
+
 end LeanS7.Value

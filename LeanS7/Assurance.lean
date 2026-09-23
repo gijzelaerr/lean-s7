@@ -258,6 +258,28 @@ structure CoreProtocolAssurance : Prop where
   singleUserDataCompletion : ∀ (response : S7.UserDataResponse) payload,
     S7.requireCompleteUserData response = .ok payload →
       response.hasMoreData = false ∧ payload = response.payload
+  cotpResourceBytes : ∀ (state next : COTP.Reassembly) segment maximum maxSegments complete,
+    state.pushResourceBounded segment maximum maxSegments = .ok (next, complete) →
+      next.payload.size ≤ maximum
+  cotpResourceSegments : ∀ (state next : COTP.Reassembly) segment maximum maxSegments complete,
+    state.pushResourceBounded segment maximum maxSegments = .ok (next, complete) →
+      next.segments = state.segments + 1 ∧ next.segments ≤ maxSegments
+  surroundedDword : ∀ pre suffix value,
+    Value.getUInt32 (pre ++ (Value.putUInt32 value ++ suffix)) pre.size = .ok value
+  surroundedLword : ∀ pre suffix value,
+    Value.getUInt64 (pre ++ (Value.putUInt64 value ++ suffix)) pre.size = .ok value
+  surroundedDint : ∀ pre suffix value,
+    Value.getInt32 (pre ++ (Value.putInt32 value ++ suffix)) pre.size = .ok value
+  surroundedLint : ∀ pre suffix value,
+    Value.getInt64 (pre ++ (Value.putInt64 value ++ suffix)) pre.size = .ok value
+  surroundedRealBits : ∀ pre suffix value,
+    Value.getReal (pre ++ (Value.putReal value ++ suffix)) pre.size = .ok (Float32.ofBits value.toBits)
+  surroundedLrealBits : ∀ pre suffix value,
+    Value.getLReal (pre ++ (Value.putLReal value ++ suffix)) pre.size = .ok (Float.ofBits value.toBits)
+  stringAllocation : ∀ maximum value encoded,
+    Value.encodeString maximum value = .ok encoded → encoded.size = maximum + 2
+  wstringAllocation : ∀ maximum value encoded,
+    Value.encodeWString maximum value = .ok encoded → encoded.size = maximum * 2 + 4
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -352,6 +374,16 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact WriteProgress.State.replay_history_locations
   · exact WriteProgress.State.acknowledge_count
   · exact S7.requireCompleteUserData_complete
+  · exact COTP.Reassembly.pushResourceBounded_size
+  · exact COTP.Reassembly.pushResourceBounded_segments
+  · exact Value.getUInt32_putUInt32_surrounded
+  · exact Value.getUInt64_putUInt64_surrounded
+  · exact Value.getInt32_putInt32_surrounded
+  · exact Value.getInt64_putInt64_surrounded
+  · exact Value.getReal_putReal_surrounded_bits
+  · exact Value.getLReal_putLReal_surrounded_bits
+  · exact Value.encodeString_size
+  · exact Value.encodeWString_size
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition

@@ -1,6 +1,7 @@
 import Lean.Data.Json
 import LeanS7.Conformance
 import LeanS7.S7Conformance
+import LeanS7.OperationConformance
 
 open Lean
 open LeanS7.Conformance
@@ -98,4 +99,7 @@ def main (args : List String) : IO Unit := do
   | ["s7"] =>
       S7.validate
       IO.println (Json.pretty S7.corpus 100)
-  | _ => throw <| IO.userError "usage: lean-s7-conformance [cotp|s7]"
+  | ["operations"] =>
+      Operations.validate
+      IO.println (Json.pretty Operations.corpus 100)
+  | _ => throw <| IO.userError "usage: lean-s7-conformance [cotp|s7|operations]"

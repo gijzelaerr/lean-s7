@@ -323,11 +323,13 @@ structure Data where
 /-- Accumulated payload from one or more COTP data TPDUs. -/
 structure Reassembly where
   payload : ByteArray := ByteArray.empty
+  segments : Nat := 0
   deriving BEq
 
 /-- Append one segment and report whether it completes the TSDU. -/
 def Reassembly.push (state : Reassembly) (segment : Data) : Reassembly × Bool :=
-  ({ payload := state.payload ++ segment.payload }, segment.endOfTransmission)
+  ({ payload := state.payload ++ segment.payload, segments := state.segments + 1 },
+    segment.endOfTransmission)
 
 /-- Enforce a cumulative TSDU budget before allocating the appended payload. -/
 def Reassembly.pushBounded (state : Reassembly) (segment : Data) (maximum : Nat) :
@@ -345,6 +347,37 @@ theorem Reassembly.pushBounded_size (state next : Reassembly) (segment : Data)
   split at h
   · cases h
     simpa [push] using ‹state.payload.size + segment.payload.size ≤ maximum›
+  · contradiction
+
+/-- Bound work as well as payload bytes, including empty and non-final TPDUs. -/
+def Reassembly.pushResourceBounded (state : Reassembly) (segment : Data)
+    (maximum maxSegments : Nat) : Except DecodeError (Reassembly × Bool) :=
+  if state.segments < maxSegments then
+    state.pushBounded segment maximum
+  else
+    .error (.invalidField 0 s!"COTP reassembly exceeds segment limit {maxSegments}")
+
+theorem Reassembly.pushResourceBounded_size (state next : Reassembly) (segment : Data)
+    (maximum maxSegments : Nat) (complete : Bool)
+    (h : state.pushResourceBounded segment maximum maxSegments = .ok (next, complete)) :
+    next.payload.size ≤ maximum := by
+  unfold pushResourceBounded at h
+  split at h
+  · exact pushBounded_size state next segment maximum complete h
+  · contradiction
+
+theorem Reassembly.pushResourceBounded_segments (state next : Reassembly) (segment : Data)
+    (maximum maxSegments : Nat) (complete : Bool)
+    (h : state.pushResourceBounded segment maximum maxSegments = .ok (next, complete)) :
+    next.segments = state.segments + 1 ∧ next.segments ≤ maxSegments := by
+  unfold pushResourceBounded at h
+  split at h
+  · rename_i hcount
+    unfold pushBounded at h
+    split at h
+    · cases h
+      exact ⟨rfl, Nat.succ_le_of_lt hcount⟩
+    · contradiction
   · contradiction
 
 /-- Reassembly preserves arrival order and appends every segment exactly once. -/

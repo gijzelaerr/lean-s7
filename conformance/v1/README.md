@@ -130,3 +130,51 @@ validate shared element/byte arithmetic and payload preservation. They do not
 claim equivalent APIs or prove the Python implementation. These cases were
 motivated by the September 2026 audit; the audit's historical reproductions remain
 separate because they intentionally assert the observed faulty behavior.
+
+## Operation regressions
+
+Generate `operations.json` with `lake exe lean-s7-conformance operations`. The
+exporter first checks fixed expectations against the actual value codecs,
+USER_DATA decoder/completion guard, retry policy, and write-progress state model.
+Run `python integration/operation_conformance.py` for an independent strict
+standard-library-only oracle. All bytes are integer arrays, not hex strings.
+
+`string_read_cases` pairs `initial_header` from the first DB read with `body`
+from the second read of the originally advertised storage capacity. These are
+assembled value bytes, not S7 or TCP packets. STRING uses Latin-1 and two
+one-byte length fields; WSTRING uses UTF-16BE and two big-endian two-byte length
+fields. Capacity must remain unchanged between reads, while current length may
+change. Expected negative categories distinguish `initial-header`,
+`capacity-changed`, and `value-codec`. The guard model mirrors the client check
+and invokes its actual value codecs; it does not establish atomic PLC snapshots,
+network scheduling, operation deadlines, or thread serialization.
+
+`single_userdata_cases` supplies complete unframed S7 response PDUs for fixed
+single-response services. Validate the reference/group/subfunction and PDU
+extent before requiring a zero continuation flag. Categories distinguish
+`pdu-validation` from `incomplete-single-response`. A syntactically valid first
+fragment must still reject, including an empty password/clock acknowledgement.
+Acceptance exposes only the guarded payload; service-specific clock or block
+metadata interpretation is outside these vectors. Segmented SZL/block-list
+services use the separate conversation corpus and must not use this guard.
+
+`retry_policy_cases` specifies operation replay permission, not whether a
+particular error triggers a retry: reads permit replay, potentially mutating
+operations require an explicit opt-in. Actual attempt counts, reconnects,
+compound-operation replay suppression, and remote side effects remain network
+integration concerns.
+
+`write_progress_cases` supplies ordered pure events (`send`, `acknowledge`,
+`replay`, `global-reject`). Each location retains the memory range, original
+multi-item `item_index` (null for scalar), and `chunk_byte_offset` in bytes within
+the caller payload. Duplicate memory ranges are distinct caller items. A replay
+retains the earlier unacknowledged attempt as `replayed-unknown`; a later success
+or rejection cannot retroactively establish its remote outcome. Expected traces
+preserve chronological order and specify counts for acknowledged, globally
+rejected, replay-uncertain, and currently uncertain attempts. Item failure code 5
+is an acknowledged item result, not a global rejection. Successful prefixes
+are not an atomic transaction or rollback guarantee.
+
+The Python oracle is independent conformance evidence, not a formal proof of
+Python source or a test of python-snap7. These vectors require no controller and
+do not establish physical PLC compatibility.

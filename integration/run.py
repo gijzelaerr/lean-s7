@@ -14,14 +14,18 @@ import sequence_conformance
 from compound_operations import run_compound_operations
 from concurrency import run_concurrency
 from extended_deadlines import run_extended_deadlines
+from mixed_operations import run_mixed_operations
 from multi_batching import run_multi_batching
 from multi_semantics import run_multi_semantics
+from operation_conformance import run as run_operation_conformance
 from retry_progress import run_retry_progress
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
 from snap7.type import SrvArea
 from stateful_faults import run_stateful_faults
+from timeout_cleanup import run_timeout_cleanup
 from transfer_deadlines import run_transfer_deadlines
+from transport_resources import run_transport_resources
 from userdata_completion import run_userdata_completion
 from write_provenance import run_write_provenance
 
@@ -1570,6 +1574,10 @@ def main() -> None:
         run_retry_progress(root)
         run_write_provenance(root)
         run_userdata_completion(root)
+        run_transport_resources()
+        run_timeout_cleanup(root)
+        run_mixed_operations()
+        run_operation_conformance()
         run_multi_batching(root)
         run_multi_semantics(root)
         run_reconnect_shrink(root)

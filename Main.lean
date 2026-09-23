@@ -6,6 +6,9 @@ import LeanS7.RetryProgressTests
 import LeanS7.CompoundTests
 import LeanS7.WriteProvenanceTests
 import LeanS7.UserDataCompletionTests
+import LeanS7.TransportResourceTests
+import LeanS7.TimeoutTests
+import LeanS7.MixedOperationTests
 
 open LeanS7 Std.Net
 
@@ -681,6 +684,12 @@ def main (args : List String) : IO Unit := do
       ConcurrencyTests.runIntegration host port mode
   | ["integration-compound", host, port, mode] =>
       CompoundTests.runIntegration host port mode
+  | ["integration-mixed-operations", host, port, plan] =>
+      MixedOperationTests.runIntegration host port plan
+  | ["integration-timeout-cleanup", host, port, mode] =>
+      TimeoutTests.runIntegration host port mode
+  | ["integration-transport-resources", host, port, mode] =>
+      TransportResourceTests.runIntegration host port mode
   | ["integration-userdata-completion", host, port, service, mode] =>
       UserDataCompletionTests.runIntegration host port service mode
   | ["integration-write-provenance", host, port, mode] =>

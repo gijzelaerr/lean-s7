@@ -28,38 +28,48 @@ private inductive TimeoutResult (α : Type) where
 
 private instance : Nonempty (TimeoutResult α) := ⟨.timedOut⟩
 
+/-- Budgets must not silently wrap when passed to native timer APIs. -/
+def maximumTimeoutMs : Nat := 4294967295
+
+def validateTimeoutMs (timeoutMs : Option Nat) : IO Unit := do
+  if let some timeout := timeoutMs then
+    if timeout > maximumTimeoutMs then
+      throw <| ClientError.invalidInput s!"timeout exceeds maximum {maximumTimeoutMs} ms: {timeout}"
+
+private def await (operation : Async α) : IO α := do
+  let task ← operation.toIO
+  task.block
+
+private def taskSelector (task : Task (Except IO.Error α)) : Selector (Except IO.Error α) := {
+  tryFn := do
+    if ← IO.hasFinished task then return some task.get
+    else return none
+  registerFn := fun waiter => do
+    IO.chainTask task fun result =>
+      waiter.race (pure ()) fun promise => promise.resolve (.ok result)
+  unregisterFn := pure () }
+
 private inductive ReceiveResult where
   | received (data : Option ByteArray)
   | timedOut
 
 private def withTimeout (timeoutMs : Option Nat) (label : String) (operation : IO α) : IO α := do
+  validateTimeoutMs timeoutMs
   let some timeoutMs := timeoutMs | operation
-  let result : IO.Promise (TimeoutResult α) ← IO.Promise.new
-  let finished ← IO.mkRef false
   let operationTask ← IO.asTask operation
-  let timerTask ← IO.asTask do IO.sleep (UInt32.ofNat timeoutMs)
-  IO.chainTask operationTask fun value => do
-    if ← finished.modifyGet fun done => (!done, true) then
-      result.resolve (TimeoutResult.completed value)
-  IO.chainTask timerTask fun _ => do
-    if ← finished.modifyGet fun done => (!done, true) then
-      result.resolve TimeoutResult.timedOut
-  let some outcome ← IO.wait result.result?
-    | throw <| ClientError.lifecycle s!"{label} timeout waiter was cancelled"
-  match outcome with
-  | .completed (.ok value) =>
-      IO.cancel timerTask
-      return value
-  | .completed (.error error) =>
-      IO.cancel timerTask
-      throw error
-  | .timedOut =>
-      IO.cancel operationTask
-      throw <| ClientError.timeout s!"{label} timed out after {timeoutMs} ms"
-
-private def await (operation : Async α) : IO α := do
-  let task ← operation.toIO
-  task.block
+  try
+    let timer ← await (Selector.sleep (Std.Time.Millisecond.Offset.ofNat timeoutMs))
+    let outcome ← await <| Selectable.one #[
+      .case (taskSelector operationTask) fun value => pure (TimeoutResult.completed value),
+      .case timer fun _ => pure TimeoutResult.timedOut ]
+    match outcome with
+    | .completed (.ok value) => return value
+    | .completed (.error error) => throw error
+    | .timedOut => throw <| ClientError.timeout s!"{label} timed out after {timeoutMs} ms"
+  finally
+    -- Native timer selection unregisters losing timers. Cancelling a task remains
+    -- cooperative; socket owners must also shut down failed connections.
+    IO.cancel operationTask
 
 private def orThrow [Repr ε] (result : Except ε α) : IO α :=
   match result with
@@ -71,6 +81,7 @@ def sendBytes (socket : Socket) (data : ByteArray) (_timeoutMs : Option Nat := n
 
 /-- One monotonic receive deadline, shared by fragments and stale responses. -/
 def receiveDeadline (timeoutMs : Option Nat) : IO (Option Nat) := do
+  validateTimeoutMs timeoutMs
   match timeoutMs with
   | none => return none
   | some timeout => return some ((← IO.monoMsNow) + timeout)
@@ -95,6 +106,7 @@ private def remainingReceiveTime (deadline : Option Nat) : IO (Option Nat) := do
   let now ← IO.monoMsNow
   if now ≥ deadline then
     throw <| ClientError.timeout "socket receive timed out: operation deadline expired"
+  validateTimeoutMs (some (deadline - now))
   return some (deadline - now)
 
 private def receiveSome (socket : Socket) (count : Nat) (deadline : Option Nat) : IO (Option ByteArray) := do
@@ -129,12 +141,19 @@ def sendFrame (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat :=
   let frame ← orThrow <| TPKT.encode { payload }
   sendBytes socket frame timeoutMs
 
-private def receiveFrameUntil (socket : Socket) (deadline : Option Nat) : IO ByteArray := do
+private def receiveFrameUntil (socket : Socket) (deadline : Option Nat)
+    (maxBodySize : Nat := TPKT.maxFrameSize - TPKT.headerSize)
+    (bodyLimitDetail : String := "") : IO ByteArray := do
   let header ← receiveExactUntil socket TPKT.headerSize deadline
+  let (version, _) ← orThrow <| (Cursor.readUInt8 { data := header })
+  if version != TPKT.version then
+    throw <| ClientError.protocol s!"unsupported TPKT version {version}"
   let cursor : Cursor := { data := header, offset := 2 }
   let (length, _) ← orThrow cursor.readUInt16BE
-  if length.toNat < TPKT.headerSize then
+  if length.toNat < TPKT.minFrameSize then
     throw <| ClientError.protocol s!"invalid TPKT frame length {length}"
+  if length.toNat - TPKT.headerSize > maxBodySize then
+    throw <| ClientError.protocol s!"TPKT body exceeds receive limit {maxBodySize} {bodyLimitDetail}"
   let payload ← receiveExactUntil socket (length.toNat - TPKT.headerSize) deadline
   let frame ← orThrow <| TPKT.decode (header ++ payload)
   return frame.payload
@@ -146,30 +165,43 @@ def sendData (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat := 
   sendFrame socket (COTP.encodeData { payload }) timeoutMs
 
 private partial def receiveDataSegments (socket : Socket) (deadline : Option Nat)
-    (maximum : Nat) (state : COTP.Reassembly) : IO ByteArray := do
-  let payload ← receiveFrameUntil socket deadline
+    (maximum maxSegments : Nat) (state : COTP.Reassembly) : IO ByteArray := do
+  if state.segments ≥ maxSegments then
+    throw <| ClientError.protocol s!"COTP reassembly exceeds segment limit {maxSegments}"
+  -- The supported class-0 DT header is exactly three bytes. Reject a declared
+  -- over-budget body before awaiting it, rather than only after decoding it.
+  let payload ← receiveFrameUntil socket deadline (maximum - state.payload.size + 3)
+    s!"COTP reassembly exceeds payload limit {maximum}"
   let segment ← orThrow <| COTP.decodeData payload
-  let (state, complete) ← orThrow <| state.pushBounded segment maximum
+  let (state, complete) ← orThrow <| state.pushResourceBounded segment maximum maxSegments
   if complete then
     return state.payload
-  receiveDataSegments socket deadline maximum state
+  receiveDataSegments socket deadline maximum maxSegments state
 
 /-- Receive one complete TSDU using an absolute `IO.monoMsNow` deadline.
-    `none` disables the deadline; callers may reuse it while discarding stale PDUs. -/
+    `none` disables the deadline; callers may reuse it while discarding stale PDUs.
+    A separate finite segment budget still applies to empty and tiny fragments. -/
 def receiveDataUntil (socket : Socket) (deadline : Option Nat)
-    (maxPayloadSize : Nat := 65535) : IO ByteArray :=
-  receiveDataSegments socket deadline maxPayloadSize {}
+    (maxPayloadSize : Nat := 65535) (maxSegments : Nat := 4096) : IO ByteArray :=
+  receiveDataSegments socket deadline maxPayloadSize maxSegments {}
 
 def receiveData (socket : Socket) (timeoutMs : Option Nat := none)
-    (maxPayloadSize : Nat := 65535) : IO ByteArray := do
-  receiveDataUntil socket (← receiveDeadline timeoutMs) maxPayloadSize
+    (maxPayloadSize : Nat := 65535) (maxSegments : Nat := 4096) : IO ByteArray := do
+  receiveDataUntil socket (← receiveDeadline timeoutMs) maxPayloadSize maxSegments
 
 private def socketAddress (address : IPAddr) (port : UInt16) : SocketAddress :=
   match address with
   | .v4 address => SocketAddressV4.mk address port
   | .v6 address => SocketAddressV6.mk address port
 
+/-- Resolver entries may repeat an endpoint for different socket/protocol kinds.
+    Preserve candidate order without silently trying an identical peer twice. -/
+def uniqueAddresses (addresses : Array SocketAddress) : Array SocketAddress :=
+  addresses.foldl (init := #[]) fun selected address =>
+    if selected.contains address then selected else selected.push address
+
 def resolve (endpoint : Endpoint) (port : UInt16) (timeoutMs : Option Nat := none) : IO (Array SocketAddress) := do
+  validateTimeoutMs timeoutMs
   match endpoint with
   | .ipv4 address => return #[SocketAddressV4.mk address port]
   | .ipv6 address => return #[SocketAddressV6.mk address port]
@@ -178,7 +210,7 @@ def resolve (endpoint : Endpoint) (port : UInt16) (timeoutMs : Option Nat := non
         await (DNS.getAddrInfo name (toString port))
       if addresses.isEmpty then
         throw <| IO.Error.noSuchThing none 0 s!"hostname {name} resolved to no addresses"
-      return addresses.map fun address => socketAddress address port
+      return uniqueAddresses (addresses.map fun address => socketAddress address port)
 
 private def connectAddress (address : SocketAddress) (request : COTP.ConnectionRequest)
     (timeoutMs : Option Nat) : IO Connection := do
@@ -208,7 +240,7 @@ private def connectAddresses (addresses : List SocketAddress) (request : COTP.Co
   | address :: rest =>
       try connectAddress address request timeoutMs
       catch error =>
-        if rest.isEmpty then throw error
+        if rest.isEmpty || !isRetryableClientError error then throw error
         connectAddresses rest request timeoutMs
 
 def connect (endpoint : Endpoint) (port : UInt16) (request : COTP.ConnectionRequest)

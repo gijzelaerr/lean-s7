@@ -8,6 +8,10 @@ import LeanS7.ValueCodecAssuranceTests
 import LeanS7.RetryProgressTests
 import LeanS7.WriteProvenanceTests
 import LeanS7.UserDataCompletionTests
+import LeanS7.TransportResourceTests
+import LeanS7.TimeoutTests
+import LeanS7.OperationConformance
+import LeanS7.ExtendedValueAssuranceTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -359,7 +363,7 @@ def testCOTPDataRoundTrip : IO Unit := do
   let (state, complete) := state.push last
   check (complete && state.payload == first.payload ++ last.payload)
     "COTP segment reassembly lost order or completion"
-  check (isOkEq (({ payload := first.payload } : COTP.Reassembly).pushBounded last 4)
+  check (isOkEq (({ payload := first.payload, segments := 1 } : COTP.Reassembly).pushBounded last 4)
       (state, true)) "exact reassembly budget was rejected"
   check (match ({} : COTP.Reassembly).pushBounded last 1 with
     | .error _ => true | .ok _ => false) "oversized first segment was accepted"
@@ -888,13 +892,17 @@ def main : IO Unit := do
   testTPKTSizeBoundary
   testTPKTConformanceCorpus
   Conformance.S7.validate
+  Conformance.Operations.validate
   MutationTests.run
   ExpandedMutationTests.run
   StatefulFaultTests.run
   ValueCodecAssuranceTests.run
+  ExtendedValueAssuranceTests.run
   RetryProgressTests.run
   WriteProvenanceTests.run
   UserDataCompletionTests.run
+  TransportResourceTests.run
+  TimeoutTests.run
   MultiSemanticsTests.run
   BatchingTests.run
   testUserDataAssembly

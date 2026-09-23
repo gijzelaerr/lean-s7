@@ -309,10 +309,64 @@ theorem readUInt64BE_uint64BE (value : UInt64) :
   have h := UInt64.toNat_lt value
   omega
 
+/-- An in-bounds byte of a surrounded segment is independent of its neighbours. -/
+theorem getElem_surrounded (pre value suffix : ByteArray) (index : Nat)
+    (h : index < value.size) :
+    (pre ++ (value ++ suffix))[pre.size + index]'(by simp; omega) = value[index] := by
+  rw [ByteArray.getElem_append_right (by omega)]
+  simp only [Nat.add_sub_cancel_left]
+  rw [ByteArray.getElem_append_left h]
+
+/-- DWORD decoding is compositional at any byte offset. -/
+theorem Cursor.readUInt32BE_append_uint32BE (pre suffix : ByteArray) (value : UInt32) :
+    Cursor.readUInt32BE { data := pre ++ (uint32BE value ++ suffix), offset := pre.size } =
+      .ok (value, { data := pre ++ (uint32BE value ++ suffix), offset := pre.size + 4 }) := by
+  rw [Cursor.readUInt32BE_of_available _ (by simp)]
+  have hround := readUInt32BE_uint32BE value
+  rw [Cursor.readUInt32BE_of_available _ (by simp)] at hround
+  have hget (index : Nat) (h : index < 4) :
+      (pre ++ (uint32BE value ++ suffix))[pre.size + index]'(by simp; omega) =
+        (uint32BE value)[index]'(by simp; omega) :=
+    getElem_surrounded pre (uint32BE value) suffix index (by simpa using h)
+  have h0 := hget 0 (by omega)
+  simp only [Nat.add_zero] at h0
+  rw [h0, hget 1 (by omega), hget 2 (by omega), hget 3 (by omega)]
+  injection hround with hpair
+  injection hpair with hvalue
+  rw [hvalue]
+
+/-- LWORD decoding is compositional at any byte offset. -/
+theorem Cursor.readUInt64BE_append_uint64BE (pre suffix : ByteArray) (value : UInt64) :
+    Cursor.readUInt64BE { data := pre ++ (uint64BE value ++ suffix), offset := pre.size } =
+      .ok (value, { data := pre ++ (uint64BE value ++ suffix), offset := pre.size + 8 }) := by
+  rw [Cursor.readUInt64BE_of_available _ (by simp)]
+  have hround := readUInt64BE_uint64BE value
+  rw [Cursor.readUInt64BE_of_available _ (by simp)] at hround
+  have hget (index : Nat) (h : index < 8) :
+      (pre ++ (uint64BE value ++ suffix))[pre.size + index]'(by simp; omega) =
+        (uint64BE value)[index]'(by simp; omega) :=
+    getElem_surrounded pre (uint64BE value) suffix index (by simpa using h)
+  have h0 := hget 0 (by omega)
+  simp only [Nat.add_zero] at h0
+  rw [h0, hget 1 (by omega), hget 2 (by omega), hget 3 (by omega),
+    hget 4 (by omega), hget 5 (by omega), hget 6 (by omega), hget 7 (by omega)]
+  injection hround with hpair
+  injection hpair with hvalue
+  rw [hvalue]
+
 def bytes (values : Array UInt8) : ByteArray :=
   ByteArray.mk values
 
 @[simp] theorem bytes_size (values : Array UInt8) : (bytes values).size = values.size := by
+  rfl
+
+theorem Cursor.readUInt8_append_byte (pre suffix : ByteArray) (value : UInt8) :
+    Cursor.readUInt8 { data := pre ++ (bytes #[value] ++ suffix), offset := pre.size } =
+      .ok (value, { data := pre ++ (bytes #[value] ++ suffix), offset := pre.size + 1 }) := by
+  rw [Cursor.readUInt8_of_lt _ (by simp [bytes_size]; omega)]
+  have hget := getElem_surrounded pre (bytes #[value]) suffix 0 (by simp [bytes_size])
+  simp only [Nat.add_zero] at hget
+  rw [hget]
   rfl
 
 end LeanS7

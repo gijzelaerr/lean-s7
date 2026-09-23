@@ -352,3 +352,42 @@ These are cross-implementation observations, not formal claims about the Python 
   against the final clean build, including all existing transport checks. Combined
   local validation is green; the single-response completion fix is ready for a
   commit and push on the same branch. No PR merge or physical-PLC claim is made.
+
+## Five-workstream parallel hardening
+
+- Owner requested all five suggested workstreams in parallel. Three delegated
+  workers plus root advanced resource limits, portable regressions, generated
+  conversations, typed-value proofs, and timeout/cleanup auditing on the same
+  branch. No worktree or separate PR/branch was created.
+- COTP now has a finite segment budget (default 4096), including empty segments
+  with deadlines disabled. TPKT version/minimum length/body size rejects before
+  waiting for the declared body. Pure proofs cover payload bytes and segment
+  count; all nine independent resource peers passed.
+- `operations.json` exports 29 validated operation cases with an independent
+  standard-library-only Python oracle. Four seeded 16-operation live plans and
+  bounded exact-failure-preserving reduction passed, including retry/reconnect,
+  multi-item mixed results, malformed replies, and dropped write acknowledgements.
+- Wider integer and float bit-interpretation surrounded-buffer proofs, string
+  allocation/capacity bounds, STRING decoder locality, and empty string encoder
+  roundtrips are checked. Extended value tests passed; nonempty Unicode encoder
+  roundtrips are tested rather than universally proved.
+- Timeout races now use native cancellable timers; budgets over 4,294,967,295 ms
+  reject explicitly before DNS/client IO instead of silently wrapping. Resolver
+  duplicate endpoints were reproduced and deduplicated; connection protocol
+  failures no longer fall through to another candidate. Twenty-eight cleanup
+  attempts passed with maximum timers and stalled/malformed confirmations.
+- An initial cleanup harness failure also required accepting TCP RST as valid
+  closure after unread malformed bytes. Cancellation remains cooperative and
+  does not establish process-wide leak freedom or a total connection deadline.
+  Combined clean validation is pending; all changes are uncommitted and unpushed.
+- Combined clean build passed all 98 jobs, complete Lean tests, four generated
+  corpus comparisons, independent operation oracle, Python lint/format (21 files),
+  and whitespace checks. Read-only review found no implementation blocker; mixed
+  peer cleanup was hardened to close failed handshakes and accept legal terminal
+  RST. Final full pinned integration is starting against frozen source.
+- Final full pinned python-snap7 3.0.0 emulator/scripted-peer suite passed,
+  including nine resource peers, twenty-eight cleanup attempts, four seeded
+  mixed-operation plans, the 29-case independent operations oracle, and all
+  existing integration tests. All five requested workstreams are implemented
+  and combined local validation is green. One coherent local commit follows
+  under earlier commit approval; this new batch has not been pushed.

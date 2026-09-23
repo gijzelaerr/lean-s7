@@ -120,12 +120,21 @@ segmented COTP data TPDUs until the end-of-transmission flag.
 Reassembly rejects cumulative payloads beyond the negotiated S7 PDU budget before
 appending the offending segment. Before negotiation, the default cap is 65535
 bytes. The size-bound theorem is included in the core assurance contract.
+Reassembly also limits a TSDU to 4096 segments, even with no receive deadline;
+low-level receive methods accept a trailing `maxSegments` override. TPKT version,
+minimum length, and the remaining body budget are checked before receiving a
+declared body. Empty segments consume the segment budget.
 Scripted peers test exact-budget acceptance, single and cumulative overflow,
 missing EOT, truncated headers, and stale-response exhaustion. Each receive uses
 one monotonic deadline across TCP fragments, TPKT headers/payloads, and COTP
 segments; stale responses share the same deadline within an exchange attempt.
 Continuous small or empty segments cannot refresh that deadline. This bounds
 receiving, not sending or the total duration of multiple reconnect attempts.
+Timer budgets must be between 0 and 4,294,967,295 milliseconds; larger values
+reject as invalid input rather than wrapping. Generic timeout races use native
+cancellable timers, not sleeping worker tasks. Cancellation of DNS/connect tasks
+remains cooperative. Resolved endpoints are deduplicated in order, and a protocol
+failure during connection negotiation does not trigger address fallback.
 
 Uploads, downloads, chunked memory reads/writes, multi-item calls, SZL reads,
 and segmented block lists additionally share one absolute
@@ -304,8 +313,9 @@ For timer and counter operations, `start` is a two-byte-aligned byte offset and
 
 Typed DB methods cover signed and unsigned 8-, 16-, 32-, and 64-bit integers,
 32-bit REAL, 64-bit LREAL, individual bits, S7 STRING, and S7 WSTRING. Bit
-writes use a read-modify-write operation to preserve neighboring bits; callers
-must serialize concurrent writes to the same byte when that distinction matters.
+writes use a read-modify-write operation to preserve neighboring bits. Calls on
+the same client are serialized; other connections and controller scans still
+require application-level coordination when that distinction matters.
 
 `Client.readMulti` and `Client.writeMulti` preserve caller item order, expose
 per-item PLC failures, enforce the classic 20-item limit per telegram, and split
@@ -352,6 +362,18 @@ do not create or remove persistent CPU force-table entries and the scan cycle
 may overwrite their values.
 
 ## Hardware validation
+
+The portable `conformance/v1/operations.json` corpus adds 29 pure operation cases
+for string capacity consistency, single-response USER_DATA completion, replay
+policy, and caller/chunk write provenance. A separate standard-library Python
+oracle checks them without relying on the emulator. Four reproducibly seeded
+16-operation live plans combine success, rejection, reconnect, and terminal
+faults; failures report their seed and a bounded failure-preserving reduction.
+Typed-value assurance now includes surrounded 32-/64-bit integer proofs, float
+bit-interpretation proofs, string allocation bounds, STRING decoder locality,
+and empty STRING/WSTRING encoder roundtrips. Nonempty Unicode roundtrips remain
+regression-tested, not universally proved; float claims do not assert NaN equality
+or preservation of every NaN payload.
 
 The deterministic suite covers golden wire vectors, malformed responses, the
 python-snap7 emulator, fragmented uploads, and a dedicated PLC-driven download

@@ -101,6 +101,9 @@ private def connectSession (config : ClientConfig) : IO (Transport.Connection ×
     throw error
 
 def Client.connect (config : ClientConfig) : IO Client := do
+  Transport.validateTimeoutMs config.connectTimeoutMs
+  Transport.validateTimeoutMs config.operationTimeoutMs
+  Transport.validateTimeoutMs config.transferReceiveTimeoutMs
   let (session, setup) ← connectSession config
   let connection ← IO.mkRef (some session)
   let requestTail ← IO.mkRef (Task.pure (some ()))
