@@ -16,11 +16,14 @@ from clock_assurance import run_clock_assurance
 from compound_operations import run_compound_operations
 from concurrency import run_concurrency
 from connection_budget import run_connection_budget
+from conversation_conformance import run as run_conversation_conformance
 from extended_deadlines import run_extended_deadlines
 from mixed_operations import run_mixed_operations
 from multi_batching import run_multi_batching
 from multi_semantics import run_multi_semantics
 from operation_conformance import run as run_operation_conformance
+from overlap_operations import run_overlap_operations
+from queued_batches import run_queued_batches
 from queued_lifecycle import run_queued_lifecycle
 from resource_stress import run_resource_stress
 from retry_progress import run_retry_progress
@@ -1587,9 +1590,12 @@ def main() -> None:
         run_resource_stress(root)
         run_mixed_operations()
         run_boundary_operations(root)
+        run_overlap_operations(root)
+        run_queued_batches(root)
         run_clock_assurance(root)
         run_operation_conformance()
         run_value_conformance()
+        run_conversation_conformance()
         run_multi_batching(root)
         run_multi_semantics(root)
         run_reconnect_shrink(root)

@@ -537,3 +537,78 @@ These are cross-implementation observations, not formal claims about the Python 
   green. One coherent local commit records the batch under standing owner commit
   approval. Publication is a separate step; no new PR has been opened or merged,
   and weekly/manual CI activation awaits merging the workflow into main.
+
+## Value-boundary branch publication and follow-up review
+
+- Owner requested pushing and identifying the next work. Published validated
+  commit `f26364f` on `feat/classic-value-boundary-assurance`; local HEAD and
+  upstream match. Before pushing, checked the sole outgoing commit's full author,
+  committer, message and empty trailers. Both identities are Gijs Molenaar
+  <gijsmolenaar@gmail.com>. No PR creation, merge or history rewrite occurred.
+- Read-only source review identified further emulator-only assurance work:
+  seeded overlapping read/write histories checked against an independent mutable
+  memory model (the new boundary peers currently use per-operation payloads and
+  separate addresses); generated mixed-size multi-item batches combined with
+  queued calls and injected failures (existing generators and queue/batch tests
+  cover these separately); successful-decoder validity and general malformed
+  STRING/WSTRING rejection/locality proofs beyond existing encoder roundtrips;
+  and exporting generated lifecycle/retry/write-progress conversations to the
+  portable corpus, which currently has fixed multi-item/USER_DATA sequences.
+- These are proposed extensions, not newly discovered bugs or authorized fixes.
+  Start with the stateful overlap campaign for practical bug discovery. No PLC
+  is required; controller-specific compatibility remains unvalidated. The soak
+  schedule still requires merging its workflow into main. This publication log
+  is a local documentation-only update after the pushed commit.
+
+## Stateful, queued, decoder and portable conversation follow-ups
+
+- Owner approved all four follow-ups in parallel on the existing value-boundary
+  branch. Existing publication-log delta is preserved. Separate workers own
+  overlapping mutable-memory histories, queued mixed-size multi-item faults,
+  and actual decoder contracts; root owns portable primitive conversations and
+  shared suite/export/CI/documentation wiring. No new push or PR is authorized
+  by this implementation step alone.
+- Focused live overlap campaign passed eight PDU240/480 histories: 1,040 operations
+  and eight complete 2,048-byte DB observations. Independent bit/wire/model and
+  parameter-preserving reducer checks pass; deliberate unrelated-bit and final
+  guard-byte corruptions were caught by native observations. No client bug found.
+- Focused queued campaign passed twenty conversations with 29 caller items per
+  multi operation and five FIFO-admitted calls. It checks early-read retry identity,
+  no retry after oversized-read first-chunk acknowledgement, lost first/partial
+  write ACK provenance, recoverable item rejection, duplicate ranges, queue
+  cleanup and no terminal resurrection. Independent wire mutations were rejected.
+- Actual decoder success/header/allocation bounds and arbitrary-body capacity/
+  current rejection proofs compile. Proof-only WSTRING locality in Value.lean
+  quantifies arbitrary valid or malformed active UTF16 units and unrelated
+  surrounding data; decoder implementations are unchanged. Final contract wiring,
+  regressions, axiom audit and complete local validation are pending.
+- Portable generated primitive histories and independent stdlib oracle are
+  implemented: 32 seed/template combinations with full S7 wire exchanges,
+  per-event lifecycle/progress observations, conservative/opt-in replay controls,
+  malformed ACKs, duplicate caller identity and prefix uncertainty. Added pending
+  reference correlation and invalid-length read controls after focused review;
+  refreshed export and full validation are pending. Scope explicitly excludes
+  IO scheduling, retry-budget consumption, remote memory and exactly-once writes.
+- All streams are frozen and wired into the normal suite. Root-owned clean build
+  passed all 128 jobs; complete native tests passed, including new exhaustive
+  decoder regressions. All six generated corpus comparisons match exactly;
+  independent primitive-conversation oracle passes 32/32 cases and 252 steps,
+  including malformed ACK length/reference and invalid read-length controls.
+- Root independently audited all 11 decoder contracts: only propext/Quot.sound;
+  the extended CoreProtocolAssurance uses only the existing standard
+  propext/Classical.choice/Quot.sound. No admissions, native certificates, new
+  user axioms or decoder implementation changes. Ruff lint/format (30 files),
+  whitespace checks and pinned actionlint1.7.7 both-workflow checks pass. Pinned
+  emulator version remains python-snap7 3.0.0. Complete integration is running;
+  no commit, push, PR or merge for this follow-up batch yet.
+- Complete pinned-emulator/scripted-peer integration passed, including both new
+  live campaigns (1,040 overlap operations and all 20 queued conversations),
+  the 32/252-step primitive corpus oracle, all existing clock/boundary/transfer/
+  retry/deadline/concurrency tests and final transport cases. Default measured
+  stress passed 216 attempts/54 retry reconnects: FD8/8, threads7/7,
+  RSS5,636,096/5,652,480 bytes (+16,384 bytes). No new client defect was found.
+- All four requested streams are implemented and combined local checks are green.
+  Recording one coherent local commit under standing owner commit approval;
+  no new push, PR creation or merge. Portable histories are explicitly scoped
+  to primitives and do not assert complete IO-client equivalence. The earlier
+  publication-progress delta is included rather than discarded.

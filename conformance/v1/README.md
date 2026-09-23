@@ -1,5 +1,57 @@
 # Conformance corpus v1
 
+## Primitive conversation histories
+
+Generate `conversations.json` with `lake exe lean-s7-conformance conversations`.
+Its 32 seeded cases combine actual lifecycle transitions, replay-policy/error
+classification guards, write-progress primitives and classic S7 multi-item codecs.
+Run `python integration/conversation_conformance.py` for a separate standard-library
+oracle. CI compares the checked-in export with the generator's exact output.
+
+Each case has `id`, `seed`, ordered `events`, and equally ordered `expected_trace`.
+Every trace entry contains its event's `result` and post-event `snapshot`.
+Snapshots expose `lifecycle` (`connected`, `disconnected`, `closed`) and chronological
+write `attempts`, preserving `location` and `outcome`; duplicate ranges retain
+distinct original caller indices. Locations contain a DB-only `range` (`db_number`,
+`start` in bytes, `count` in bytes), nullable `item_index`, and `chunk_byte_offset`.
+Outcomes are `pending`, `replayed-unknown`, `global-rejected`, `success`, or
+`failure:N`. An accepted later replay never removes uncertainty about an earlier
+unacknowledged attempt. `global-rejected` is reserved; these generated histories
+currently exercise per-item rejection and uncertainty rather than global rejection.
+
+Event operations:
+
+- `lifecycle`: apply `event` (`transport-closed`, `reconnected`, `disconnect`).
+- `retry`: report `permitted` from `safety`, Boolean `allow_potentially_mutating`,
+  `error_kind`, supplied `remaining` retries and terminal lifecycle state. An
+  eligible mutating replay finalizes pending attempts as `replayed-unknown`.
+- `send`: encode the complete `request_pdu` using `reference` and ordered
+  `locations`, then record pending write attempts if the state permits it.
+  Payload byte `i` is `(range.start * 7 + i * 29) % 256`. Invalid empty requests
+  have null wire bytes; overlapping pending attempts reject without losing history.
+- `acknowledge`: decode `response_pdu` generated from response `reference`,
+  item `count` and `codes`. Validate it against the pending send's reference and
+  exact item count before changing progress. Code 255 succeeds; other codes are
+  recoverable per-item failures. Malformed/stale responses leave pending uncertainty.
+- `read`: encode `request_pdu` and decode `response_pdu` for the specified DB
+  `range`, `reference` and `payload`, requiring exact requested length.
+
+PDUs are unframed S7 octet arrays, not TPKT/COTP packets. Rejected events leave
+primitive state unchanged; explicit lifecycle events separately model closure.
+Negative categories distinguish lifecycle transitions, not-connected use,
+request/response codecs, overlapping write progress and a read while writes are
+pending. All numeric fields use integers, not Booleans or floating-point values.
+
+This is a primitive-level model, not a specification or proof of the entire IO
+client. Retry events query eligibility with a supplied budget; they neither
+decrement it nor assert that a request was resent. Reads have no stored active
+request across events, and the model has no scheduler, queued gate, connection
+deadline, handshake, mutable PLC memory or remote-side-effect semantics. Live
+queued/overlap campaigns exercise some of those separately. Exactly-once writes,
+hard native cancellation and controller compatibility remain unclaimed.
+
+## S7 corpus
+
 Generate `s7.json` with `lake exe lean-s7-conformance s7`. The generator and
 deterministic Lean tests validate the expectations before accepting the corpus.
 CI compares generated output with the checked-in JSON.

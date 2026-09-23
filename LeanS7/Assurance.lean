@@ -5,6 +5,7 @@ import LeanS7.BatchEncoderAssurance
 import LeanS7.ValueCodecAssurance
 import LeanS7.BitUpdateAssurance
 import LeanS7.ClockCodecAssurance
+import LeanS7.ValueDecoderAssurance
 
 namespace LeanS7
 
@@ -334,6 +335,53 @@ structure CoreProtocolAssurance : Prop where
   transportClosureSafety : ∀ state next,
     Lifecycle.transition state .transportClosed = some next →
       next ≠ .connected
+  stringDecoderValidity : ∀ data offset value,
+    Value.decodeString data offset = .ok value →
+      ∃ maximum current : UInt8,
+        Value.getUInt8 data offset = .ok maximum ∧
+        Value.getUInt8 data (offset + 1) = .ok current ∧
+        maximum.toNat ≤ Value.maxStringLength ∧ current ≤ maximum ∧
+        offset + 2 + maximum.toNat ≤ data.size
+  wideStringDecoderValidity : ∀ data offset value,
+    Value.decodeWString data offset = .ok value →
+      ∃ maximum current : UInt16,
+        Value.getUInt16 data offset = .ok maximum ∧
+        Value.getUInt16 data (offset + 2) = .ok current ∧
+        maximum.toNat ≤ Value.maxWStringLength ∧ current ≤ maximum ∧
+        offset + 4 + maximum.toNat * 2 ≤ data.size
+  stringInvalidCapacity : ∀ pre body maximum current,
+    Value.maxStringLength < maximum.toNat →
+      Value.decodeString (pre ++ (Value.putUInt8 maximum ++ (Value.putUInt8 current ++ body))) pre.size =
+        .error (.invalidMaximumLength maximum.toNat Value.maxStringLength)
+  stringInvalidCurrent : ∀ pre body maximum current,
+    maximum.toNat ≤ Value.maxStringLength → maximum < current →
+      Value.decodeString (pre ++ (Value.putUInt8 maximum ++ (Value.putUInt8 current ++ body))) pre.size =
+        .error (.invalidStringHeader current.toNat maximum.toNat)
+  wideStringInvalidCapacity : ∀ pre body maximum current,
+    Value.maxWStringLength < maximum.toNat →
+      Value.decodeWString (pre ++ (uint16BE maximum ++ (uint16BE current ++ body))) pre.size =
+        .error (.invalidMaximumLength maximum.toNat Value.maxWStringLength)
+  wideStringInvalidCurrent : ∀ pre body maximum current,
+    maximum.toNat ≤ Value.maxWStringLength → maximum < current →
+      Value.decodeWString (pre ++ (uint16BE maximum ++ (uint16BE current ++ body))) pre.size =
+        .error (.invalidStringHeader current.toNat maximum.toNat)
+  stringIncompleteAllocation : ∀ pre body maximum current,
+    maximum.toNat ≤ Value.maxStringLength → current ≤ maximum → body.size < maximum.toNat →
+      Value.decodeString (pre ++ (Value.putUInt8 maximum ++ (Value.putUInt8 current ++ body))) pre.size =
+        .error (.decode (.unexpectedEnd (pre.size + 2) maximum.toNat body.size))
+  wideStringIncompleteAllocation : ∀ pre body maximum current value,
+    body.size < maximum.toNat * 2 →
+      Value.decodeWString (pre ++ (uint16BE maximum ++ (uint16BE current ++ body))) pre.size ≠ .ok value
+  wideStringActiveLocality : ∀ pre₁ pre₂ padding₁ padding₂ suffix₁ suffix₂ maximum (units : List UInt16),
+    maximum.toNat ≤ Value.maxWStringLength → units.length ≤ maximum.toNat →
+    (maximum.toNat - units.length) * 2 ≤ padding₁.size →
+    (maximum.toNat - units.length) * 2 ≤ padding₂.size →
+      Value.decodeWString (pre₁ ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
+        (units.foldr (fun unit rest => uint16BE unit ++ rest) ByteArray.empty ++
+          (padding₁ ++ suffix₁))))) pre₁.size =
+      Value.decodeWString (pre₂ ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
+        (units.foldr (fun unit rest => uint16BE unit ++ rest) ByteArray.empty ++
+          (padding₂ ++ suffix₂))))) pre₂.size
 
 /-- The implementation satisfies the complete formal contract stated by
     `CoreProtocolAssurance`. -/
@@ -444,5 +492,14 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition
   · exact Lifecycle.transportClosed_not_connected
+  · exact Value.decodeString_success_valid
+  · exact Value.decodeWString_success_valid
+  · exact Value.decodeString_invalid_capacity
+  · exact Value.decodeString_invalid_current
+  · exact Value.decodeWString_invalid_capacity
+  · exact Value.decodeWString_invalid_current
+  · exact Value.decodeString_incomplete_allocation
+  · exact Value.decodeWString_incomplete_allocation
+  · exact Value.decodeWString_active_units_locality
 
 end LeanS7

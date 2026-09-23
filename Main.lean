@@ -14,6 +14,8 @@ import LeanS7.ConnectionBudgetTests
 import LeanS7.QueuedLifecycleTests
 import LeanS7.BoundaryOperationTests
 import LeanS7.ClockCodecAssuranceTests
+import LeanS7.OverlapOperationTests
+import LeanS7.QueuedBatchTests
 
 open LeanS7 Std.Net
 
@@ -702,6 +704,10 @@ def main (args : List String) : IO Unit := do
       MixedOperationTests.runIntegration host port plan
   | ["integration-boundary-operations", host, port, pdu, plan] =>
       BoundaryOperationTests.runIntegration host port pdu plan
+  | ["integration-overlap-operations", host, port, pdu, memorySize, plan] =>
+      OverlapOperationTests.runIntegration host port pdu memorySize plan
+  | ["integration-queued-batches", host, port, pdu, mode, sizes] =>
+      QueuedBatchTests.runIntegration host port pdu mode sizes
   | ["integration-clock-assurance", host, port, digit] =>
       ClockCodecAssuranceTests.runIntegration host port digit
   | ["integration-timeout-cleanup", host, port, mode] =>

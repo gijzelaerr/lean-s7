@@ -17,6 +17,8 @@ import LeanS7.NonemptyStringAssuranceTests
 import LeanS7.ClockCodecAssuranceTests
 import LeanS7.BitUpdateAssuranceTests
 import LeanS7.ValueConformance
+import LeanS7.ConversationConformance
+import LeanS7.ValueDecoderAssuranceTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -899,6 +901,7 @@ def main : IO Unit := do
   Conformance.S7.validate
   Conformance.Operations.validate
   Conformance.Values.validate
+  Conformance.Conversations.validate
   MutationTests.run
   ExpandedMutationTests.run
   StatefulFaultTests.run
@@ -907,6 +910,7 @@ def main : IO Unit := do
   NonemptyStringAssuranceTests.run
   ClockCodecAssuranceTests.run
   BitUpdateAssuranceTests.run
+  ValueDecoderAssuranceTests.run
   RetryProgressTests.run
   WriteProvenanceTests.run
   UserDataCompletionTests.run

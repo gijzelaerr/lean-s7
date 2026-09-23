@@ -638,4 +638,66 @@ theorem decodeWString_encodeWString_surrounded (pre suffix : ByteArray) (maximum
   rw [decodeUtf16Units_encodeUtf16]
   simp only [pure, Except.pure, String.ofList_toList]
 
+private theorem decodeWString_arbitrary_units (pre padding suffix : ByteArray)
+    (maximum : UInt16) (units : List UInt16)
+    (hmax : maximum.toNat ≤ maxWStringLength) (hfits : units.length ≤ maximum.toNat)
+    (hpadding : (maximum.toNat - units.length) * 2 ≤ padding.size) :
+    decodeWString (pre ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
+      (encodeUtf16Units units ++ (padding ++ suffix))))) pre.size =
+      (decodeUtf16Units units 0).map String.ofList := by
+  have hc : (UInt16.ofNat units.length).toNat = units.length := by
+    rw [UInt16.toNat_ofNat']
+    apply Nat.mod_eq_of_lt
+    unfold maxWStringLength at hmax
+    omega
+  unfold decodeWString
+  simp only [cursorAt]
+  rw [Cursor.readUInt16BE_append_uint16BE]
+  simp only [fromDecode, Except.mapError, bind, Except.bind]
+  have hsecond := Cursor.readUInt16BE_append_uint16BE (pre ++ uint16BE maximum)
+    (encodeUtf16Units units ++ (padding ++ suffix)) (UInt16.ofNat units.length)
+  simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hsecond
+  rw [hsecond]
+  have hcapacity : ¬ maximum.toNat > maxWStringLength := by omega
+  have hactive : ¬ UInt16.ofNat units.length > maximum := by
+    simp only [UInt16.lt_iff_toNat_lt, hc]
+    omega
+  simp only [hcapacity, hactive, if_false, hc]
+  have hread := readUtf16Units_encodeUtf16Units units
+    ((pre ++ uint16BE maximum) ++ uint16BE (UInt16.ofNat units.length)) (padding ++ suffix)
+  simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hread
+  rw [hread]
+  have havailable : maximum.toNat * 2 ≤
+      (pre ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
+        (encodeUtf16Units units ++ (padding ++ suffix))))).size - (pre.size + 2 + 2) := by
+    simp only [ByteArray.size_append, uint16BE_size, encodeUtf16Units_size]
+    omega
+  simp only [Cursor.readBytes, Cursor.remaining, havailable, if_true]
+  cases decodeUtf16Units units 0 <;> rfl
+
+private theorem encodeUtf16Units_foldr (units : List UInt16) :
+    encodeUtf16Units units = units.foldr (fun unit rest => uint16BE unit ++ rest) ByteArray.empty := by
+  induction units with
+  | nil => rfl
+  | cons unit rest ih => simp only [encodeUtf16Units, List.foldr_cons, ih]
+
+/-- For arbitrary UTF-16 units, even malformed surrogate sequences, WSTRING
+    interpretation and structured errors do not depend on prefix, reserved
+    padding, or suffix bytes. Each input must contain its entire allocation. -/
+theorem decodeWString_active_units_locality
+    (pre₁ pre₂ padding₁ padding₂ suffix₁ suffix₂ : ByteArray)
+    (maximum : UInt16) (units : List UInt16)
+    (hmax : maximum.toNat ≤ maxWStringLength) (hfits : units.length ≤ maximum.toNat)
+    (hpadding₁ : (maximum.toNat - units.length) * 2 ≤ padding₁.size)
+    (hpadding₂ : (maximum.toNat - units.length) * 2 ≤ padding₂.size) :
+    decodeWString (pre₁ ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
+      (units.foldr (fun unit rest => uint16BE unit ++ rest) ByteArray.empty ++
+        (padding₁ ++ suffix₁))))) pre₁.size =
+    decodeWString (pre₂ ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
+      (units.foldr (fun unit rest => uint16BE unit ++ rest) ByteArray.empty ++
+        (padding₂ ++ suffix₂))))) pre₂.size := by
+  rw [← encodeUtf16Units_foldr]
+  rw [decodeWString_arbitrary_units pre₁ padding₁ suffix₁ maximum units hmax hfits hpadding₁,
+    decodeWString_arbitrary_units pre₂ padding₂ suffix₂ maximum units hmax hfits hpadding₂]
+
 end LeanS7.Value

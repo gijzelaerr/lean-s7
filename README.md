@@ -404,6 +404,32 @@ oracle. Eight seeded live boundary conversations add 312 parameterized operation
 at PDU sizes 240 and 480, including chunk edges and surrogate pairs split across
 DB read/write chunks. Reduction preserves retained operation IDs and parameters.
 
+Eight additional seeded histories check 1,040 overlapping reads, writes and bit
+updates against independent mutable DB memory, including read-after-write,
+duplicate writes and chunk-edge overwrites. Each ends with a complete 2,048-byte
+memory observation. Twenty queued mixed-size multi-item conversations combine
+29 caller items with five FIFO-admitted calls at PDU240/480, per-item rejection,
+early read retry, partial-read failure and lost first/partial write acknowledgements.
+They check caller/chunk write provenance and prevent replay or queued resurrection
+after terminal closure. These are bounded regression campaigns, not PLC evidence.
+
+Actual decoder contracts now also prove that accepting arbitrary STRING/WSTRING
+input implies valid capacity/current headers and a complete allocated storage
+region inside the input. General invalid-capacity/current, truncated-header and
+incomplete-allocation rejection properties are checked. WSTRING active-unit
+locality covers arbitrary valid or malformed UTF-16 content across unrelated
+prefixes, allocated padding and suffixes—not only encoder-produced values.
+
+The portable `conformance/v1/conversations.json` corpus exports 32 seeded
+primitive histories with complete unframed request/response PDUs and per-event
+lifecycle/write-progress observations. Run
+`python integration/conversation_conformance.py` for the independent stdlib
+oracle, or `lake exe lean-s7-conformance conversations` to regenerate it. Its
+replay decisions combine safety, explicit opt-in, error category, supplied retry
+budget and terminal-state gates; it does not model socket IO, scheduler ordering,
+budget consumption or remote side effects. Live campaigns supply separate IO
+evidence rather than turning this primitive model into a proof of the client.
+
 Connection-budget peers test stage sharing, distinct-address fallback, and
 protocol failures that must not try another candidate. Twelve queued lifecycle
 cases establish actual FIFO gate admissions across active read retry, terminal
