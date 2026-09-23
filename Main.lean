@@ -16,6 +16,7 @@ import LeanS7.BoundaryOperationTests
 import LeanS7.ClockCodecAssuranceTests
 import LeanS7.OverlapOperationTests
 import LeanS7.QueuedBatchTests
+import LeanS7.RetryBudgetTests
 
 open LeanS7 Std.Net
 
@@ -708,6 +709,8 @@ def main (args : List String) : IO Unit := do
       OverlapOperationTests.runIntegration host port pdu memorySize plan
   | ["integration-queued-batches", host, port, pdu, mode, sizes] =>
       QueuedBatchTests.runIntegration host port pdu mode sizes
+  | ["integration-retry-budgets", host, port, mode, budget, drops] =>
+      RetryBudgetTests.runIntegration host port mode budget drops
   | ["integration-clock-assurance", host, port, digit] =>
       ClockCodecAssuranceTests.runIntegration host port digit
   | ["integration-timeout-cleanup", host, port, mode] =>

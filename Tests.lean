@@ -19,6 +19,7 @@ import LeanS7.BitUpdateAssuranceTests
 import LeanS7.ValueConformance
 import LeanS7.ConversationConformance
 import LeanS7.ValueDecoderAssuranceTests
+import LeanS7.RetryBudgetTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -912,6 +913,7 @@ def main : IO Unit := do
   BitUpdateAssuranceTests.run
   ValueDecoderAssuranceTests.run
   RetryProgressTests.run
+  RetryBudgetTests.run
   WriteProvenanceTests.run
   UserDataCompletionTests.run
   TransportResourceTests.run

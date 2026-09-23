@@ -33,10 +33,13 @@ def classifyClientError : IO.Error → ClientErrorKind
 
 /-- Transport failures eligible for retry consideration. This does not establish
     replay safety: operation-aware policy must also permit resending the request. -/
-def isRetryableClientError (error : IO.Error) : Bool :=
-  match classifyClientError error with
+def isRetryableClientErrorKind (kind : ClientErrorKind) : Bool :=
+  match kind with
   | .timeout | .disconnected | .transport => true
   | _ => false
+
+def isRetryableClientError (error : IO.Error) : Bool :=
+  isRetryableClientErrorKind (classifyClientError error)
 
 namespace ClientError
 

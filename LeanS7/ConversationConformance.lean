@@ -93,8 +93,8 @@ private def step (state : State) (event : Event) : State × Json := Id.run do
       | some next => return ({ state with lifecycle := next }, accept)
       | none => return (state, reject "lifecycle-transition")
   | .retry safety allow kind remaining =>
-      let permitted := state.lifecycle != .closed && remaining > 0 &&
-        isRetryableClientError (errorOfKind kind) && retryPermitted safety allow
+      let permitted := (retryBudgetAfter remaining (state.lifecycle == .closed)
+        (classifyClientError (errorOfKind kind)) safety allow).isSome
       let next := if permitted && safety == .potentiallyMutating then
         { state with progress := state.progress.replay, pendingReference := none } else state
       return (next, Json.mkObj [("status", "accept"), ("permitted", toJson permitted)])

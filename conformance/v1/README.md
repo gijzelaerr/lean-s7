@@ -50,6 +50,11 @@ deadline, handshake, mutable PLC memory or remote-side-effect semantics. Live
 queued/overlap campaigns exercise some of those separately. Exactly-once writes,
 hard native cancellation and controller compatibility remain unclaimed.
 
+The Lean eligibility query now invokes `retryBudgetAfter`, the same pure decision
+used by both actual client exchange paths. Its next-allowance result has separate
+checked decrement/accounting contracts, but the portable events still report only
+eligibility with a supplied budget; the v1 schema and observations are unchanged.
+
 ## S7 corpus
 
 Generate `s7.json` with `lake exe lean-s7-conformance s7`. The generator and

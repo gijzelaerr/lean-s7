@@ -26,6 +26,7 @@ from overlap_operations import run_overlap_operations
 from queued_batches import run_queued_batches
 from queued_lifecycle import run_queued_lifecycle
 from resource_stress import run_resource_stress
+from retry_budgets import run_retry_budgets
 from retry_progress import run_retry_progress
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
@@ -1581,6 +1582,7 @@ def main() -> None:
         run_compound_operations(root)
         run_stateful_faults(root)
         run_retry_progress(root)
+        run_retry_budgets(root)
         run_write_provenance(root)
         run_userdata_completion(root)
         run_transport_resources()

@@ -382,6 +382,18 @@ structure CoreProtocolAssurance : Prop where
       Value.decodeWString (pre₂ ++ (uint16BE maximum ++ (uint16BE (UInt16.ofNat units.length) ++
         (units.foldr (fun unit rest => uint16BE unit ++ rest) ByteArray.empty ++
           (padding₂ ++ suffix₂))))) pre₂.size
+  retryBudgetTerminal : ∀ remaining kind safety allow,
+    retryBudgetAfter remaining true kind safety allow = none
+  retryBudgetExhausted : ∀ closed kind safety allow,
+    retryBudgetAfter 0 closed kind safety allow = none
+  retryBudgetSound : ∀ remaining next closed kind safety allow,
+    retryBudgetAfter remaining closed kind safety allow = some next →
+      closed = false ∧ 0 < remaining ∧ isRetryableClientErrorKind kind = true ∧
+      retryPermitted safety allow = true ∧ next + 1 = remaining
+  retryBudgetDecrease : ∀ remaining next closed kind safety allow,
+    retryBudgetAfter remaining closed kind safety allow = some next → next < remaining
+  retryTraceAccounting : ∀ initial count final,
+    RetryBudgetChain initial count final → count + final = initial
 
 /-- The implementation satisfies the complete formal contract stated by
     `CoreProtocolAssurance`. -/
@@ -501,5 +513,10 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Value.decodeString_incomplete_allocation
   · exact Value.decodeWString_incomplete_allocation
   · exact Value.decodeWString_active_units_locality
+  · exact retryBudgetAfter_closed
+  · exact retryBudgetAfter_zero
+  · exact retryBudgetAfter_invariants
+  · exact retryBudgetAfter_decreases
+  · exact fun _ _ _ chain => chain.accounting
 
 end LeanS7

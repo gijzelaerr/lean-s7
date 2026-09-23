@@ -354,6 +354,16 @@ Reconnect retries are limited to timeout, disconnect, and transport failures.
 Protocol violations, PLC-declared rejection, lifecycle misuse, and invalid
 caller input are never automatically resent.
 
+Both live exchange paths and the portable primitive model use the same pure
+`retryBudgetAfter` decision. Checked contracts show that a permitted retry has a
+positive allowance, eligible error/safety gates, a nonterminal lifecycle and
+exactly one fewer allowance. Every chain of successful decisions preserves
+`retry_count + final_allowance = initial_allowance`, bounding retries by the
+configured budget. This bounds decisions, not native IO completion time or remote
+effects. Forty live repeated-failure conversations exercise allowances 0/1/2/4
+for typed reads, raw requests and writes with conservative and explicit opt-in
+replay policies; exhausted clients reject fresh operations without resurrection.
+
 Management methods include `readSzl`, `readSzlList`, `getOrderCode`,
 `getCpuInfo`, `getCpInfo`, `getProtection`, `getCpuState`, `getPlcDateTime`,
 `setPlcDateTime`, `plcHotStart`, `plcColdStart`, `plcStop`,

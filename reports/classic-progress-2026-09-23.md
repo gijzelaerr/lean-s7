@@ -612,3 +612,46 @@ These are cross-implementation observations, not formal claims about the Python 
   no new push, PR creation or merge. Portable histories are explicitly scoped
   to primitives and do not assert complete IO-client equivalence. The earlier
   publication-progress delta is included rather than discarded.
+
+## Shared retry-budget decision and repeated-failure continuation
+
+- Owner requested pushing and continuing. Published validated `83373d2` after
+  checking author, committer, full message and empty trailers; no PR or merge.
+- Read-only review found the aggregate retry guard duplicated in the two live
+  exchange paths and portable primitive model. Continuing with a behavior-preserving
+  shared pure decision, universal allowance/accounting proofs and repeated-failure
+  live campaigns. No newly confirmed bug or change to conservative replay policy.
+- `retryBudgetAfter` now returns the next allowance only when budget, lifecycle,
+  error category and operation-safety gates permit retry; both live exchange paths
+  use its returned value. Actual error classification is retained. Portable model
+  uses the same primitive instead of a shadow aggregate guard; exported schema
+  and eligibility semantics are unchanged. Pure proof and focused tests underway.
+- Nine universal retry contracts compile, including exact equivalence to the
+  existing eligibility guard, terminal/exhausted/nonretryable/default-mutation
+  rejection, positive/decreasing allowance and general chain accounting/bounds.
+  Both live exchange paths now use the same next-allowance value rather than
+  duplicating the decrement. CoreProtocolAssurance includes the actual primitive's
+  terminal/exhausted/soundness/decrease/chain-accounting properties.
+- Focused repeated-failure campaign passed forty conversations across typed read,
+  raw default/opt-in and write default/opt-in modes at allowances 0/1/2/4. Exact
+  request/reference identity and physical attempt counts were preserved; eligible
+  retries succeeded at the boundary or stopped at exhaustion, while conservative
+  raw/writes never replayed. Fresh operations did not resurrect exhausted clients.
+- Final root-owned clean build passed all 130 jobs. Full native tests pass,
+  including 4,352 gate decisions, huge Nat budgets, 65 repeated chains and the
+  strengthened live-write chronology/provenance checks. All six corpus exports
+  remain exactly unchanged; Ruff lint/format (31 files) and whitespace checks pass.
+  Nine new retry theorem axiom audits use only standard propext/Classical.choice/
+  Quot.sound; no admissions, native certificates or new user axioms. Full final
+  emulator/scripted-peer integration is running before commit/publication.
+- Complete final emulator/scripted-peer suite passed, including all forty new
+  repeated-failure conversations with strengthened chronological write outcomes
+  and location provenance, all twenty queued batch cases, 1,040 overlap operations
+  and every prior transfer/deadline/clock/transport regression. Default measured
+  stress passed 216 attempts/54 retry reconnects: FD8/8, threads7/7,
+  RSS5,619,712/5,701,632 bytes (+81,920 bytes). No new bug was found.
+- All local checks are green. Recording and publishing the coherent retry-budget
+  continuation on the existing branch under the owner's push/continue instruction,
+  with full author/committer/message/trailer inspection before publication. No
+  PR creation or merge; no claims of full IO termination, exactly-once writes,
+  hard native cancellation or physical-controller compatibility.

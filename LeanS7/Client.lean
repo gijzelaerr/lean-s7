@@ -205,11 +205,11 @@ private partial def Client.exchangeWithRetries (client : Client) (reference : UI
     client.exchangeCurrent reference request transferDeadline (do attempted.set true; beforeSend)
   catch error =>
     client.closeCurrent
-    if remainingRetries == 0 || (← client.state.get) == .closed ||
-        !isRetryableClientError error || !retryPermitted safety client.config.allowPotentiallyMutatingRetries then
-      throw error
+    let some nextRetries := retryBudgetAfter remainingRetries ((← client.state.get) == .closed)
+        (classifyClientError error) safety client.config.allowPotentiallyMutatingRetries
+      | throw error
     if ← attempted.get then onReplay
-    client.exchangeWithRetries reference request (remainingRetries - 1) true transferDeadline safety onReplay beforeSend
+    client.exchangeWithRetries reference request nextRetries true transferDeadline safety onReplay beforeSend
 
 private partial def Client.exchangeBytesWithRetries (client : Client) (reference : UInt16)
     (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
@@ -223,10 +223,10 @@ private partial def Client.exchangeBytesWithRetries (client : Client) (reference
     client.exchangeBytesCurrent reference request transferDeadline
   catch error =>
     client.closeCurrent
-    if remainingRetries == 0 || (← client.state.get) == .closed ||
-        !isRetryableClientError error || !retryPermitted safety client.config.allowPotentiallyMutatingRetries then
-      throw error
-    client.exchangeBytesWithRetries reference request (remainingRetries - 1) true transferDeadline safety
+    let some nextRetries := retryBudgetAfter remainingRetries ((← client.state.get) == .closed)
+        (classifyClientError error) safety client.config.allowPotentiallyMutatingRetries
+      | throw error
+    client.exchangeBytesWithRetries reference request nextRetries true transferDeadline safety
 
 private def Client.serialized (client : Client) (operation : IO α) : IO α := do
   let gate : IO.Promise Unit ← IO.Promise.new
