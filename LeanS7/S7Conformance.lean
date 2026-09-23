@@ -217,6 +217,18 @@ def uploadCases : Array UploadCase := #[
     pdu := ackDataPacket (bytes #[S7.startUploadFunction, 0])
       (bytes #[0, 2, 0, 0xfb, 0xde, 0xad])
     expected := none
+  },
+  {
+    id := "upload-invalid-continuation-flag"
+    pdu := ackDataPacket (bytes #[S7.uploadFunction, 2])
+      (bytes #[0, 2, 0, 0xfb, 0xde, 0xad])
+    expected := none
+  },
+  {
+    id := "upload-invalid-continuation-flag-ff"
+    pdu := ackDataPacket (bytes #[S7.uploadFunction, 0xff])
+      (bytes #[0, 2, 0, 0xfb, 0xde, 0xad])
+    expected := none
   }
 ]
 

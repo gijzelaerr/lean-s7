@@ -90,6 +90,8 @@ Implemented:
 - classic S7 session-password enter/clear operations
 - block counts, block lists, and typed block metadata
 - fragmented MC7 and full load-memory block uploads
+- validated upload lengths and continuation flags, with machine-checked bounded
+  assembly, byte order, continuation progress, and completion properties
 - PLC-driven fragmented block downloads, insertion, and deletion
 - exact machine-checked PLC-driven download-fragment size
 - machine-checked PLC-driven download phases, ordered fragment-prefix coverage,

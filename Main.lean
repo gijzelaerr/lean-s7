@@ -501,6 +501,8 @@ def runServiceRejectionIntegration (host portString operation expected : String)
         unless (message.splitOn expected).length > 1 do
           throw <| IO.userError s!"unexpected service failure: {message}"
     | none => throw <| IO.userError "malformed service response was accepted"
+    if operation == "upload" && (← client.isConnected) then
+      throw <| IO.userError "rejected upload left the client connected"
     client.disconnect
     IO.println s!"service rejection passed: {operation}: {expected}"
   catch error =>

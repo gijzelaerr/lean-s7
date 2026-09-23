@@ -238,8 +238,10 @@ structure StartUploadResponse where
 
 private def asciiNat (offset : Nat) (data : ByteArray) : Except DecodeError Nat := do
   let mut value := 0
+  let mut cursor : Cursor := { data }
   for index in [0:data.size] do
-    let byte := data[index]!
+    let (byte, next) ← cursor.readUInt8
+    cursor := next
     if byte < 0x30 || byte > 0x39 then
       throw (.invalidField (offset + index) "expected an ASCII decimal digit")
     value := value * 10 + byte.toNat - 0x30
@@ -247,8 +249,12 @@ private def asciiNat (offset : Nat) (data : ByteArray) : Except DecodeError Nat 
 
 def decodeStartUpload (reference : UInt16) (response : Response) : Except DecodeError StartUploadResponse := do
   validateResponse response reference startUploadFunction
-  if response.parameters.size < 8 then
-    throw (.unexpectedEnd responseHeaderSize 8 response.parameters.size)
+  -- The eight-byte form is retained for the legacy emulator. Real wire vectors
+  -- include the three reserved bytes and five ASCII block-length digits.
+  if response.parameters.size != 8 && response.parameters.size != 16 then
+    throw (.invalidField responseHeaderSize "start-upload response must contain 8 or 16 parameter bytes")
+  if !response.data.isEmpty then
+    throw (.invalidField responseHeaderSize "start-upload response must not contain data")
   let (uploadId, _) ← ({ data := response.parameters, offset := 7 } : Cursor).readUInt8
   let loadSize ← if response.parameters.size >= 16 then
     some <$> asciiNat (responseHeaderSize + 11) (response.parameters.extract 11 16)
@@ -265,6 +271,8 @@ def decodeUploadFragment (reference : UInt16) (response : Response) : Except Dec
   if response.parameters.size != 2 then
     throw (.invalidField responseHeaderSize "upload response parameters must contain two bytes")
   let (endOfUpload, _) ← ({ data := response.parameters, offset := 1 } : Cursor).readUInt8
+  if endOfUpload != 0 && endOfUpload != 1 then
+    throw (.invalidField (responseHeaderSize + 1) "invalid upload continuation flag")
   let cursor : Cursor := { data := response.data }
   let (declaredLength, cursor) ← cursor.readUInt16BE
   let (marker, cursor) ← cursor.readUInt16BE

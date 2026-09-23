@@ -103,6 +103,66 @@ def testDownloadState : IO Unit := do
       (Download.finish payload completed).isNone)
     "completed download accepted another transition"
 
+def testUploadState : IO Unit := do
+  let .ok ready := Upload.start 5 (some 5)
+    | throw <| IO.userError "upload initialization failed"
+  check (match Upload.start 5 (some 6) with | .error _ => true | _ => false)
+    "upload accepted a declared length above its safety limit"
+  check (match Upload.finish ready with | .error _ => true | _ => false)
+    "upload completed before its final fragment"
+  for fragment in #[
+      { isLast := false, data := ByteArray.empty : S7.UploadFragment },
+      { isLast := true, data := bytes #[1, 2] },
+      { isLast := true, data := bytes #[1, 2, 3, 4, 5, 6] },
+      { isLast := false, data := bytes #[1, 2, 3, 4, 5] }] do
+    check (match Upload.accept ready fragment with | .error _ => true | _ => false)
+      "upload accepted an empty continuation or inconsistent declared length"
+  let .ok first := Upload.accept ready { isLast := false, data := bytes #[1, 2] }
+    | throw <| IO.userError "first upload fragment was rejected"
+  let .ok last := Upload.accept first.after { isLast := true, data := bytes #[3, 4, 5] }
+    | throw <| IO.userError "final upload fragment was rejected"
+  check (first.after.phase == .receiving && last.after.phase == .awaitingEnd &&
+      last.after.assembly.data == bytes #[1, 2, 3, 4, 5])
+    "upload assembly changed byte order or phase"
+  check (match Upload.accept last.after { isLast := true, data := bytes #[6] } with
+    | .error _ => true | _ => false) "upload accepted another fragment after the final fragment"
+  let .ok completed := Upload.finish last.after
+    | throw <| IO.userError "upload END acknowledgement was rejected"
+  check (completed.phase == .complete &&
+      (match Upload.finish completed with | .error _ => true | _ => false))
+    "completed upload accepted another completion"
+  let .ok legacy := Upload.start 5 none
+    | throw <| IO.userError "upload with no declared length was rejected"
+  check (match Upload.accept legacy { isLast := true, data := bytes #[1, 2, 3, 4, 5, 6] } with
+    | .error _ => true | _ => false) "legacy upload exceeded the cumulative safety limit"
+  let .ok exact := Upload.accept legacy { isLast := true, data := bytes #[1, 2, 3, 4, 5] }
+    | throw <| IO.userError "upload rejected its exact cumulative safety limit"
+  check (exact.after.assembly.data.size == 5) "bounded upload truncated its final fragment"
+
+def testUploadResponseValidation : IO Unit := do
+  let start : S7.Response := {
+    pduType := S7.ackDataType, reference := 1,
+    parameters := bytes #[0x1d, 0, 0, 0, 0, 0, 0, 0x78, 0, 0, 0] ++ "00123".toUTF8,
+    data := ByteArray.empty, errorClass := 0, errorCode := 0
+  }
+  check (isOkEq (S7.decodeStartUpload 1 start) { uploadId := 0x78, loadSize := some 123 })
+    "start-upload decoded the ID or length incorrectly"
+  check (isOkEq (S7.decodeStartUpload 1 { start with parameters := start.parameters.extract 0 8 })
+      { uploadId := 0x78, loadSize := none }) "legacy start-upload form was rejected"
+  for size in #[0, 7, 9, 11, 15, 17] do
+    let params := if size == 17 then start.parameters ++ bytes #[0] else start.parameters.extract 0 size
+    check (match S7.decodeStartUpload 1 { start with parameters := params } with
+      | .error _ => true | _ => false) "start-upload accepted a malformed parameter length"
+  check (match S7.decodeStartUpload 1 { start with data := bytes #[1] } with
+    | .error _ => true | _ => false) "start-upload accepted unexpected data"
+  check (match S7.decodeStartUpload 1
+      { start with parameters := start.parameters.extract 0 11 ++ "00x23".toUTF8 } with
+    | .error _ => true | _ => false) "start-upload accepted a nondecimal length"
+  for flag in #[2, 0xff] do
+    check (match S7.decodeUploadFragment 1 {
+        start with parameters := bytes #[0x1e, flag], data := bytes #[0, 2, 0, 0xfb, 1, 2] } with
+      | .error _ => true | _ => false) "upload accepted an invalid continuation flag"
+
 def testTPKTRoundTrip : IO Unit := do
   let frame : TPKT.Frame := { payload := bytes #[2, 0xf0, 0x80, 0xde, 0xad] }
   match TPKT.encode frame with
@@ -810,6 +870,8 @@ def main : IO Unit := do
   testChunking
   testLifecycle
   testDownloadState
+  testUploadState
+  testUploadResponseValidation
   testTPKTRoundTrip
   testTPKTRejectsMalformedFrames
   testTPKTIgnoresReservedInput

@@ -144,6 +144,19 @@ structure CoreProtocolAssurance : Prop where
   downloadFinishExact : ∀ payload (state after : Download.State payload),
     Download.finish payload state = some after →
       state.offset = payload.size ∧ after.phase = .complete
+  uploadAssemblyOrder : ∀ maximum (state after : Upload.Assembly maximum) chunk,
+    state.append chunk = .ok after → after.data = state.data ++ chunk
+  uploadAssemblyBound : ∀ maximum (state : Upload.Assembly maximum),
+    state.data.size ≤ maximum
+  uploadContinuationProgress : ∀ maximum (state : Upload.State maximum) fragment
+      (step : Upload.Step state fragment),
+    fragment.isLast = false → state.assembly.data.size < step.after.assembly.data.size
+  uploadFinishPhase : ∀ maximum (state after : Upload.State maximum),
+    Upload.finish state = .ok after →
+      state.phase = .awaitingEnd ∧ after.phase = .complete
+  uploadFinishExact : ∀ maximum (state after : Upload.State maximum) expected,
+    state.expected = some expected → Upload.finish state = .ok after →
+      after.assembly.data.size = expected
   chunkCoverage : ∀ total maximum,
     maximum ≠ 0 → (Chunking.counts total maximum).sum = total
   chunkBounds : ∀ total maximum chunk,
@@ -248,6 +261,11 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Download.fragment_prefix
   · exact Download.encoded_fragment_fits
   · exact Download.finish_complete
+  · exact fun _ => Upload.Assembly.append_order
+  · exact fun _ state => state.bounded
+  · exact fun _ _ _ step => step.progress
+  · exact fun _ => Upload.finish_phase
+  · exact fun _ => Upload.finish_exact
   · exact Chunking.counts_sum
   · exact Chunking.counts_bounds
   · exact fun _ _ _ => Chunking.ReadAssembly.append_data

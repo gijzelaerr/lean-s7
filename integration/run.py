@@ -616,9 +616,18 @@ def serve_service_rejection(
                 return
             if not mode.startswith("upload-"):
                 raise ValueError(f"unknown service rejection case: {mode}")
+            legacy_modes = {
+                "upload-invalid-marker",
+                "upload-length-mismatch",
+                "upload-wrong-function",
+            }
+            start_parameters = bytes([0x1D]) + bytes(6) + bytes([1])
+            if mode not in legacy_modes:
+                declared = 2 if mode == "upload-end-bad-ack" else 4
+                start_parameters += bytes(3) + f"{declared:05d}".encode("ascii")
             _send_s7(
                 connection,
-                _s7_response(reference, bytes([0x1D, 0, 0, 0, 0, 0, 0, 1])),
+                _s7_response(reference, start_parameters),
             )
             upload = _receive_s7(connection)
             reference = int.from_bytes(upload[4:6], "big")
@@ -631,14 +640,55 @@ def serve_service_rejection(
             elif mode == "upload-wrong-function":
                 parameters = bytes([0x1D, 0])
                 data = b"\x00\x02\x00\xfb\xde\xad"
+            elif mode in ("upload-invalid-flag", "upload-cleanup-bad-ack"):
+                parameters = bytes([0x1E, 2])
+                data = b"\x00\x02\x00\xfb\xde\xad"
+            elif mode == "upload-empty-continuation":
+                parameters = bytes([0x1E, 1])
+                data = b"\x00\x00\x00\xfb"
+            elif mode == "upload-short-final":
+                parameters = bytes([0x1E, 0])
+                data = b"\x00\x02\x00\xfb\xde\xad"
+            elif mode == "upload-long-final":
+                parameters = bytes([0x1E, 0])
+                data = b"\x00\x05\x00\xfb\x01\x02\x03\x04\x05"
+            elif mode == "upload-more-at-declared-length":
+                parameters = bytes([0x1E, 1])
+                data = b"\x00\x04\x00\xfb\x01\x02\x03\x04"
+            elif mode in ("upload-midstream-short", "upload-midstream-overflow"):
+                _send_s7(
+                    connection,
+                    _s7_response(
+                        reference, bytes([0x1E, 1]), b"\x00\x02\x00\xfb\x01\x02"
+                    ),
+                )
+                upload = _receive_s7(connection)
+                reference = int.from_bytes(upload[4:6], "big")
+                if upload[10] != 0x1E or upload[17] != 1:
+                    raise RuntimeError(
+                        "upload continuation used the wrong function or ID"
+                    )
+                chunk = b"\x03" if mode == "upload-midstream-short" else b"\x03\x04\x05"
+                parameters = bytes([0x1E, 0])
+                data = struct.pack(">HH", len(chunk), 0x00FB) + chunk
+            elif mode == "upload-end-bad-ack":
+                parameters = bytes([0x1E, 0])
+                data = b"\x00\x02\x00\xfb\xde\xad"
             else:
                 raise ValueError(f"unknown service rejection case: {mode}")
             _send_s7(connection, _s7_response(reference, parameters, data))
             cleanup = _receive_s7(connection)
-            if cleanup[10] != 0x1F:
-                raise RuntimeError("client omitted end-upload cleanup after rejection")
+            if cleanup[10] != 0x1F or cleanup[17] != 1:
+                raise RuntimeError(
+                    "client omitted end-upload cleanup or used the wrong ID"
+                )
             cleanup_reference = int.from_bytes(cleanup[4:6], "big")
-            _send_s7(connection, _s7_response(cleanup_reference, bytes([0x1F])))
+            end_parameters = (
+                bytes([0x1F, 0])
+                if mode in ("upload-end-bad-ack", "upload-cleanup-bad-ack")
+                else bytes([0x1F])
+            )
+            _send_s7(connection, _s7_response(cleanup_reference, end_parameters))
     except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
         errors.append(error)
 
@@ -656,6 +706,23 @@ def run_service_rejections(root: Path) -> None:
             "upload data length does not match its section",
         ),
         ("upload-wrong-function", "upload", "unexpected S7 response function"),
+        ("upload-invalid-flag", "upload", "invalid upload continuation flag"),
+        ("upload-empty-continuation", "upload", "made no progress"),
+        ("upload-short-final", "upload", "does not match the declared block length"),
+        ("upload-long-final", "upload", "exceeds the declared block length"),
+        (
+            "upload-more-at-declared-length",
+            "upload",
+            "reached the declared block length",
+        ),
+        (
+            "upload-midstream-short",
+            "upload",
+            "does not match the declared block length",
+        ),
+        ("upload-midstream-overflow", "upload", "exceeds the declared block length"),
+        ("upload-end-bad-ack", "upload", "invalid end-upload response"),
+        ("upload-cleanup-bad-ack", "upload", "invalid upload continuation flag"),
     ):
         errors: list[Exception] = []
         with socket.socket() as listener:
