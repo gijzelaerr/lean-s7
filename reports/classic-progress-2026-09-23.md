@@ -280,3 +280,25 @@ These are cross-implementation observations, not formal claims about the Python 
   check. Combined validation is green. Follow-up changes are on
   `feat/compound-operation-gates`, uncommitted and unpushed.
 - Final PR #15 inspection confirmed merged status and success for both CI runs.
+
+## Caller-indexed write diagnostics
+
+- Owner authorized local commits and continued work. Compound-operation fixes
+  were committed as `469646d`; the branch remains unpushed.
+- Detailed writes now preserve chronological per-wire-item attempts, original
+  caller indices, and chunk byte offsets, including duplicate logical ranges.
+  Existing summary fields and ordinary write API signatures remain available.
+- A reverse-list accumulator avoids repeatedly scanning completed history;
+  public diagnostic arrays are materialized once and internal state is cleared.
+  Pure proofs cover history preservation, replay location order, acknowledged
+  result order, and exact acknowledgement count. These are model properties,
+  not an exactly-once or rollback guarantee for PLC writes.
+- Unit tests passed, including a 10,000-item trace. Six independent provenance
+  peers and all fifteen existing retry/progress peers passed. Complete clean
+  validation is pending before the next local commit. No push is authorized.
+- Final clean validation passed all 86 build jobs, the complete Lean test suite,
+  all three generated corpus comparisons, Python lint/format (16 files), and
+  whitespace checks. The complete pinned python-snap7 3.0.0 emulator/scripted-
+  peer suite passed, including all six new provenance scenarios and every
+  existing integration check. The provenance batch is ready for a local commit;
+  no push or physical-PLC validation has been performed.

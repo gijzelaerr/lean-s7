@@ -4,6 +4,7 @@ import LeanS7.ConcurrencyTests
 import LeanS7.StatefulFaultIntegration
 import LeanS7.RetryProgressTests
 import LeanS7.CompoundTests
+import LeanS7.WriteProvenanceTests
 
 open LeanS7 Std.Net
 
@@ -679,6 +680,8 @@ def main (args : List String) : IO Unit := do
       ConcurrencyTests.runIntegration host port mode
   | ["integration-compound", host, port, mode] =>
       CompoundTests.runIntegration host port mode
+  | ["integration-write-provenance", host, port, mode] =>
+      WriteProvenanceTests.runIntegration host port mode
   | ["integration-retry-progress", host, port, mode] =>
       RetryProgressTests.runIntegration host port mode
   | ["integration-stateful-fault", host, port, operation, expected] =>

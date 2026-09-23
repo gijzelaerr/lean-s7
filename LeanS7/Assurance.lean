@@ -248,6 +248,13 @@ structure CoreProtocolAssurance : Prop where
       (plan : WriteBatchPlan pduLength pending) packet,
     14 ≤ pduLength → S7.encodeAreaWriteMany reference plan.selected.toArray = .ok packet →
       packet.size ≤ pduLength
+  writeTraceSendHistory : ∀ (state after : WriteProgress.State) locations,
+    state.sent locations = .ok after → after.history = state.history
+  writeTraceReplayLocations : ∀ state : WriteProgress.State,
+    state.replay.history.map (·.location) =
+      state.pending.toList.reverse ++ state.history.map (·.location)
+  writeTraceAckCount : ∀ (state after : WriteProgress.State) results,
+    state.acknowledge results = .ok after → results.size = state.pending.size
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -338,6 +345,9 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact fun pdu pending => (planWriteBatch pdu pending).lengths
   · exact S7.plannedReadBatch_fits
   · exact S7.plannedWriteBatch_fits
+  · exact WriteProgress.State.sent_preserves_history
+  · exact WriteProgress.State.replay_history_locations
+  · exact WriteProgress.State.acknowledge_count
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition

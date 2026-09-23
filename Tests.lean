@@ -6,6 +6,7 @@ import LeanS7.MultiSemanticsTests
 import LeanS7.StatefulFaultTests
 import LeanS7.ValueCodecAssuranceTests
 import LeanS7.RetryProgressTests
+import LeanS7.WriteProvenanceTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -891,6 +892,7 @@ def main : IO Unit := do
   StatefulFaultTests.run
   ValueCodecAssuranceTests.run
   RetryProgressTests.run
+  WriteProvenanceTests.run
   MultiSemanticsTests.run
   BatchingTests.run
   testUserDataAssembly

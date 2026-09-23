@@ -151,7 +151,11 @@ results, including item rejection codes; `rejected` records scalar/global PLC
 rejections, and `uncertain` identifies outstanding writes whose outcome is
 unknown. With explicit replay enabled, `replayedUncertain` retains earlier
 unacknowledged attempts even if a later attempt succeeds or rejects. Earlier
-acknowledged writes are not rolled back. The existing
+acknowledged writes are not rolled back. `attempts` preserves chronological
+wire-item outcomes, including replayed attempts. Each location carries the
+original multi-item `itemIndex` (scalar writes use `none`) and the byte offset
+within that item's payload, so duplicate ranges and chunked items remain
+distinguishable. Acknowledgements carry the same provenance. The existing
 `writeArea`/`writeMulti` APIs retain their signatures and raise the underlying
 error when the detailed call fails.
 SZL/USER_DATA assembly checks byte and fragment limits before appending; its

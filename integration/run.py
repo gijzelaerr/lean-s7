@@ -22,6 +22,7 @@ from snap7.server import Server
 from snap7.type import SrvArea
 from stateful_faults import run_stateful_faults
 from transfer_deadlines import run_transfer_deadlines
+from write_provenance import run_write_provenance
 
 
 class MultiItemServer(Server):
@@ -1566,6 +1567,7 @@ def main() -> None:
         run_compound_operations(root)
         run_stateful_faults(root)
         run_retry_progress(root)
+        run_write_provenance(root)
         run_multi_batching(root)
         run_multi_semantics(root)
         run_reconnect_shrink(root)

@@ -49,7 +49,7 @@ structure Client where
   pduLength : UInt16
   private currentPduLength : IO.Ref UInt16
   private nextReference : IO.Ref UInt16
-  private writeProgress : IO.Ref WriteProgress
+  private writeProgress : IO.Ref WriteProgress.State
 
 private def orThrow [Repr ε] (result : Except ε α) : IO α :=
   match result with
@@ -107,11 +107,17 @@ def Client.connect (config : ClientConfig) : IO Client := do
   let state ← IO.mkRef Lifecycle.State.connected
   let currentPduLength ← IO.mkRef setup.pduLength
   let nextReference ← IO.mkRef config.initialRequestReference
-  let writeProgress ← IO.mkRef ({} : WriteProgress)
+  let writeProgress ← IO.mkRef ({} : WriteProgress.State)
   return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
   client.nextReference.modifyGet fun reference => (reference, reference + 1)
+
+/-- Release the internal reverse history once the caller owns its snapshot. -/
+private def Client.takeWriteProgress (client : Client) : IO WriteProgress := do
+  let progress := (← client.writeProgress.get).snapshot
+  client.writeProgress.set {}
+  return progress
 
 def Client.isConnected (client : Client) : IO Bool :=
   return (← client.state.get) == .connected
@@ -572,7 +578,8 @@ private def Client.readAreaChunk (client : Client) (range : S7.MemoryRange)
         payload hdecode⟩
 
 private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
-    (payload : ByteArray) (deadline : Option Nat) (retries : Nat) : IO Unit := do
+    (payload : ByteArray) (deadline : Option Nat) (retries : Nat)
+    (chunkByteOffset : Nat := 0) : IO Unit := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaWrite reference range payload
   let pduLength ← client.negotiatedPduLength
@@ -581,12 +588,10 @@ private def Client.writeAreaChunk (client : Client) (range : S7.MemoryRange)
   Transport.checkReceiveDeadline deadline
   unless ← client.isConnected do throw <| ClientError.disconnected "S7 client is disconnected"
   let response ← client.exchangeWithRetries reference request retries false deadline .potentiallyMutating
-    (client.writeProgress.modify fun p => { p with
-      replayedUncertain := p.replayedUncertain ++ p.uncertain, uncertain := #[] })
-    (client.writeProgress.modify fun p => { p with uncertain := #[range] })
+    (client.writeProgress.modify WriteProgress.State.replay)
+    (do client.writeProgress.set (← orThrow <| (← client.writeProgress.get).sent #[{ range, chunkByteOffset }]))
   decodeOrThrow <| S7.decodeDbWrite reference response
-  client.writeProgress.modify fun p => {
-    p with acknowledged := p.acknowledged.push { range, result := .success }, uncertain := #[] }
+  client.writeProgress.set (← orThrow <| (← client.writeProgress.get).acknowledge #[.success])
 
 private def Client.readAreaChunks (client : Client) (area : S7.Area)
     (dbNumber : UInt16) (start : Nat) (consumed : Nat) (chunks : List Nat)
@@ -643,7 +648,7 @@ private def Client.writeAreaChunks (client : Client) (area : S7.Area)
       have htail : offset + byteCount + rest.sum * area.elementSize = payload.size := by
         simpa [hchunks, byteCount, Nat.add_mul, Nat.add_assoc] using hcoverage
       let chunk := Chunking.writeSlice payload offset count area.elementSize (by omega)
-      client.writeAreaChunk { area, dbNumber, start := start + offset, count } chunk.val deadline retries
+      client.writeAreaChunk { area, dbNumber, start := start + offset, count } chunk.val deadline retries offset
       client.writeAreaChunks area dbNumber start (offset + byteCount)
         payload rest htail deadline 0
 
@@ -686,12 +691,12 @@ def Client.writeAreaDetailed (client : Client) (area : S7.Area) (dbNumber : UInt
     try
       let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
       client.writeAreaChecked area dbNumber start payload deadline client.config.reconnectRetries
-      return .ok (← client.writeProgress.get)
+      return .ok (← client.takeWriteProgress)
     catch error =>
       if classifyClientError error == .plcRejected then
-        client.writeProgress.modify fun p => { p with rejected := p.rejected ++ p.uncertain, uncertain := #[] }
+        client.writeProgress.modify WriteProgress.State.globalReject
       else if classifyClientError error != .invalidInput then client.closeCurrent
-      return .error { error, progress := ← client.writeProgress.get }
+      return .error { error, progress := ← client.takeWriteProgress }
 
 def Client.writeArea (client : Client) (area : S7.Area) (dbNumber : UInt16)
     (start : Nat) (payload : ByteArray) : IO Unit := do
@@ -1192,7 +1197,8 @@ def planWriteBatch (pduLength : Nat) (pending : List S7.WriteItem) :
     budgets := fun h => takeWriteBatch_fits pduLength pending (by omega) h }
 
 private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem)
-    (deadline : Option Nat) (retries : Nat) : IO (Array S7.WriteItemResult) := do
+    (deadline : Option Nat) (retries : Nat) (firstItemIndex : Nat)
+    (chunkByteOffset : Nat := 0) : IO (Array S7.WriteItemResult) := do
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeAreaWriteMany reference items
   let pduLength ← client.negotiatedPduLength
@@ -1202,20 +1208,18 @@ private def Client.writeMultiBatch (client : Client) (items : Array S7.WriteItem
   Transport.checkReceiveDeadline deadline
   unless ← client.isConnected do throw <| ClientError.disconnected "S7 client is disconnected"
   let response ← client.exchangeWithRetries reference request retries false deadline .potentiallyMutating
-    (client.writeProgress.modify fun p => { p with
-      replayedUncertain := p.replayedUncertain ++ p.uncertain, uncertain := #[] })
-    (client.writeProgress.modify fun p => { p with uncertain := items.map (·.range) })
+    (client.writeProgress.modify WriteProgress.State.replay)
+    (do
+      let locations := items.mapIdx fun index item => {
+        range := item.range, itemIndex := some (firstItemIndex + index), chunkByteOffset }
+      client.writeProgress.set (← orThrow <| (← client.writeProgress.get).sent locations))
   let results ← decodeOrThrow <| S7.decodeAreaWriteMany reference items.size response
-  let acknowledgements : Array WriteAcknowledgement :=
-    (items.zip results).map fun (item, result) => { range := item.range, result := result }
-  client.writeProgress.modify fun p => { p with
-    acknowledged := p.acknowledged ++ acknowledgements
-    uncertain := #[] }
+  client.writeProgress.set (← orThrow <| (← client.writeProgress.get).acknowledge results)
   return results
 
 private def Client.writeMultiChunks (client : Client) (item : S7.WriteItem)
     (offset : Nat) (chunks : List Nat) (deadline : Option Nat)
-    (retries : Nat) : IO S7.WriteItemResult := do
+    (retries : Nat) (itemIndex : Nat) : IO S7.WriteItemResult := do
   match chunks with
   | [] => return .success
   | count :: rest =>
@@ -1224,10 +1228,10 @@ private def Client.writeMultiChunks (client : Client) (item : S7.WriteItem)
         range := { item.range with start := item.range.start + offset, count }
         payload := item.payload.extract offset (offset + byteCount)
       }
-      let results ← client.writeMultiBatch #[chunk] deadline retries
+      let results ← client.writeMultiBatch #[chunk] deadline retries itemIndex offset
       match results[0]? with
       | some (S7.WriteItemResult.failure code) => return .failure code
-      | some S7.WriteItemResult.success => client.writeMultiChunks item (offset + byteCount) rest deadline 0
+      | some S7.WriteItemResult.success => client.writeMultiChunks item (offset + byteCount) rest deadline 0 itemIndex
       | none => throw <| ClientError.protocol "singleton multi-write omitted its result"
 
 private partial def Client.writeMultiLoop (client : Client) (pending : List S7.WriteItem)
@@ -1244,10 +1248,10 @@ private partial def Client.writeMultiLoop (client : Client) (pending : List S7.W
         let maximum := MultiValidation.writeMaximum pduLength.toNat item.range.area
         if maximum = 0 then
           throw <| ClientError.invalidInput "negotiated PDU cannot hold a multi-write item"
-        let result ← client.writeMultiChunks item 0 (Chunking.counts item.range.count maximum) deadline retries
+        let result ← client.writeMultiChunks item 0 (Chunking.counts item.range.count maximum) deadline retries results.size
         client.writeMultiLoop rest (results.push result) deadline 0
       else
-        let batchResults ← client.writeMultiBatch batch.toArray deadline retries
+        let batchResults ← client.writeMultiBatch batch.toArray deadline retries results.size
         client.writeMultiLoop remaining (results ++ batchResults) deadline 0
 
 /-- Both success and failure retain per-wire-item progress. A PLC item rejection
@@ -1263,12 +1267,12 @@ def Client.writeMultiDetailed (client : Client) (items : Array S7.WriteItem) :
       inputOrThrow <| MultiValidation.writes pduLength.toNat items
       let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
       let results ← client.writeMultiLoop items.toList #[] deadline client.config.reconnectRetries
-      return .ok (results, ← client.writeProgress.get)
+      return .ok (results, ← client.takeWriteProgress)
     catch error =>
       if classifyClientError error != .invalidInput then client.closeCurrent
       if classifyClientError error == .plcRejected then
-        client.writeProgress.modify fun p => { p with rejected := p.rejected ++ p.uncertain, uncertain := #[] }
-      return .error { error, progress := ← client.writeProgress.get }
+        client.writeProgress.modify WriteProgress.State.globalReject
+      return .error { error, progress := ← client.takeWriteProgress }
 
 def Client.writeMulti (client : Client) (items : Array S7.WriteItem) : IO (Array S7.WriteItemResult) := do
   match ← client.writeMultiDetailed items with
