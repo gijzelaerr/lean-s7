@@ -174,6 +174,9 @@ peers inject faults at every upload and segmented SZL receive phase.
 Compound bit read-modify-write calls (`dbWriteBit`, `forceBit`, and
 `cancelForceBit`) hold the same client gate across both exchanges. STRING and
 WSTRING reads hold it across their header and body, including typed decoding.
+Their capacity must remain unchanged between the sizing and body headers;
+ordinary updates to current length remain allowed. This does not provide a
+consistent snapshot across controller scans or other connections.
 Each compound call uses one shared receive budget; only its initial read can
 reconnect, never a subsequent body read or write. Invalid string header lengths
 reject before the body request. This prevents interleaving on the same client,

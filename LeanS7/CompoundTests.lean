@@ -45,6 +45,10 @@ def runIntegration (host portString mode : String) : IO Unit := do
       let data ← client.readArea area (if area == .dataBlocks then 1 else 0) 0 1
       unless data == bytes #[if mode.endsWith "clear" then 0 else 255] do
         throw <| IO.userError "concurrent bit updates were lost"
+    else if mode.endsWith "length-update" then
+      let text ← readText client mode
+      unless text == (if mode.startsWith "wstring" then "updated 🌍" else "updated") do
+        throw <| IO.userError "valid current-length update was rejected or lost"
     else if mode == "string-success" || mode == "wstring-success" then
       let first ← IO.asTask (readText client mode)
       let _ ← (← IO.getStdin).getLine
@@ -63,6 +67,9 @@ def runIntegration (host portString mode : String) : IO Unit := do
       catch error => pure (some error)
       let some error := error | throw <| IO.userError "compound fault unexpectedly succeeded"
       let kind := classifyClientError error
+      if mode.endsWith "capacity-shrink" || mode.endsWith "capacity-grow" then
+        unless ((toString error).splitOn "capacity changed during read").length > 1 do
+          throw <| IO.userError s!"capacity change missed its specific diagnostic: {error}"
       unless (if deadlineCase then kind == .timeout else if mode == "bit-drop" then
         kind == .disconnected || kind == .transport else kind == .protocol) do
         throw <| IO.userError s!"unexpected compound failure {repr kind}: {error}"

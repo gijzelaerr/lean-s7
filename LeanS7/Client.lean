@@ -1381,6 +1381,9 @@ def Client.dbReadString (client : Client) (dbNumber : UInt16) (start : Nat) : IO
     if current > maximum then
       throw <| ClientError.protocol s!"invalid S7 STRING current length {current} exceeds {maximum}"
     let content ← client.readAreaChecked .dataBlocks dbNumber start (maximum.toNat + 2) deadline 0
+    let contentMaximum ← orThrow <| Value.getUInt8 content.val
+    if contentMaximum != maximum then
+      throw <| ClientError.protocol s!"S7 STRING capacity changed during read: {maximum} to {contentMaximum}"
     orThrow <| Value.decodeString content.val
 
 def Client.dbWriteString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
@@ -1397,6 +1400,9 @@ def Client.dbReadWString (client : Client) (dbNumber : UInt16) (start : Nat) : I
     if current > maximum then
       throw <| ClientError.protocol s!"invalid S7 WSTRING current length {current} exceeds {maximum}"
     let content ← client.readAreaChecked .dataBlocks dbNumber start (maximum.toNat * 2 + 4) deadline 0
+    let contentMaximum ← orThrow <| Value.getUInt16 content.val
+    if contentMaximum != maximum then
+      throw <| ClientError.protocol s!"S7 WSTRING capacity changed during read: {maximum} to {contentMaximum}"
     orThrow <| Value.decodeWString content.val
 
 def Client.dbWriteWString (client : Client) (dbNumber : UInt16) (start maximum : Nat)

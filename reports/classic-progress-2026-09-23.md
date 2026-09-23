@@ -302,3 +302,26 @@ These are cross-implementation observations, not formal claims about the Python 
   peer suite passed, including all six new provenance scenarios and every
   existing integration check. The provenance batch is ready for a local commit;
   no push or physical-PLC validation has been performed.
+
+## String capacity consistency follow-up
+
+- Owner requested push and continued work. Both local commits (`469646d` and
+  `a2aa44d`) were inspected for author, committer, message, and attribution, then
+  pushed to `origin/feat/compound-operation-gates`. No PR was created or merged.
+- Audit found that a smaller capacity in the body header can silently pass
+  STRING/WSTRING decoding after the initial sizing read. New peers exercise
+  shrinking/growing capacity and valid current-length changes separately;
+  implementation and complete validation are underway.
+- Independent shrinking-capacity peers reproduced silent acceptance in both
+  pre-fix APIs. The fix checks the body capacity against the sizing header and
+  reports a protocol failure, closing the session without replay. Current-length
+  updates remain permitted; this is not snapshot isolation from controller IO.
+- All six new focused peers passed, covering capacity growth/shrinkage and valid
+  current-length updates for both string types. Clean combined validation is
+  underway; follow-up changes remain uncommitted.
+- Final clean build (86 jobs), complete Lean tests, all three generated corpus
+  comparisons, Python lint/format, whitespace checks, and the complete pinned
+  emulator/scripted-peer suite passed. Compound coverage now totals 20 scenarios.
+  CI for the initially pushed head `a2aa44d` completed successfully. The capacity
+  fix is ready to commit and push on the same branch; no physical PLC or PR merge
+  is involved. Current-length changes do not establish a consistent PLC snapshot.

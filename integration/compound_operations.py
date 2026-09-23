@@ -151,6 +151,23 @@ def _serve(
                 if mode.endswith("deadline") and not _delay(connection, 0.15):
                     raise RuntimeError("compound timed out before valid first response")
                 _read_reply(connection, first, data[:header_size])
+                if mode.endswith(("capacity-shrink", "capacity-grow")):
+                    changed = maximum + (-1 if mode.endswith("shrink") else 1)
+                    data = (
+                        struct.pack(">H", changed) + data[2:]
+                        if wide
+                        else bytes([changed]) + data[1:]
+                    )
+                elif mode.endswith("length-update"):
+                    text = "updated 🌍".encode("utf-16-be") if wide else b"updated"
+                    header = (
+                        struct.pack(">HH", maximum, len(text) // 2)
+                        if wide
+                        else bytes([maximum, len(text)])
+                    )
+                    data = (
+                        header + text + bytes(maximum * (2 if wide else 1) - len(text))
+                    )
                 for offset in range(0, len(data), 222):
                     request = _request(connection)
                     count = min(222, len(data) - offset)
@@ -200,6 +217,12 @@ def run_compound_operations(root: Path) -> None:
         "string-bad-header",
         "wstring-bad-header",
         "wstring-bad-utf16",
+        "string-capacity-shrink",
+        "wstring-capacity-shrink",
+        "string-capacity-grow",
+        "wstring-capacity-grow",
+        "string-length-update",
+        "wstring-length-update",
         "string-deadline",
         "wstring-deadline",
         "bit-drop",
