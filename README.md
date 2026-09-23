@@ -167,6 +167,15 @@ machines to independent phase/size/order oracles. Barrier-synchronized peers
 exercise concurrent calls, queued failures, disconnect, and reconnect; other
 peers inject faults at every upload and segmented SZL receive phase.
 
+Compound bit read-modify-write calls (`dbWriteBit`, `forceBit`, and
+`cancelForceBit`) hold the same client gate across both exchanges. STRING and
+WSTRING reads hold it across their header and body, including typed decoding.
+Each compound call uses one shared receive budget; only its initial read can
+reconnect, never a subsequent body read or write. Invalid string header lengths
+reject before the body request. This prevents interleaving on the same client,
+but does not make the operation atomic against other connections or PLC scan
+cycles, nor does it provide a coherent controller-wide snapshot.
+
 ## Build and test
 
 Install [Lean through `elan`](https://lean-lang.org/install/), then run:

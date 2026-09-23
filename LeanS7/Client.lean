@@ -1340,31 +1340,60 @@ def Client.dbWriteReal (client : Client) (dbNumber : UInt16) (start : Nat) (valu
 def Client.dbWriteLReal (client : Client) (dbNumber : UInt16) (start : Nat) (value : Float) : IO Unit :=
   client.dbWrite dbNumber start (Value.putLReal value)
 
-def Client.dbWriteBit (client : Client) (dbNumber : UInt16) (byteOffset bitIndex : Nat)
-    (enabled : Bool) : IO Unit := do
+/-- One gate and receive budget for a compound operation. This excludes other
+    calls on this client, not other connections or PLC scan-cycle mutations. -/
+private def Client.compound (client : Client) (operation : Option Nat → IO α) : IO α :=
+  client.serialized do
+    try
+      operation (← Transport.receiveDeadline client.config.transferReceiveTimeoutMs)
+    catch error =>
+      if classifyClientError error != .invalidInput && classifyClientError error != .plcRejected then
+        client.closeCurrent
+      throw error
+
+private def Client.writeBitChecked (client : Client) (area : S7.Area)
+    (dbNumber : UInt16) (byteOffset bitIndex : Nat) (enabled : Bool) : IO Unit := do
   if bitIndex > 7 then
     throw <| ClientError.invalidInput s!"bit index must be between 0 and 7, got {bitIndex}"
-  let current ← client.dbReadUInt8 dbNumber byteOffset
-  let updated ← inputOrThrow <| Value.setBit current bitIndex enabled
-  client.dbWriteUInt8 dbNumber byteOffset updated
+  client.compound fun deadline => do
+    client.writeProgress.set {}
+    let current ← client.readAreaChecked area dbNumber byteOffset 1 deadline client.config.reconnectRetries
+    let value ← orThrow <| Value.getUInt8 current.val
+    let updated ← inputOrThrow <| Value.setBit value bitIndex enabled
+    -- Do not replay the write after this operation's read has completed.
+    client.writeAreaChecked area dbNumber byteOffset (bytes #[updated]) deadline 0
+
+def Client.dbWriteBit (client : Client) (dbNumber : UInt16) (byteOffset bitIndex : Nat)
+    (enabled : Bool) : IO Unit :=
+  client.writeBitChecked .dataBlocks dbNumber byteOffset bitIndex enabled
 
 def Client.dbReadString (client : Client) (dbNumber : UInt16) (start : Nat) : IO String := do
-  let header ← client.dbRead dbNumber start 2
-  let maximum ← orThrow <| Value.getUInt8 header
-  if maximum.toNat > Value.maxStringLength then
-    throw <| ClientError.protocol s!"invalid S7 STRING maximum length {maximum}"
-  orThrow <| Value.decodeString (← client.dbRead dbNumber start (maximum.toNat + 2))
+  client.compound fun deadline => do
+    let header ← client.readAreaChecked .dataBlocks dbNumber start 2 deadline client.config.reconnectRetries
+    let maximum ← orThrow <| Value.getUInt8 header.val
+    let current ← orThrow <| Value.getUInt8 header.val 1
+    if maximum.toNat > Value.maxStringLength then
+      throw <| ClientError.protocol s!"invalid S7 STRING maximum length {maximum}"
+    if current > maximum then
+      throw <| ClientError.protocol s!"invalid S7 STRING current length {current} exceeds {maximum}"
+    let content ← client.readAreaChecked .dataBlocks dbNumber start (maximum.toNat + 2) deadline 0
+    orThrow <| Value.decodeString content.val
 
 def Client.dbWriteString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
     (value : String) : IO Unit := do
   client.dbWrite dbNumber start (← inputOrThrow <| Value.encodeString maximum value)
 
 def Client.dbReadWString (client : Client) (dbNumber : UInt16) (start : Nat) : IO String := do
-  let header ← client.dbRead dbNumber start 4
-  let maximum ← orThrow <| Value.getUInt16 header
-  if maximum.toNat > Value.maxWStringLength then
-    throw <| ClientError.protocol s!"invalid S7 WSTRING maximum length {maximum}"
-  orThrow <| Value.decodeWString (← client.dbRead dbNumber start (maximum.toNat * 2 + 4))
+  client.compound fun deadline => do
+    let header ← client.readAreaChecked .dataBlocks dbNumber start 4 deadline client.config.reconnectRetries
+    let maximum ← orThrow <| Value.getUInt16 header.val
+    let current ← orThrow <| Value.getUInt16 header.val 2
+    if maximum.toNat > Value.maxWStringLength then
+      throw <| ClientError.protocol s!"invalid S7 WSTRING maximum length {maximum}"
+    if current > maximum then
+      throw <| ClientError.protocol s!"invalid S7 WSTRING current length {current} exceeds {maximum}"
+    let content ← client.readAreaChecked .dataBlocks dbNumber start (maximum.toNat * 2 + 4) deadline 0
+    orThrow <| Value.decodeWString content.val
 
 def Client.dbWriteWString (client : Client) (dbNumber : UInt16) (start maximum : Nat)
     (value : String) : IO Unit := do
@@ -1377,11 +1406,7 @@ def Client.forceBit (client : Client) (area : S7.Area) (byteOffset bit : Nat)
   if area != .processInputs && area != .processOutputs then
     throw <| ClientError.invalidInput
       "process-image bit override only supports input and output areas"
-  if bit > 7 then
-    throw <| ClientError.invalidInput s!"bit index must be between 0 and 7, got {bit}"
-  let current ← client.readArea area 0 byteOffset 1
-  let updated ← inputOrThrow <| Value.setBit current[0]! bit value
-  client.writeArea area 0 byteOffset (bytes #[updated])
+  client.writeBitChecked area 0 byteOffset bit value
 
 def Client.cancelForceBit (client : Client) (area : S7.Area) (byteOffset bit : Nat) : IO Unit :=
   client.forceBit area byteOffset bit false

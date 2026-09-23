@@ -250,3 +250,33 @@ These are cross-implementation observations, not formal claims about the Python 
   item identity; replay uncertainty does not imply rollback or exactly-once IO.
   Sends/connects remain outside cancellation guarantees, and no physical PLC
   compatibility or safety certification is claimed.
+
+## Compound-operation serialization follow-up
+
+- Operation safety/conversation assurance was committed as `8d2fd50`, pushed,
+  and merged via PR #15 at the owner's request. Follow-up branch
+  `feat/compound-operation-gates` starts from merged main `b074043`.
+- DB bit updates and input/output process-image overrides now retain the
+  serialization gate across read-modify-write, with one receive budget and
+  no replay after the initial read. This excludes same-client calls only;
+  controller scans and other connections remain outside that guarantee.
+- STRING/WSTRING reads retain the gate through initial header checks, all body
+  chunks, and typed decoding. Used lengths exceeding capacity reject before
+  body IO. Their two stages share one absolute receive deadline.
+- The first eleven independent compound peers passed. Coverage is expanded to
+  fourteen scenarios including concurrent bit clears, cancellation of process
+  image bits, and a receive deadline spanning the bit read and write. Full
+  combined validation is pending; follow-up changes remain uncommitted.
+- All fourteen compound peers passed. Final clean build passed all 84 jobs;
+  Lean tests, all three generated corpus comparisons, lint/format, and whitespace
+  checks passed. The complete pinned emulator suite is running. PR #15's branch
+  CI passed; the additional pull-request CI run was still active when inspected.
+- Focused concurrency and all fourteen compound peers also passed with
+  `LEAN_NUM_THREADS=2` configured. This sets the initial worker pool, not a hard
+  cap on native threads: the [pinned Lean runtime](https://raw.githubusercontent.com/leanprover/lean4/v4.33.1/src/runtime/object.cpp)
+  can expand workers when a task blocks waiting for another task.
+- The complete pinned python-snap7 3.0.0 emulator/scripted-peer suite passed,
+  including all fourteen compound scenarios and every existing integration
+  check. Combined validation is green. Follow-up changes are on
+  `feat/compound-operation-gates`, uncommitted and unpushed.
+- Final PR #15 inspection confirmed merged status and success for both CI runs.

@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import sequence_conformance
+from compound_operations import run_compound_operations
 from concurrency import run_concurrency
 from extended_deadlines import run_extended_deadlines
 from multi_batching import run_multi_batching
@@ -1562,6 +1563,7 @@ def main() -> None:
         run_transfer_deadlines(root)
         run_extended_deadlines(root)
         run_concurrency(root)
+        run_compound_operations(root)
         run_stateful_faults(root)
         run_retry_progress(root)
         run_multi_batching(root)
