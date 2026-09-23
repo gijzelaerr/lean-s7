@@ -311,6 +311,23 @@ abbrev JobPdu := Job
 def decodeJobPdu (pdu : ByteArray) : Except DecodeError JobPdu :=
   decodeJob pdu
 
+/-- Validate a PLC-driven download service request for the block being sent.
+    The service parameters contain the function, seven reserved bytes, and
+    the `_0TNNNNNP` block address; a download job carries no data section. -/
+def validateDownloadServiceRequest (job : JobPdu) (function : UInt8)
+    (blockType : BlockType) (number : Nat) : Except DecodeError Unit := do
+  if number > 99999 then
+    throw (.invalidField 0 s!"download block number {number} exceeds five digits")
+  let numberBytes := bytes #[decimalDigit number 10000, decimalDigit number 1000,
+    decimalDigit number 100, decimalDigit number 10, decimalDigit number 1]
+  let expected := bytes #[function, 0, 0, 0, 0, 0, 0, 0, 9, 0x5f, 0x30,
+    blockType.code] ++ numberBytes ++ bytes #[0x50]
+  if job.parameters != expected then
+    throw (.invalidField jobHeaderSize "invalid PLC download service parameters or block address")
+  if !job.data.isEmpty then
+    throw (.invalidField (jobHeaderSize + job.parameters.size)
+      "PLC download service request must not contain data")
+
 def encodeRequestDownload (reference : UInt16) (blockType : BlockType) (number loadSize mc7Size : Nat) :
     Except EncodeError ByteArray := do
   let numberBytes ← decimal5 number
@@ -319,6 +336,11 @@ def encodeRequestDownload (reference : UInt16) (blockType : BlockType) (number l
   encodeJob { reference, parameters :=
     (bytes #[requestDownloadFunction, 0, 1, 0, 0, 0, 0, 0, 9, 0x5f, 0x30, blockType.code] ++
       numberBytes ++ bytes #[0x50, 0x0d, 0x31] ++ loadBytes ++ mc7Bytes) }
+
+def decodeRequestDownloadAck (reference : UInt16) (response : Response) : Except DecodeError Unit := do
+  validateResponse response reference requestDownloadFunction
+  if response.parameters.size != 1 || !response.data.isEmpty then
+    throw (.invalidField responseHeaderSize "invalid request-download acknowledgement")
 
 def encodeDownloadFragmentResponse (reference : UInt16) (isLast : Bool)
     (payload : ByteArray) : Except EncodeError ByteArray :=

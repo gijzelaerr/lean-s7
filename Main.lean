@@ -346,6 +346,31 @@ def runDownloadInterruptionIntegration (host portString : String) : IO Unit := d
   client.disconnect
   IO.println "block-download interruption passed"
 
+def runDownloadRejectionIntegration (host portString : String) : IO Unit := do
+  let some portNat := portString.toNat?
+    | throw <| IO.userError s!"invalid TCP port: {portString}"
+  let client ← Client.connect {
+    endpoint := endpointOfString host
+    port := UInt16.ofNat portNat
+    operationTimeoutMs := some 1000
+  }
+  let mc7 := ByteArray.mk <| (Array.range 600).map fun index => UInt8.ofNat (index * 29 + 7)
+  let compact := ByteArray.mk (Array.replicate 34 0) ++ uint16BE (UInt16.ofNat mc7.size)
+  let outcome ← try
+    client.downloadBlock .dataBlock 7 (compact ++ mc7)
+    pure (none : Option IO.Error)
+  catch error => pure (some error)
+  match outcome with
+  | none => throw <| IO.userError "malformed PLC download service request unexpectedly succeeded"
+  | some error =>
+      unless classifyClientError error == .protocol do
+        throw <| IO.userError
+          s!"unexpected malformed download category {repr (classifyClientError error)}: {error}"
+  if ← client.isConnected then
+    throw <| IO.userError "malformed PLC download service request left the client connected"
+  client.disconnect
+  IO.println "malformed PLC download service request rejected"
+
 def runUserDataInterruptionIntegration (host portString : String) : IO Unit := do
   let some portNat := portString.toNat?
     | throw <| IO.userError s!"invalid TCP port: {portString}"
@@ -531,6 +556,8 @@ def main (args : List String) : IO Unit := do
   | ["integration-download", host, port] => runDownloadIntegration host port
   | ["integration-download-interruption", host, port] =>
       runDownloadInterruptionIntegration host port
+  | ["integration-download-rejection", host, port] =>
+      runDownloadRejectionIntegration host port
   | ["integration-userdata-interruption", host, port] =>
       runUserDataInterruptionIntegration host port
   | ["integration-reference-wrap", host, port] =>

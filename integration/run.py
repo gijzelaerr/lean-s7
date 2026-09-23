@@ -435,9 +435,11 @@ def _s7_response(reference: int, parameters: bytes, data: bytes = b"") -> bytes:
     )
 
 
-def _s7_job(reference: int, parameters: bytes) -> bytes:
+def _s7_job(reference: int, parameters: bytes, data: bytes = b"") -> bytes:
     return (
-        struct.pack(">BBHHHH", 0x32, 1, 0, reference, len(parameters), 0) + parameters
+        struct.pack(">BBHHHH", 0x32, 1, 0, reference, len(parameters), len(data))
+        + parameters
+        + data
     )
 
 
@@ -794,6 +796,16 @@ def run_reconnect_recovery(root: Path) -> None:
         raise errors[0]
 
 
+def _download_service_params(function: int, block_number: int) -> bytes:
+    return (
+        bytes([function])
+        + bytes(7)
+        + b"\x09_0A"
+        + f"{block_number:05d}".encode()
+        + b"P"
+    )
+
+
 def serve_plc_driven_download(
     listener: socket.socket, expected: bytes, errors: list[Exception]
 ) -> None:
@@ -821,7 +833,9 @@ def serve_plc_driven_download(
             received = bytearray()
             sequence = 0x7000
             while len(received) < len(expected):
-                _send_s7(connection, _s7_job(sequence, bytes([0x1B])))
+                _send_s7(
+                    connection, _s7_job(sequence, _download_service_params(0x1B, 7))
+                )
                 response = _receive_s7(connection)
                 parameter_length = struct.unpack(">H", response[6:8])[0]
                 data_length = struct.unpack(">H", response[8:10])[0]
@@ -841,7 +855,7 @@ def serve_plc_driven_download(
                 sequence += 1
             if bytes(received) != expected:
                 raise RuntimeError("downloaded block data mismatch")
-            _send_s7(connection, _s7_job(sequence, bytes([0x1C])))
+            _send_s7(connection, _s7_job(sequence, _download_service_params(0x1C, 7)))
             ended = _receive_s7(connection)
             if ended[12:] != bytes([0x1C]):
                 raise RuntimeError("invalid download-ended response")
@@ -892,7 +906,7 @@ def serve_interrupted_download(
             start = _receive_s7(connection)
             reference = int.from_bytes(start[4:6], "big")
             _send_s7(connection, _s7_response(reference, bytes([0x1A])))
-            _send_s7(connection, _s7_job(0x7000, bytes([0x1B])))
+            _send_s7(connection, _s7_job(0x7000, _download_service_params(0x1B, 7)))
             fragment = _receive_s7(connection)
             if fragment[12:13] != bytes([0x1B]):
                 raise RuntimeError("interrupted download returned an invalid fragment")
@@ -926,6 +940,82 @@ def run_download_interruption(root: Path) -> None:
         raise RuntimeError("interrupted-download peer did not finish")
     if errors:
         raise errors[0]
+
+
+def serve_malformed_download_service(
+    listener: socket.socket, mutation: str, errors: list[Exception]
+) -> None:
+    try:
+        with _accept_session(listener, 480) as connection:
+            start = _receive_s7(connection)
+            reference = int.from_bytes(start[4:6], "big")
+            if mutation == "ack-extra":
+                _send_s7(connection, _s7_response(reference, bytes([0x1A, 0])))
+            elif mutation == "ack-data":
+                _send_s7(connection, _s7_response(reference, bytes([0x1A]), b"\x01"))
+            else:
+                _send_s7(connection, _s7_response(reference, bytes([0x1A])))
+                parameters = bytearray(_download_service_params(0x1B, 7))
+                data = b""
+                if mutation == "wrong-block":
+                    parameters[16] = ord("8")
+                elif mutation == "reserved":
+                    parameters[1] = 1
+                elif mutation == "truncated":
+                    parameters.pop()
+                elif mutation == "data":
+                    data = b"\x01"
+                _send_s7(connection, _s7_job(0x7000, bytes(parameters), data))
+            # The client must reject the job and close before sending block data.
+            connection.settimeout(2)
+            try:
+                received = _receive_tpkt(connection)
+            except ConnectionResetError:
+                return
+            except RuntimeError as error:
+                if str(error) == "peer closed an incomplete test frame":
+                    return
+                raise
+            if len(received) >= 2 and received[1] == 0xF0:
+                raise RuntimeError(f"client accepted malformed {mutation} download job")
+    except (OSError, RuntimeError, struct.error, ValueError, IndexError) as error:
+        errors.append(error)
+
+
+def run_download_rejections(root: Path) -> None:
+    for mutation in (
+        "ack-extra",
+        "ack-data",
+        "wrong-block",
+        "reserved",
+        "truncated",
+        "data",
+    ):
+        errors: list[Exception] = []
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            thread = threading.Thread(
+                target=serve_malformed_download_service,
+                args=(listener, mutation, errors),
+            )
+            thread.start()
+            subprocess.run(
+                [
+                    str(root / ".lake/build/bin/lean-s7"),
+                    "integration-download-rejection",
+                    "127.0.0.1",
+                    str(listener.getsockname()[1]),
+                ],
+                cwd=root,
+                check=True,
+                timeout=10,
+            )
+            thread.join(timeout=3)
+        if thread.is_alive():
+            raise RuntimeError(f"malformed download peer did not finish: {mutation}")
+        if errors:
+            raise errors[0]
 
 
 def serve_interrupted_userdata(
@@ -1314,6 +1404,7 @@ def main() -> None:
         run_reconnect_recovery(root)
         run_download_integration(root)
         run_download_interruption(root)
+        run_download_rejections(root)
         run_userdata_interruption(root)
         run_reference_wrap(root)
         run_segmented_integration(root)
