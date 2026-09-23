@@ -455,3 +455,85 @@ These are cross-implementation observations, not formal claims about the Python 
   and PR #16 under owner approval; it has not been merged. Native OS cancellation,
   ordinary-send bounds, universal leak freedom, and physical PLC validation
   remain outside the proven/tested guarantees.
+
+## PR #16 merge and next non-blocking work
+
+- Owner requested merging #16. Both Linux CI runs passed. Local `main` was
+  fast-forwarded to the exact validated `082ec79` and pushed after inspecting
+  all six outgoing commits' authors, committers, messages, and empty trailers.
+  No new merge commit, history rewriting, or branch deletion was needed.
+  GitHub confirms #16 MERGED at 2026-09-23T18:31:50Z; local/origin main match.
+- Read-only review confirmed a new clock-decoder bug, not yet fixed:
+  `S7.decodePlcDateTime (bytes #[0,0x19,0x26,0x09,0x23,0x12,0x34,0x56,0x12,0xa3])`
+  returns a valid-looking date/time with millisecond=130 despite non-decimal BCD
+  digit A in the final byte's high nibble. A native Lean evaluation reproduced it.
+- Recommended emulator-only follow-ups: fix clock BCD validation and prove valid
+  DATE_AND_TIME roundtrips; prove bit-update isolation/idempotence/readback;
+  export wide values, Unicode and clock boundaries as portable conformance cases;
+  broaden existing mixed-fault generators beyond operation order to PDU/payload/
+  capacity boundaries; add dedicated longer Linux/macOS soak CI coverage.
+  These are recommendations, not newly authorized implementation or automation.
+
+## Clock, bit, and generated boundary assurance
+
+- Owner approved all five follow-ups in parallel. Work is on one new branch,
+  `feat/classic-value-boundary-assurance`, starting at merged #16 (`082ec79`).
+  The preceding progress-log update is preserved. Separate workers own clock
+  codec/fix proofs, bit-update proofs, and generated boundary conversations;
+  root owns portable value corpus, shared wiring, docs, and soak CI.
+- New weekly/manual soak workflow targets Linux and macOS independently with
+  32 rounds by default and an optional 128-round manual choice. It uses the
+  existing process-metric checker; no automation is enabled until publication
+  and merge. Source/corpus/proof work and combined local checks remain underway.
+- Clock's packed final millisecond digit now rejects A–F independently of other
+  fields. Actual universal validated-value roundtrip, ten-byte encoding, wrong
+  length rejection, and independent invalid-digit proofs are checked. Tests span
+  all 36,525 supported dates, 7,000 millisecond/weekday combinations, calendar
+  decoder negatives, and full-stack read-only clock-query controls/rejections.
+- Bit-update actual-API properties quantify arbitrary UInt8 values, Nat indices,
+  Boolean updates and surrounding data. Readback, unrelated-bit preservation,
+  idempotence, overwrite and invalid-index rejection are in CoreProtocolAssurance.
+  Axiom audit contains only standard propext/Classical.choice/Quot.sound; a
+  provisional reflection-based approach was replaced by kernel-checked algebra.
+- Eight reproducibly seeded native boundary plans passed 312 parameterized
+  operations at PDU240/480. Fifteen synthetic closure checks reject partial or
+  unauthorized traffic. Parameter-aware reduction preserves operation IDs,
+  addresses, lengths and values; generator independently checks mandatory edges.
+- Portable integer/Unicode/clock value corpus and stdlib Python oracle are
+  implemented. Initial 190 cases passed, then review added decoder-only calendar
+  failures, exact integer schema versions, compact representation negatives and
+  byte/value mutations. Soak workflows parse and actionlint1.7.7 passes locally.
+  Source is frozen pending root integration/wiring checks and full clean validation;
+  all current follow-up changes are uncommitted and unpublished.
+- Root focused checks pass: all eight boundary plans/312 operations; 16 full-stack
+  clock queries (10 decimal controls, six A–F rejections with terminal cleanup);
+  final portable corpus 207/207 independent cases (34 integer, 30 string,
+  143 clock). Schema tests reject Boolean/float versions; compact-byte tests
+  detect malformed shape/ranges/aggregate sizes, and byte/value/status mutations.
+- Root independently audited clock roundtrip and four main bit-update theorems:
+  only standard propext/Classical.choice/Quot.sound axioms. Original 0xA3 clock
+  reproducer now returns `invalidField 9 "invalid BCD millisecond digit"`.
+  No admissions, native certificate axioms, or new user axioms are present.
+  All source is frozen; one root-owned clean combined validation starts next.
+- Clean combined build passed all 118 jobs. Complete native Lean tests pass,
+  including clock-calendar/bit regression suites and the new corpus validator.
+  All five generated corpus comparisons are exact; independent values oracle
+  passes 207/207 cases. Ruff lint/format (27 files), whitespace checks, and both
+  workflow files' pinned actionlint check pass. Final full emulator integration
+  and timed 128-round measured soak are running; no publication or merge yet.
+- Final full pinned python-snap7 3.0.0 emulator/scripted-peer suite passed, including
+  all previous compound/concurrency/retry/transfer tests, the new eight boundary
+  conversations (312 operations), sixteen clock-query peers, and both independent
+  operation/value oracles. Bounded 216-attempt stress remained FD8/8, threads7/7,
+  RSS5,603,328/5,619,712 bytes. The larger 128-round soak remains in progress;
+  source is uncommitted on the new branch and hosted-platform runs are pending.
+- Timed final 128-round macOS soak passed: 27,648 logical attempts, 6,912 retry
+  reconnects, 34,560 physical TCP sessions; 181.98 seconds wall time. Baseline/peak
+  FD8/8, threads7/7, RSS5,603,328/5,652,480 bytes (+49,152 bytes). Both proposed
+  manual lengths have local macOS regression evidence; hosted-platform cold build
+  and soak evidence still requires CI after publication. Plateau is relative,
+  not universal leak freedom or hard native-operation cancellation.
+- All five requested workstreams are implemented and combined local checks are
+  green. One coherent local commit records the batch under standing owner commit
+  approval. Publication is a separate step; no new PR has been opened or merged,
+  and weekly/manual CI activation awaits merging the workflow into main.

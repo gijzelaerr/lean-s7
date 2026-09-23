@@ -20,6 +20,7 @@ jobs:
       - run: lake exe lean-s7-conformance cotp | diff - conformance/v1/cotp-data.json
       - run: lake exe lean-s7-conformance s7 | diff - conformance/v1/s7.json
       - run: lake exe lean-s7-conformance operations | diff - conformance/v1/operations.json
+      - run: lake exe lean-s7-conformance values | diff - conformance/v1/values.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

@@ -178,3 +178,41 @@ are not an atomic transaction or rollback guarantee.
 The Python oracle is independent conformance evidence, not a formal proof of
 Python source or a test of python-snap7. These vectors require no controller and
 do not establish physical PLC compatibility.
+
+## Typed value and clock cases
+
+Generate `values.json` with `lake exe lean-s7-conformance values`. The exporter
+checks all fixed expectations against the actual Lean encoders and decoders
+before emitting them. Run `python integration/value_conformance.py` for the
+independent standard-library oracle; no python-snap7 or controller is required.
+
+Byte specifications use `{"chunks": [...]}`. Each chunk is either
+`{"bytes": [0, ..., 255]}` or `{"repeat": {"byte": 0, "count": N}}`.
+Concatenate chunks literally; repeated runs compress large padding allocations.
+The Python reader requires integer octets/counts and bounds expanded data to
+1,000,000 bytes. `offset` is a byte offset into the expanded input data.
+
+`integer_cases` uses big-endian unsigned/signed 8/16/32/64-bit codecs. Both
+`input_value` and accepted `value` are canonical decimal **strings**, preserving
+64-bit values beyond JavaScript's exact numeric range. Successful cases compare
+the actual encoding and surrounded decoding with fixed expected bytes/value;
+short reads reject as `truncated-value`.
+
+`string_codec_cases` uses `latin-1` STRING or `utf-16-be` WSTRING. `roundtrip`
+cases encode `input_value` at `maximum` capacity and decode the supplied data at
+`offset`; `decode` cases test supplied bytes only. Lengths count characters for
+Latin-1, UTF-16 units for WSTRING. Success requires the complete declared storage
+allocation, even when active content is shorter. Categories normalize encoder
+errors as `encode-value` and malformed/truncated storage as `value-codec`.
+These cases include embedded NUL, the surrogate gap, first/last supplementary
+scalars, legal maximum padding, and malformed surrogate sequences.
+
+`clock_codec_cases` supplies the client's complete ten-byte clock payload, not
+an eight-byte raw DATE_AND_TIME field or a full S7 response. Successful
+`roundtrip` cases check encoding and decoded date/time fields; `decode` cases
+exercise wire-side BCD/calendar/time/weekday rejection. Invalid source values
+reject as `encode-clock`, while invalid wire data rejects as `clock-validation`.
+The wire year maps 90–99 to 1990–1999 and 00–89 to 2000–2089: an invalid full
+source year cannot necessarily be distinguished after its two-digit encoding.
+Weekday must be 1–7 but need not match calendar alignment; no PLC timezone or
+firmware convention is inferred. Floats/NaN semantics and IO are out of scope.

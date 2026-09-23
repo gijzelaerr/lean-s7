@@ -3,6 +3,8 @@ import LeanS7.Client
 import LeanS7.Value
 import LeanS7.BatchEncoderAssurance
 import LeanS7.ValueCodecAssurance
+import LeanS7.BitUpdateAssurance
+import LeanS7.ClockCodecAssurance
 
 namespace LeanS7
 
@@ -289,6 +291,39 @@ structure CoreProtocolAssurance : Prop where
     maximum ≤ Value.maxWStringLength → Value.utf16Length value ≤ maximum →
     (Value.encodeWString maximum value >>= fun encoded =>
       Value.decodeWString (pre ++ (encoded ++ suffix)) pre.size) = .ok value
+  bitUpdateReadback : ∀ pre suffix value index enabled,
+    index < 8 →
+    (Value.setBit value index enabled >>= fun updated =>
+      Value.getBit (pre ++ (Value.putUInt8 updated ++ suffix)) pre.size index) = .ok enabled
+  bitUpdateIsolation : ∀ pre suffix value index other enabled,
+    index < 8 → other < 8 → index ≠ other →
+    (Value.setBit value index enabled >>= fun updated =>
+      Value.getBit (pre ++ (Value.putUInt8 updated ++ suffix)) pre.size other) =
+      Value.getBit (pre ++ (Value.putUInt8 value ++ suffix)) pre.size other
+  bitUpdateIdempotence : ∀ value index enabled,
+    index < 8 →
+    (Value.setBit value index enabled >>= fun updated => Value.setBit updated index enabled) =
+      Value.setBit value index enabled
+  bitUpdateOverwrite : ∀ value index first last,
+    index < 8 →
+    (Value.setBit value index first >>= fun updated => Value.setBit updated index last) =
+      Value.setBit value index last
+  clockRoundtrip : ∀ value,
+    value.validate = .ok () →
+    (S7.encodePlcDateTime value >>= S7.decodePlcDateTime) = .ok value
+  clockEncodedSize : ∀ value payload,
+    S7.encodePlcDateTime value = .ok payload → payload.size = 10
+  invalidBitUpdate : ∀ value index enabled,
+    8 ≤ index → Value.setBit value index enabled = .error (.invalidBitIndex index)
+  invalidBitRead : ∀ data offset index,
+    8 ≤ index → Value.getBit data offset index = .error (.invalidBitIndex index)
+  invalidClockSize : ∀ payload,
+    payload.size ≠ 10 → S7.decodePlcDateTime payload = .error (.invalidField 0
+      s!"clock payload must contain 10 bytes, got {payload.size}")
+  invalidClockDigit : ∀ reserved header year month day hour minute second millis tail,
+    tail.toNat / 16 > 9 →
+    S7.decodePlcDateTime (bytes #[reserved,header,year,month,day,hour,minute,second,millis,tail]) =
+      .error (.invalidField 9 "invalid BCD millisecond digit")
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -395,6 +430,16 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Value.encodeWString_size
   · exact Value.decodeString_encodeString_surrounded
   · exact Value.decodeWString_encodeWString_surrounded
+  · exact Value.getBit_setBit_surrounded
+  · exact Value.getBit_setBit_preserves_other_surrounded
+  · exact Value.setBit_idempotent
+  · exact Value.setBit_overwrite
+  · exact S7.decodePlcDateTime_encode
+  · exact S7.encodePlcDateTime_size
+  · exact Value.setBit_invalid_index
+  · exact Value.getBit_invalid_index
+  · exact S7.decodePlcDateTime_wrong_size
+  · exact S7.decodePlcDateTime_invalid_millisecond_digit
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition

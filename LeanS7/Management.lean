@@ -448,6 +448,23 @@ private def bcdDecode (offset : Nat) (value : UInt8) : Except DecodeError Nat :=
     throw (.invalidField offset s!"invalid BCD byte {value}")
   return high * 10 + low
 
+private theorem bcdEncode_toNat (value : Nat) (h : value < 100) :
+    (bcdEncode value).toNat = (value / 10) * 16 + value % 10 := by
+  simp only [bcdEncode, UInt8.toNat_ofNat']
+  apply Nat.mod_eq_of_lt
+  omega
+
+private theorem bcdDecode_encode (offset value : Nat) (h : value < 100) :
+    bcdDecode offset (bcdEncode value) = .ok value := by
+  have hhigh : ((value / 10) * 16 + value % 10) / 16 = value / 10 := by omega
+  have hlow : ((value / 10) * 16 + value % 10) % 16 = value % 10 := by omega
+  simp only [bcdDecode, bcdEncode_toNat value h, hhigh, hlow]
+  have hhi : ¬value / 10 > 9 := by omega
+  have hlo : ¬value % 10 > 9 := by omega
+  simp [hhi, hlo]
+  congr 1
+  omega
+
 private def isLeapYear (year : Nat) : Bool :=
   year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)
 
@@ -495,6 +512,8 @@ def decodePlcDateTime (payload : ByteArray) : Except DecodeError PlcDateTime := 
   let (millisecondHigh, cursor) ← cursor.readUInt8
   let (millisecondLowAndWeekday, cursor) ← cursor.readUInt8
   cursor.finish
+  if millisecondLowAndWeekday.toNat / 16 > 9 then
+    throw (.invalidField 9 "invalid BCD millisecond digit")
   let yearLow ← bcdDecode 2 yearByte
   let value : PlcDateTime := {
     year := if yearLow < 90 then 2000 + yearLow else 1900 + yearLow
@@ -508,6 +527,53 @@ def decodePlcDateTime (payload : ByteArray) : Except DecodeError PlcDateTime := 
   }
   value.validate
   return value
+
+/-- Actual S7 clock codecs round trip every date accepted by calendar validation. -/
+theorem decodePlcDateTime_encode (value : PlcDateTime)
+    (valid : value.validate = .ok ()) :
+    (encodePlcDateTime value >>= decodePlcDateTime) = .ok value := by
+  have bounds : 1990 ≤ value.year ∧ value.year ≤ 2089 ∧
+      1 ≤ value.month ∧ value.month ≤ 12 ∧
+      1 ≤ value.day ∧ value.day ≤ daysInMonth value.year value.month ∧
+      value.hour ≤ 23 ∧ value.minute ≤ 59 ∧ value.second ≤ 59 ∧
+      value.millisecond ≤ 999 ∧ 1 ≤ value.weekday ∧ value.weekday ≤ 7 := by
+    unfold PlcDateTime.validate at valid
+    repeat first
+      | split at valid
+      | simp [bind, Except.bind, throw, pure, Except.pure] at valid
+      | (simp only [Bool.or_eq_true, decide_eq_true_eq] at *; omega)
+  have dayBound : value.day < 100 := by
+    have monthBound : daysInMonth value.year value.month ≤ 31 := by
+      unfold daysInMonth
+      split <;> (try split) <;> omega
+    omega
+  have yearLow : value.year % 100 < 100 := Nat.mod_lt _ (by decide)
+  have monthBound : value.month < 100 := by omega
+  have hourBound : value.hour < 100 := by omega
+  have minuteBound : value.minute < 100 := by omega
+  have secondBound : value.second < 100 := by omega
+  have milliBound : value.millisecond / 10 < 100 := by omega
+  have tailBound : (value.millisecond % 10) * 16 + value.weekday < 256 := by omega
+  have tailHigh : ((value.millisecond % 10) * 16 + value.weekday) / 16 =
+      value.millisecond % 10 := by omega
+  have tailLow : ((value.millisecond % 10) * 16 + value.weekday) % 16 =
+      value.weekday := by omega
+  have yearIdentity : (if value.year % 100 < 90 then 2000 + value.year % 100
+      else 1900 + value.year % 100) = value.year := by split <;> omega
+  have milliIdentity : (value.millisecond / 10) * 10 + value.millisecond % 10 =
+      value.millisecond := by omega
+  have tailDigit : ¬value.millisecond % 10 > 9 := by omega
+  have weekdayBound : value.weekday < 16 := by omega
+  simp only [encodePlcDateTime, valid, bind, Except.bind, pure, Except.pure]
+  simp only [decodePlcDateTime, Cursor.readUInt8, Cursor.finish, bytes,
+    ByteArray.size, bind, Except.bind, pure, Except.pure]
+  simp [ByteArray.getElem_eq_getElem_data, -ByteArray.size_data,
+    -UInt8.ofNat_add, -UInt8.ofNat_mul, Nat.mod_eq_of_lt tailBound,
+    Nat.mod_eq_of_lt weekdayBound, tailHigh, tailDigit,
+    bcdDecode_encode 2 _ yearLow, bcdDecode_encode 3 _ monthBound,
+    bcdDecode_encode 4 _ dayBound, bcdDecode_encode 5 _ hourBound,
+    bcdDecode_encode 6 _ minuteBound, bcdDecode_encode 7 _ secondBound,
+    bcdDecode_encode 8 _ milliBound, yearIdentity, milliIdentity, valid]
 
 def encodePassword (password : String) : Except DecodeError ByteArray := do
   let chars := password.toList

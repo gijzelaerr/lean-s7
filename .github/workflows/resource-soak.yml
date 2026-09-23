@@ -1,0 +1,46 @@
+name: Resource soak
+
+"on":
+  schedule:
+    - cron: "17 3 * * 2"
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "Same-process stress multiplier (216 attempts per round)"
+        required: true
+        default: "32"
+        type: choice
+        options:
+          - "32"
+          - "128"
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    name: Soak (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.os }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: lean-s7 lean-s7-tests lean-s7-conformance
+      - run: lake exe lean-s7-tests
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check independent value corpus
+        run: python integration/value_conformance.py
+      - name: Measure descriptor, thread, and RSS plateau
+        env:
+          SOAK_ROUNDS: ${{ inputs.rounds || '32' }}
+        run: python -u integration/resource_stress.py --rounds "$SOAK_ROUNDS"

@@ -389,6 +389,21 @@ Unicode scalar strings, including surrogate-pair encoding, within their legal
 character/UTF-16-unit capacities. Float claims do not assert NaN equality or
 preservation of every NaN payload.
 
+Bit-update assurance proves target readback, preservation of every other valid
+bit, idempotence, and last-write behavior for arbitrary byte values and surrounding
+data. Invalid Nat bit indices reject before byte decoding. Clock assurance proves
+actual encode/decode roundtrips for every validated `PlcDateTime` in 1990–2089,
+ten-byte encoding, wrong-size rejection, and independent rejection of non-decimal
+packed millisecond digits. Weekday is validated as 1–7, not inferred from the date;
+controller timezone and firmware behavior are outside these properties.
+
+The additional `conformance/v1/values.json` corpus adds 207 cases for integer limits and byte
+order, Latin-1/Unicode storage boundaries, and clock calendar/BCD failures. Run
+`python integration/value_conformance.py` for its independent standard-library
+oracle. Eight seeded live boundary conversations add 312 parameterized operations
+at PDU sizes 240 and 480, including chunk edges and surrogate pairs split across
+DB read/write chunks. Reduction preserves retained operation IDs and parameters.
+
 Connection-budget peers test stage sharing, distinct-address fallback, and
 protocol failures that must not try another candidate. Twelve queued lifecycle
 cases establish actual FIFO gate admissions across active read retry, terminal
@@ -402,6 +417,10 @@ python integration/resource_stress.py --rounds 32
 ```
 
 This runs 6,912 attempts and 1,728 retry reconnects in one client-test process.
+The separate `Resource soak` workflow runs weekly on Linux and macOS, with a
+manual 32/128-round choice (6,912/27,648 attempts). It is separate from the bounded
+per-change regression suite. Hosted-platform results and timings must be checked
+after enabling the workflow; local macOS results are not Linux CI evidence.
 
 The deterministic suite covers golden wire vectors, malformed responses, the
 python-snap7 emulator, fragmented uploads, and a dedicated PLC-driven download

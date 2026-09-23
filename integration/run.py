@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 
 import sequence_conformance
+from boundary_operations import run_boundary_operations
+from clock_assurance import run_clock_assurance
 from compound_operations import run_compound_operations
 from concurrency import run_concurrency
 from connection_budget import run_connection_budget
@@ -30,6 +32,7 @@ from timeout_cleanup import run_timeout_cleanup
 from transfer_deadlines import run_transfer_deadlines
 from transport_resources import run_transport_resources
 from userdata_completion import run_userdata_completion
+from value_conformance import run as run_value_conformance
 from write_provenance import run_write_provenance
 
 
@@ -1583,7 +1586,10 @@ def main() -> None:
         run_queued_lifecycle(root)
         run_resource_stress(root)
         run_mixed_operations()
+        run_boundary_operations(root)
+        run_clock_assurance(root)
         run_operation_conformance()
+        run_value_conformance()
         run_multi_batching(root)
         run_multi_semantics(root)
         run_reconnect_shrink(root)

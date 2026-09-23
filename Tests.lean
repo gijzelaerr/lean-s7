@@ -14,6 +14,9 @@ import LeanS7.OperationConformance
 import LeanS7.ExtendedValueAssuranceTests
 import LeanS7.ConnectionBudgetTests
 import LeanS7.NonemptyStringAssuranceTests
+import LeanS7.ClockCodecAssuranceTests
+import LeanS7.BitUpdateAssuranceTests
+import LeanS7.ValueConformance
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -895,12 +898,15 @@ def main : IO Unit := do
   testTPKTConformanceCorpus
   Conformance.S7.validate
   Conformance.Operations.validate
+  Conformance.Values.validate
   MutationTests.run
   ExpandedMutationTests.run
   StatefulFaultTests.run
   ValueCodecAssuranceTests.run
   ExtendedValueAssuranceTests.run
   NonemptyStringAssuranceTests.run
+  ClockCodecAssuranceTests.run
+  BitUpdateAssuranceTests.run
   RetryProgressTests.run
   WriteProvenanceTests.run
   UserDataCompletionTests.run

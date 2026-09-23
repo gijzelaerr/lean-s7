@@ -12,6 +12,8 @@ import LeanS7.MixedOperationTests
 import LeanS7.ResourceStressTests
 import LeanS7.ConnectionBudgetTests
 import LeanS7.QueuedLifecycleTests
+import LeanS7.BoundaryOperationTests
+import LeanS7.ClockCodecAssuranceTests
 
 open LeanS7 Std.Net
 
@@ -698,6 +700,10 @@ def main (args : List String) : IO Unit := do
       ConnectionBudgetTests.runIntegration host firstPort secondPort mode
   | ["integration-mixed-operations", host, port, plan] =>
       MixedOperationTests.runIntegration host port plan
+  | ["integration-boundary-operations", host, port, pdu, plan] =>
+      BoundaryOperationTests.runIntegration host port pdu plan
+  | ["integration-clock-assurance", host, port, digit] =>
+      ClockCodecAssuranceTests.runIntegration host port digit
   | ["integration-timeout-cleanup", host, port, mode] =>
       TimeoutTests.runIntegration host port mode
   | ["integration-transport-resources", host, port, mode] =>
