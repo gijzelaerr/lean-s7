@@ -86,6 +86,9 @@ def userdata_case(test):
     try:
         try:
             response = client.protocol.parse_response(bytes(test["pdu"]))
+            client.protocol.check_userdata_response(
+                response, test["expected_group"], test["expected_subfunction"]
+            )
         except S7Error:
             return None if expected["status"] == "reject" else "valid response rejected"
         if expected["status"] == "reject":
@@ -148,14 +151,18 @@ def request_case(test):
         packet = protocol.build_set_clock_request(
             datetime(2026, 9, 23, 12, 34, 56, 789000, tzinfo=timezone.utc)
         )
-    elif operation in {
-        "set_password",
-        "clear_password",
-        "download_fragment_response",
-        "final_download_fragment_response",
-        "download_ended_response",
-    }:
-        return "operation is not implemented by python-snap7 protocol"
+    elif operation == "set_password":
+        packet = protocol.build_set_session_password_request(
+            protocol.encode_password("SECRET")
+        )
+    elif operation == "clear_password":
+        packet = protocol.build_clear_session_password_request()
+    elif operation == "download_fragment_response":
+        packet = protocol.build_download_fragment_response(1, False, b"\xde\xad")
+    elif operation == "final_download_fragment_response":
+        packet = protocol.build_download_fragment_response(1, True, b"\xbe\xef")
+    elif operation == "download_ended_response":
+        packet = protocol.build_download_ended_response(1)
     elif operation == "get_db_info":
         packet = protocol.build_get_block_info_request(0x41, 1)
     elif operation == "request_db_download":
