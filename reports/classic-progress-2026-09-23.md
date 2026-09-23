@@ -391,3 +391,67 @@ These are cross-implementation observations, not formal claims about the Python 
   existing integration tests. All five requested workstreams are implemented
   and combined local validation is green. One coherent local commit follows
   under earlier commit approval; this new batch has not been pushed.
+
+## Connection-lifetime and nonempty string follow-up
+
+- Owner approved the next plan including publication and five parallel streams.
+  Commit `4e812ec` was inspected and pushed; PR #16 is open on the combined branch.
+  It has not been merged. No branch rewriting or worktrees were used.
+- Workstreams cover a shared total connection budget, measured process-resource
+  plateau under failure/reconnect stress, distinct-address fallback behavior,
+  genuinely queued lifecycle races, and actual nonempty string roundtrip proofs.
+- Total connection budget source spans DNS/candidates/COTP/S7 setup, with existing
+  operation receive limits retained. A read-only running-plus-queued operation
+  count supports explicit admission barriers without private-field reflection.
+- Independent peer modules and Linux/Darwin FD/thread/RSS sampling are in progress.
+  Nonempty Latin-1 STRING roundtrip is checked; WSTRING proofs remain underway.
+  No new commit/push is made yet; focused and combined validation are pending.
+- Checked universal actual STRING roundtrips for every supported Latin-1 string
+  and WSTRING roundtrips for every Unicode scalar string, including supplementary
+  characters, within legal capacities and arbitrary surrounding buffers. Both
+  are part of `CoreProtocolAssurance`; exhaustive Latin-1/BMP and 4,096 astral
+  boundary regressions pass. No axioms, admissions, or placeholder proofs added.
+- Twelve genuinely admitted queued lifecycle cases exposed and fixed fresh
+  queued requests reconnecting an already-poisoned session. Both exchange paths
+  now reject fresh disconnected operations outside the retry catch, while an
+  active read can still reconnect within its own retry. All twelve focused cases
+  and the four prior concurrency cases pass.
+- Darwin measured baseline/peak for the 216-attempt stress: FD8/8, threads7/7,
+  RSS5,586,944/5,636,096 bytes. Optional `--rounds 32` same-process soak passed
+  6,912 attempts/1,728 retry reconnects: FD8/8, threads7/7,
+  RSS5,685,248/5,701,632 bytes. Synthetic checker tests detect each metric's
+  excess growth and missing measurements. These are bounded regression evidence,
+  not leak-freedom or real-time cancellation proofs; Linux remains a CI platform
+  check. Unit tests and lint/format (24 files) pass; final clean validation pending.
+- The initial apparent refused-endpoint stall was a fixture error: bound but
+  non-listening sockets on Darwin silently dropped SYNs. The distinct-refusal
+  fixture now closes an ephemeral endpoint before testing; no unsupported native
+  runtime defect is claimed. Failed S7 setup intentionally closes directly, so
+  the previous replay-reconnect-reject peer is updated to require EOF/reset with
+  no continued traffic rather than a separately budgeted graceful disconnect.
+- Nine portable native connection/fallback peers and fifteen prior retry peers
+  passed. An additional Darwin pending-TCP probe returned and exited under its
+  250 ms budget; portable immediate-refusal platforms omit only that probe.
+  Connection stages now race native Async tasks directly, with best-effort task
+  cancellation; underlying OS cancellation remains unproved. Final cleanup review
+  corrected an exception-rollback-sensitive mutable flag to an IO.Ref so an
+  established socket is actually shut down after handshake failure.
+- First combined clean build overlapped a final focused Transport rebuild and
+  lost the generated Transport.olean during Client compilation. This is a build
+  coordination failure, not accepted validation. Source is now frozen and all
+  further clean/native builds are root-owned; complete clean validation restarts.
+- Restarted clean build passed all 106 jobs with frozen source. Complete Lean
+  tests and all four exact generated corpus comparisons pass; Ruff lint/format
+  (24 files) and whitespace checks pass. The final full pinned emulator suite and
+  repeated 6,912-attempt measured soak are running; no new commit/push yet.
+- Final complete pinned python-snap7 3.0.0 emulator/scripted-peer suite passed,
+  including the nine connection-budget cases, pending-TCP process-exit probe,
+  twelve queued lifecycle cases, all prior retry/provenance/transfer tests, and
+  the independent 29-case operations oracle. Final frozen-build 216-attempt
+  plateau: FD8/8, threads7/7, RSS5,603,328/5,668,864 bytes. Repeated long soak
+  passed 6,912 attempts/1,728 retry reconnects (8,640 physical TCP connections):
+  FD8/8, threads7/7, RSS5,603,328/5,619,712 bytes. All five follow-up workstreams
+  are implemented and locally validated. Publication stays on the same branch
+  and PR #16 under owner approval; it has not been merged. Native OS cancellation,
+  ordinary-send bounds, universal leak freedom, and physical PLC validation
+  remain outside the proven/tested guarantees.

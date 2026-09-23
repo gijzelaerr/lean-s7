@@ -26,6 +26,7 @@ structure ClientConfig where
   sourceReference : UInt16 := 1
   classOption : UInt8 := 0
   tpduSizeExponent : UInt8 := 0x0a
+  /-- Total DNS, TCP candidate fallback, COTP, and S7 setup budget. -/
   connectTimeoutMs : Option Nat := some 5000
   operationTimeoutMs : Option Nat := some 5000
   /-- Whole chunked read/write, multi-item, download, upload, SZL, and segmented
@@ -44,6 +45,7 @@ structure ClientConfig where
 structure Client where
   private connection : IO.Ref (Option Transport.Connection)
   private requestTail : IO.Ref (Task (Option Unit))
+  private pendingOperations : IO.Ref Nat
   private state : IO.Ref Lifecycle.State
   private config : ClientConfig
   pduLength : UInt16
@@ -75,29 +77,33 @@ private def remoteTsap (rack slot : Nat) : IO UInt16 := do
   return UInt16.ofNat (0x0100 + rack * 32 + slot)
 
 private def connectSession (config : ClientConfig) : IO (Transport.Connection × S7.SetupCommunication) := do
+  let connectDeadline ← Transport.receiveDeadline config.connectTimeoutMs
   let calledTsap ← match config.remoteTsap with
     | some tsap => pure tsap
     | none => remoteTsap config.rack config.slot
-  let connection ← Transport.connect config.endpoint config.port {
+  let connection ← Transport.connectUntil config.endpoint config.port {
     destinationReference := config.destinationReference
     sourceReference := config.sourceReference
     classOption := config.classOption
     callingTsap := config.localTsap
     calledTsap
     tpduSizeExponent := config.tpduSizeExponent
-  } config.connectTimeoutMs
+  } connectDeadline
   try
     let reference : UInt16 := 1
     let request ← inputOrThrow <| S7.encodeSetupCommunication reference
-    Transport.sendData connection.socket request config.operationTimeoutMs
+    let setupDeadline := Transport.earlierReceiveDeadline connectDeadline
+      (← Transport.receiveDeadline config.operationTimeoutMs)
+    Transport.sendDataUntil connection.socket request setupDeadline
     let response ← orThrow <| S7.decodeResponse
-      (← Transport.receiveData connection.socket config.operationTimeoutMs)
+      (← Transport.receiveDataUntil connection.socket setupDeadline)
     let setup ← decodeOrThrow <| S7.decodeSetupCommunication reference response
     orThrow <| COTP.validateDataPayloadBudget connection.tpduSizeExponent
       setup.pduLength.toNat
+    Transport.checkReceiveDeadline connectDeadline
     return (connection, setup)
   catch error =>
-    try Transport.disconnect connection config.operationTimeoutMs catch _ => pure ()
+    try Transport.shutdown connection.socket catch _ => pure ()
     throw error
 
 def Client.connect (config : ClientConfig) : IO Client := do
@@ -107,11 +113,12 @@ def Client.connect (config : ClientConfig) : IO Client := do
   let (session, setup) ← connectSession config
   let connection ← IO.mkRef (some session)
   let requestTail ← IO.mkRef (Task.pure (some ()))
+  let pendingOperations ← IO.mkRef 0
   let state ← IO.mkRef Lifecycle.State.connected
   let currentPduLength ← IO.mkRef setup.pduLength
   let nextReference ← IO.mkRef config.initialRequestReference
   let writeProgress ← IO.mkRef ({} : WriteProgress.State)
-  return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
+  return { connection, requestTail, pendingOperations, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
   client.nextReference.modifyGet fun reference => (reference, reference + 1)
@@ -124,6 +131,11 @@ private def Client.takeWriteProgress (client : Client) : IO WriteProgress := do
 
 def Client.isConnected (client : Client) : IO Bool :=
   return (← client.state.get) == .connected
+
+/-- Running and queued operations that have entered the serialization gate.
+    This is a diagnostic snapshot, not a reservation or synchronization lock. -/
+def Client.pendingOperationCount (client : Client) : IO Nat :=
+  client.pendingOperations.get
 
 def Client.negotiatedPduLength (client : Client) : IO UInt16 :=
   client.currentPduLength.get
@@ -181,6 +193,10 @@ private partial def Client.exchangeWithRetries (client : Client) (reference : UI
     (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
     (transferDeadline : Option Nat := none) (safety : RetrySafety := .potentiallyMutating)
     (onReplay : IO Unit := pure ()) (beforeSend : IO Unit := pure ()) : IO S7.Response := do
+  -- Retry only a failure of this already-live operation, not a fresh request
+  -- admitted behind an operation that poisoned or closed the session.
+  unless reconnectFirst || (← client.isConnected) do
+    throw <| ClientError.disconnected "S7 client is disconnected"
   let attempted ← IO.mkRef false
   try
     Transport.checkReceiveDeadline transferDeadline
@@ -198,6 +214,8 @@ private partial def Client.exchangeWithRetries (client : Client) (reference : UI
 private partial def Client.exchangeBytesWithRetries (client : Client) (reference : UInt16)
     (request : ByteArray) (remainingRetries : Nat) (reconnectFirst : Bool := false)
     (transferDeadline : Option Nat := none) (safety : RetrySafety := .potentiallyMutating) : IO ByteArray := do
+  unless reconnectFirst || (← client.isConnected) do
+    throw <| ClientError.disconnected "S7 client is disconnected"
   try
     Transport.checkReceiveDeadline transferDeadline
     if reconnectFirst then
@@ -213,10 +231,13 @@ private partial def Client.exchangeBytesWithRetries (client : Client) (reference
 private def Client.serialized (client : Client) (operation : IO α) : IO α := do
   let gate : IO.Promise Unit ← IO.Promise.new
   let previous ← client.requestTail.modifyGet fun previous => (previous, gate.result?)
+  client.pendingOperations.modify (· + 1)
   let task ← IO.bindTask previous fun _ =>
     IO.asTask do
       try operation
-      finally gate.resolve ()
+      finally
+        client.pendingOperations.modify (· - 1)
+        gate.resolve ()
   match ← IO.wait task with
   | .ok value => return value
   | .error error => throw error

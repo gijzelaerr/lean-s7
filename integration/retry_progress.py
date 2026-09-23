@@ -44,7 +44,14 @@ def _serve(listener: socket.socket, mode: str, errors: list[Exception]) -> None:
                         )
                         packet[10:12] = b"\x81\x04"
                         _send(replacement, b"\x02\xf0\x80" + packet)
-                        _receive(replacement)
+                        try:
+                            continued = replacement.recv(1)
+                        except ConnectionResetError:
+                            continued = b""
+                        if continued:
+                            raise RuntimeError(
+                                "rejected S7 setup continued sending traffic"
+                            )
                     return
                 with _handshake(listener) as replacement:
                     replay = _request(replacement)

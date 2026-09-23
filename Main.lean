@@ -9,6 +9,9 @@ import LeanS7.UserDataCompletionTests
 import LeanS7.TransportResourceTests
 import LeanS7.TimeoutTests
 import LeanS7.MixedOperationTests
+import LeanS7.ResourceStressTests
+import LeanS7.ConnectionBudgetTests
+import LeanS7.QueuedLifecycleTests
 
 open LeanS7 Std.Net
 
@@ -684,6 +687,15 @@ def main (args : List String) : IO Unit := do
       ConcurrencyTests.runIntegration host port mode
   | ["integration-compound", host, port, mode] =>
       CompoundTests.runIntegration host port mode
+  | ["integration-queued-lifecycle", host, port, mode] =>
+      QueuedLifecycleTests.runIntegration host port mode
+  | ["integration-resource-stress", host, port] =>
+      ResourceStressTests.runIntegration host port
+  | ["integration-resource-stress", host, port, rounds] =>
+      let some count := rounds.toNat? | throw <| IO.userError "invalid stress rounds"
+      ResourceStressTests.runIntegration host port count
+  | ["integration-connection-budget", host, firstPort, secondPort, mode] =>
+      ConnectionBudgetTests.runIntegration host firstPort secondPort mode
   | ["integration-mixed-operations", host, port, plan] =>
       MixedOperationTests.runIntegration host port plan
   | ["integration-timeout-cleanup", host, port, mode] =>

@@ -109,6 +109,34 @@ private def remainingReceiveTime (deadline : Option Nat) : IO (Option Nat) := do
   validateTimeoutMs (some (deadline - now))
   return some (deadline - now)
 
+/-- Bound one connection stage by the remaining absolute monotonic budget.
+    The deadline is checked again on completion. Task cancellation is cooperative;
+    callers that own sockets must also shut them down on failure. -/
+def withDeadline (deadline : Option Nat) (label : String) (operation : IO α) : IO α := do
+  let result ← withTimeout (← remainingReceiveTime deadline) label operation
+  discard <| remainingReceiveTime deadline
+  return result
+
+/-- Race an asynchronous native operation without creating a worker task that
+    blocks on its promise. Cancellation remains cooperative, not a guarantee
+    that the operating system operation itself has been cancelled. -/
+private def awaitUntil (deadline : Option Nat) (label : String) (operation : Async α) : IO α := do
+  let some timeoutMs ← remainingReceiveTime deadline | await operation
+  let task ← operation.toIO
+  try
+    let timer ← await (Selector.sleep (Std.Time.Millisecond.Offset.ofNat timeoutMs))
+    let outcome ← await <| Selectable.one #[
+      .case (taskSelector task) fun value => pure (TimeoutResult.completed value),
+      .case timer fun _ => pure TimeoutResult.timedOut ]
+    match outcome with
+    | .completed (.ok value) =>
+        discard <| remainingReceiveTime deadline
+        return value
+    | .completed (.error error) => throw error
+    | .timedOut => throw <| ClientError.timeout s!"{label} timed out after {timeoutMs} ms"
+  finally
+    IO.cancel task
+
 private def receiveSome (socket : Socket) (count : Nat) (deadline : Option Nat) : IO (Option ByteArray) := do
   let timeoutMs ← remainingReceiveTime deadline
   let some timeoutMs := timeoutMs | await (socket.recv? count.toUInt64)
@@ -164,6 +192,11 @@ def receiveFrame (socket : Socket) (timeoutMs : Option Nat := none) : IO ByteArr
 def sendData (socket : Socket) (payload : ByteArray) (timeoutMs : Option Nat := none) : IO Unit :=
   sendFrame socket (COTP.encodeData { payload }) timeoutMs
 
+/-- Connection-handshake send with the same absolute budget as its reply. -/
+def sendDataUntil (socket : Socket) (payload : ByteArray) (deadline : Option Nat) : IO Unit := do
+  let frame ← orThrow <| TPKT.encode { payload := COTP.encodeData { payload } }
+  awaitUntil deadline "S7 setup send" (socket.send frame)
+
 private partial def receiveDataSegments (socket : Socket) (deadline : Option Nat)
     (maximum maxSegments : Nat) (state : COTP.Reassembly) : IO ByteArray := do
   if state.segments ≥ maxSegments then
@@ -200,29 +233,38 @@ def uniqueAddresses (addresses : Array SocketAddress) : Array SocketAddress :=
   addresses.foldl (init := #[]) fun selected address =>
     if selected.contains address then selected else selected.push address
 
-def resolve (endpoint : Endpoint) (port : UInt16) (timeoutMs : Option Nat := none) : IO (Array SocketAddress) := do
-  validateTimeoutMs timeoutMs
+def resolveUntil (endpoint : Endpoint) (port : UInt16) (deadline : Option Nat) : IO (Array SocketAddress) := do
+  discard <| remainingReceiveTime deadline
   match endpoint with
   | .ipv4 address => return #[SocketAddressV4.mk address port]
   | .ipv6 address => return #[SocketAddressV6.mk address port]
   | .hostname name =>
-      let addresses ← withTimeout timeoutMs "hostname resolution" <|
-        await (DNS.getAddrInfo name (toString port))
+      let addresses ← awaitUntil deadline "hostname resolution" <|
+        DNS.getAddrInfo name (toString port)
       if addresses.isEmpty then
         throw <| IO.Error.noSuchThing none 0 s!"hostname {name} resolved to no addresses"
       return uniqueAddresses (addresses.map fun address => socketAddress address port)
 
+def resolve (endpoint : Endpoint) (port : UInt16) (timeoutMs : Option Nat := none) : IO (Array SocketAddress) := do
+  resolveUntil endpoint port (← receiveDeadline timeoutMs)
+
 private def connectAddress (address : SocketAddress) (request : COTP.ConnectionRequest)
-    (timeoutMs : Option Nat) : IO Connection := do
+    (deadline : Option Nat) : IO Connection := do
+  discard <| remainingReceiveTime deadline
   let socket ← TCP.Socket.Client.mk
+  -- Unlike a `let mut` local, this must survive an exception inside `try`.
+  let established ← IO.mkRef false
   try
-    withTimeout timeoutMs "TCP connection" <| await (socket.connect address)
+    awaitUntil deadline "TCP connection" (socket.connect address)
+    established.set true
     socket.noDelay
     let connectionRequest := COTP.encodeConnectionRequest request
-    sendFrame socket connectionRequest timeoutMs
-    let confirmation ← orThrow <| COTP.decodeConnectionConfirm (← receiveFrame socket timeoutMs)
+    let frame ← orThrow <| TPKT.encode { payload := connectionRequest }
+    awaitUntil deadline "COTP connection request" (socket.send frame)
+    let confirmation ← orThrow <| COTP.decodeConnectionConfirm (← receiveFrameUntil socket deadline)
     let tpduSizeExponent ← orThrow <|
       COTP.negotiatedTpduSizeExponent request confirmation
+    discard <| remainingReceiveTime deadline
     return {
       socket
       localReference := request.sourceReference
@@ -230,23 +272,43 @@ private def connectAddress (address : SocketAddress) (request : COTP.ConnectionR
       tpduSizeExponent
     }
   catch error =>
-    try await socket.shutdown catch _ => pure ()
+    -- A failed TCP connect has no established write side to shut down.
+    if ← established.get then
+      try await socket.shutdown catch _ => pure ()
     throw error
 
 private def connectAddresses (addresses : List SocketAddress) (request : COTP.ConnectionRequest)
-    (timeoutMs : Option Nat) : IO Connection := do
+    (deadline : Option Nat) : IO Connection := do
   match addresses with
   | [] => throw <| IO.Error.noSuchThing none 0 "could not connect to any resolved address"
   | address :: rest =>
-      try connectAddress address request timeoutMs
+      try connectAddress address request deadline
       catch error =>
         if rest.isEmpty || !isRetryableClientError error then throw error
-        connectAddresses rest request timeoutMs
+        connectAddresses rest request deadline
+
+/-- Deterministic candidate entry point for explicit address selection. All
+    distinct candidates share one deadline. Transport failures permit fallback;
+    malformed protocol responses do not. -/
+def connectResolvedUntil (addresses : Array SocketAddress) (request : COTP.ConnectionRequest)
+    (deadline : Option Nat) : IO Connection := do
+  discard <| remainingReceiveTime deadline
+  connectAddresses (uniqueAddresses addresses).toList request deadline
+
+def connectResolved (addresses : Array SocketAddress) (request : COTP.ConnectionRequest)
+    (timeoutMs : Option Nat := none) : IO Connection := do
+  connectResolvedUntil addresses request (← receiveDeadline timeoutMs)
+
+/-- Includes resolution, all TCP candidates, request send, and COTP confirmation
+    in the same absolute connection budget. -/
+def connectUntil (endpoint : Endpoint) (port : UInt16) (request : COTP.ConnectionRequest)
+    (deadline : Option Nat) : IO Connection := do
+  let addresses ← resolveUntil endpoint port deadline
+  connectResolvedUntil addresses request deadline
 
 def connect (endpoint : Endpoint) (port : UInt16) (request : COTP.ConnectionRequest)
     (timeoutMs : Option Nat := none) : IO Connection := do
-  let addresses ← resolve endpoint port timeoutMs
-  connectAddresses addresses.toList request timeoutMs
+  connectUntil endpoint port request (← receiveDeadline timeoutMs)
 
 def disconnect (connection : Connection) (timeoutMs : Option Nat := none) : IO Unit := do
   try

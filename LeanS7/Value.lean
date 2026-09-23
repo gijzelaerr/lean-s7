@@ -438,4 +438,204 @@ theorem decodeWString_encodeWString_empty_surrounded (pre suffix : ByteArray) (m
   · simp [zeros, ByteArray.size, UInt16.toNat_ofNat']
     omega
 
+private theorem encodeLatin1_valid (characters : List Char)
+    (hvalid : ∀ character ∈ characters, character.toNat ≤ 255) :
+    encodeLatin1 characters = .ok (characters.map (fun character => UInt8.ofNat character.toNat)) := by
+  induction characters with
+  | nil => rfl
+  | cons character rest ih =>
+    have hcharacter := hvalid character (by simp)
+    have hrest : ∀ character ∈ rest, character.toNat ≤ 255 := by
+      intro character h
+      exact hvalid character (by simp [h])
+    simp [encodeLatin1, show ¬ character.toNat > 255 by omega, ih hrest,
+      bind, Except.bind, pure, Except.pure]
+
+private theorem latin1_characters (characters : List Char)
+    (hvalid : ∀ character ∈ characters, character.toNat ≤ 255) :
+    (characters.map (fun character => UInt8.ofNat character.toNat)).map
+      (fun byte => Char.ofNat byte.toNat) = characters := by
+  rw [List.map_map]
+  calc
+    _ = characters.map id := by
+      apply List.map_congr_left
+      intro character h
+      have hc := hvalid character h
+      simp only [Function.comp_apply, UInt8.toNat_ofNat']
+      rw [Nat.mod_eq_of_lt (by omega), Char.ofNat_toNat]
+      rfl
+    _ = characters := List.map_id _
+
+/-- Every supported Latin-1 STRING, including nonempty values, round trips at
+    arbitrary DB offsets and legal reserved capacities. -/
+theorem decodeString_encodeString_surrounded (pre suffix : ByteArray) (maximum : Nat)
+    (value : String) (hmax : maximum ≤ maxStringLength)
+    (hfits : value.toList.length ≤ maximum)
+    (hvalid : ∀ character ∈ value.toList, character.toNat ≤ 255) :
+    (encodeString maximum value >>= fun encoded =>
+      decodeString (pre ++ (encoded ++ suffix)) pre.size) = .ok value := by
+  let content := (value.toList.map (fun character => UInt8.ofNat character.toNat)).toByteArray
+  have hcontent : content.size = value.toList.length := by simp [content]
+  have hcapacity : ¬ maximum > maxStringLength := by omega
+  have hlength : ¬ content.size > maximum := by omega
+  have hencoded : encodeString maximum value = .ok
+      (putUInt8 (UInt8.ofNat maximum) ++ (putUInt8 (UInt8.ofNat content.size) ++
+        (content ++ zeros (maximum - content.size)))) := by
+    simp only [encodeString, hcapacity, if_false, encodeLatin1_valid _ hvalid,
+      bind, Except.bind]
+    change (if content.size > maximum then _ else _) = _
+    rw [if_neg hlength]
+    simp only [pure, Except.pure, putUInt8, bytes]
+    congr 1
+  have hm : (UInt8.ofNat maximum).toNat = maximum := by
+    simp only [UInt8.toNat_ofNat']
+    apply Nat.mod_eq_of_lt
+    unfold maxStringLength at hmax
+    omega
+  have hc : (UInt8.ofNat content.size).toNat = content.size := by
+    simp only [UInt8.toNat_ofNat']
+    apply Nat.mod_eq_of_lt
+    unfold maxStringLength at hmax
+    omega
+  rw [hencoded]
+  simp only [bind, Except.bind]
+  simp only [ByteArray.append_assoc]
+  rw [← ByteArray.append_assoc (a := content)]
+  rw [decodeString_surrounded_content pre (content ++ zeros (maximum - content.size)) suffix
+    (UInt8.ofNat maximum) (UInt8.ofNat content.size) (by simpa [hm] using hmax)
+    (by simp only [UInt8.le_iff_toNat_le, hm, hc]; omega)
+    (by have hz : (zeros (maximum - content.size)).size = maximum - content.size := by
+          simp only [zeros, ByteArray.size, Array.size_replicate]
+        rw [ByteArray.size_append, hz, hm]
+        omega)]
+  rw [hc, ByteArray.extract_append_eq_left rfl]
+  change Except.ok (String.ofList (content.toList.map (fun byte => Char.ofNat byte.toNat))) = _
+  have hl : content.toList = value.toList.map (fun character => UInt8.ofNat character.toNat) := by
+    rw [byteArray_toList_data]
+    exact List.toList_data_toByteArray
+  rw [hl, latin1_characters _ hvalid, String.ofList_toList]
+
+private theorem decodeUtf16Units_encodeUtf16 (characters : List Char) (offset : Nat) :
+    decodeUtf16Units (encodeUtf16 characters) offset = .ok characters := by
+  induction characters generalizing offset with
+  | nil => rfl
+  | cons character rest ih =>
+    have hvalid := character.valid
+    simp only [UInt32.isValidChar, Char.toNat_val] at hvalid
+    simp only [encodeUtf16, encodeUtf16Char]
+    split
+    · rename_i hsmall
+      have hm : (UInt16.ofNat character.toNat).toNat = character.toNat := by
+        rw [UInt16.toNat_ofNat', Nat.mod_eq_of_lt hsmall]
+      have hhigh : ¬ (character.toNat ≥ 0xd800 ∧ character.toNat ≤ 0xdbff) := by omega
+      have hlow : ¬ (character.toNat ≥ 0xdc00 ∧ character.toNat ≤ 0xdfff) := by omega
+      simp only [List.singleton_append]
+      rw [decodeUtf16Units.eq_def]
+      simp only [hm]
+      simp [hhigh, hlow, ih, Char.ofNat_toNat,
+        bind, Except.bind, pure, Except.pure]
+    · rename_i hlarge
+      have hupper : character.toNat < 0x110000 := by omega
+      have hhi : (UInt16.ofNat (0xd800 + (character.toNat - 0x10000) / 0x400)).toNat =
+          0xd800 + (character.toNat - 0x10000) / 0x400 := by
+        rw [UInt16.toNat_ofNat']
+        apply Nat.mod_eq_of_lt
+        omega
+      have hlo : (UInt16.ofNat (0xdc00 + (character.toNat - 0x10000) % 0x400)).toNat =
+          0xdc00 + (character.toNat - 0x10000) % 0x400 := by
+        rw [UInt16.toNat_ofNat']
+        apply Nat.mod_eq_of_lt
+        omega
+      have hhigh : 0xd800 ≤ 0xd800 + (character.toNat - 0x10000) / 0x400 ∧
+          0xd800 + (character.toNat - 0x10000) / 0x400 ≤ 0xdbff := by omega
+      have hlow : ¬ (0xdc00 + (character.toNat - 0x10000) % 0x400 < 0xdc00 ∨
+          0xdc00 + (character.toNat - 0x10000) % 0x400 > 0xdfff) := by omega
+      have hpoint : 0x10000 + (character.toNat - 0x10000) / 0x400 * 0x400 +
+          (character.toNat - 0x10000) % 0x400 = character.toNat := by omega
+      simp only [List.cons_append, List.nil_append]
+      rw [decodeUtf16Units]
+      simp only [hhi, hlo]
+      simp [hhigh, hlow, hpoint, ih, Char.ofNat_toNat,
+        bind, Except.bind, pure, Except.pure]
+
+private theorem readUtf16Units_encodeUtf16Units (units : List UInt16) (pre suffix : ByteArray) :
+    readUtf16Units units.length {
+      data := pre ++ (encodeUtf16Units units ++ suffix), offset := pre.size } = .ok units := by
+  induction units generalizing pre with
+  | nil => rfl
+  | cons unit rest ih =>
+    simp only [List.length_cons, readUtf16Units, encodeUtf16Units, ByteArray.append_assoc]
+    rw [Cursor.readUInt16BE_append_uint16BE]
+    simp only [fromDecode, Except.mapError, bind, Except.bind]
+    have hrest := ih (pre ++ uint16BE unit)
+    simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hrest
+    rw [hrest]
+    rfl
+
+/-- WSTRING capacity counts UTF-16 code units: supplementary characters use two. -/
+def utf16Length (value : String) : Nat := (encodeUtf16 value.toList).length
+
+/-- Actual WSTRING encoder/decoder composition for all Unicode scalar values,
+    including supplementary-plane surrogate pairs, at arbitrary DB offsets. -/
+theorem decodeWString_encodeWString_surrounded (pre suffix : ByteArray) (maximum : Nat)
+    (value : String) (hmax : maximum ≤ maxWStringLength)
+    (hfits : utf16Length value ≤ maximum) :
+    (encodeWString maximum value >>= fun encoded =>
+      decodeWString (pre ++ (encoded ++ suffix)) pre.size) = .ok value := by
+  let units := encodeUtf16 value.toList
+  have hcapacity : ¬ maximum > maxWStringLength := by omega
+  have hlength : ¬ units.length > maximum := by
+    change units.length ≤ maximum at hfits
+    omega
+  have hm : (UInt16.ofNat maximum).toNat = maximum := by
+    rw [UInt16.toNat_ofNat']
+    apply Nat.mod_eq_of_lt
+    unfold maxWStringLength at hmax
+    omega
+  have hc : (UInt16.ofNat units.length).toNat = units.length := by
+    rw [UInt16.toNat_ofNat']
+    apply Nat.mod_eq_of_lt
+    unfold maxWStringLength at hmax
+    omega
+  have hencoded : encodeWString maximum value = .ok
+      (uint16BE (UInt16.ofNat maximum) ++ (uint16BE (UInt16.ofNat units.length) ++
+        (encodeUtf16Units units ++ zeros ((maximum - units.length) * 2)))) := by
+    simp only [encodeWString, hcapacity, if_false]
+    change (if units.length > maximum then _ else _) = _
+    rw [if_neg hlength]
+    simp only [pure, Except.pure, ByteArray.append_assoc]
+    rfl
+  rw [hencoded]
+  simp only [bind, Except.bind, ByteArray.append_assoc]
+  unfold decodeWString
+  simp only [cursorAt]
+  rw [Cursor.readUInt16BE_append_uint16BE]
+  simp only [fromDecode, Except.mapError, bind, Except.bind]
+  have hsecond := Cursor.readUInt16BE_append_uint16BE
+    (pre ++ uint16BE (UInt16.ofNat maximum))
+    (encodeUtf16Units units ++ (zeros ((maximum - units.length) * 2) ++ suffix))
+    (UInt16.ofNat units.length)
+  simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hsecond
+  rw [hsecond]
+  have hactive : ¬ UInt16.ofNat units.length > UInt16.ofNat maximum := by
+    simp only [UInt16.lt_iff_toNat_lt, hc, hm]
+    omega
+  simp only [hm, hcapacity, hactive, if_false, hc]
+  have hread := readUtf16Units_encodeUtf16Units units
+    ((pre ++ uint16BE (UInt16.ofNat maximum)) ++ uint16BE (UInt16.ofNat units.length))
+    (zeros ((maximum - units.length) * 2) ++ suffix)
+  simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hread
+  rw [hread]
+  have hz : (zeros ((maximum - units.length) * 2)).size = (maximum - units.length) * 2 := by
+    simp only [zeros, ByteArray.size, Array.size_replicate]
+  have havailable : maximum * 2 ≤
+      (pre ++ (uint16BE (UInt16.ofNat maximum) ++ (uint16BE (UInt16.ofNat units.length) ++
+        (encodeUtf16Units units ++ (zeros ((maximum - units.length) * 2) ++ suffix))))).size -
+          (pre.size + 2 + 2) := by
+    simp only [ByteArray.size_append, uint16BE_size, encodeUtf16Units_size, hz]
+    omega
+  simp only [Cursor.readBytes, Cursor.remaining, havailable, if_true]
+  rw [decodeUtf16Units_encodeUtf16]
+  simp only [pure, Except.pure, String.ofList_toList]
+
 end LeanS7.Value

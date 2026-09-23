@@ -12,6 +12,8 @@ import LeanS7.TransportResourceTests
 import LeanS7.TimeoutTests
 import LeanS7.OperationConformance
 import LeanS7.ExtendedValueAssuranceTests
+import LeanS7.ConnectionBudgetTests
+import LeanS7.NonemptyStringAssuranceTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -898,11 +900,13 @@ def main : IO Unit := do
   StatefulFaultTests.run
   ValueCodecAssuranceTests.run
   ExtendedValueAssuranceTests.run
+  NonemptyStringAssuranceTests.run
   RetryProgressTests.run
   WriteProvenanceTests.run
   UserDataCompletionTests.run
   TransportResourceTests.run
   TimeoutTests.run
+  ConnectionBudgetTests.run
   MultiSemanticsTests.run
   BatchingTests.run
   testUserDataAssembly

@@ -1,5 +1,28 @@
 namespace LeanS7
 
+/-- The packed-array traversal agrees with the underlying array's list view. -/
+theorem byteArray_toList_data (data : ByteArray) : data.toList = data.data.toList := by
+  have hloop (index : Nat) (accumulator : List UInt8) :
+      ByteArray.toList.loop data index accumulator =
+        accumulator.reverse ++ data.data.toList.drop index := by
+    fun_induction ByteArray.toList.loop data index accumulator with
+    | case1 index accumulator h ih =>
+      rw [ih, List.reverse_cons]
+      have hi : index < data.data.toList.length := by
+        simpa only [Array.length_toList, ByteArray.size_data] using h
+      rw [List.drop_eq_getElem_cons hi]
+      simp only [List.append_assoc, List.singleton_append]
+      congr 2
+      simp only [Array.getElem_toList]
+      change data.data[index]! = data.data[index]
+      exact getElem!_pos data.data index (by simpa only [ByteArray.size_data] using h)
+    | case2 index accumulator h =>
+      have hi : data.data.toList.length ≤ index := by
+        simp only [Array.length_toList, ByteArray.size_data]
+        omega
+      simp only [List.drop_eq_nil_of_le hi, List.append_nil]
+  exact hloop 0 []
+
 /-- A decoding failure with the byte offset at which it was detected. -/
 inductive DecodeError where
   | unexpectedEnd (offset needed available : Nat)

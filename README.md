@@ -135,6 +135,11 @@ reject as invalid input rather than wrapping. Generic timeout races use native
 cancellable timers, not sleeping worker tasks. Cancellation of DNS/connect tasks
 remains cooperative. Resolved endpoints are deduplicated in order, and a protocol
 failure during connection negotiation does not trigger address fallback.
+`connectTimeoutMs` now shares one absolute budget across DNS, all distinct TCP
+candidates, COTP negotiation, and S7 setup. S7 setup also obeys the earlier
+`operationTimeoutMs` deadline. Failed setup closes the transport directly rather
+than starting a separately timed graceful disconnect. These are cooperative
+IO deadlines, not a hard real-time cancellation guarantee.
 
 Uploads, downloads, chunked memory reads/writes, multi-item calls, SZL reads,
 and segmented block lists additionally share one absolute
@@ -145,7 +150,8 @@ continuation, retry, or upload cleanup does not refresh the transfer budget.
 Only the initial exchange can automatically reconnect; subsequent chunks and
 batches are not retried after a partially completed transfer. Download completion
 and insertion acknowledgements remain inside the original receive budget.
-These deadlines do not cancel socket sends or connection establishment.
+These transfer receive deadlines do not cancel socket sends or connection
+establishment.
 
 Reconnect retries also depend on operation safety. Typed read-only operations
 may retry their initial exchange when `reconnectRetries` is nonzero. Writes,
@@ -153,6 +159,12 @@ CPU/clock/security commands, raw exchanges, and upload-session allocation do not
 replay by default: a missing acknowledgement does not mean the PLC did nothing.
 `allowPotentiallyMutatingRetries := true` explicitly accepts possible duplicate
 side effects; it does not provide exactly-once execution or retry later chunks.
+Retries belong to an already-active operation. Newly queued requests do not
+reconnect a session closed by an earlier terminal failure or explicit disconnect.
+After an operation exhausts its retries and leaves the client disconnected,
+create a new client with `Client.connect`; a later request cannot restart it.
+`Client.pendingOperationCount` reports running and queued gate admissions for
+diagnostics; the snapshot is not a synchronization lock.
 
 `writeAreaDetailed` and `writeMultiDetailed` return structured wire-level
 progress on success and failure. `acknowledged` retains validated per-chunk/item
@@ -371,9 +383,25 @@ oracle checks them without relying on the emulator. Four reproducibly seeded
 faults; failures report their seed and a bounded failure-preserving reduction.
 Typed-value assurance now includes surrounded 32-/64-bit integer proofs, float
 bit-interpretation proofs, string allocation bounds, STRING decoder locality,
-and empty STRING/WSTRING encoder roundtrips. Nonempty Unicode roundtrips remain
-regression-tested, not universally proved; float claims do not assert NaN equality
-or preservation of every NaN payload.
+and universal actual STRING/WSTRING encoder/decoder roundtrips with arbitrary
+surrounding bytes. STRING covers supported Latin-1 strings; WSTRING covers all
+Unicode scalar strings, including surrogate-pair encoding, within their legal
+character/UTF-16-unit capacities. Float claims do not assert NaN equality or
+preservation of every NaN payload.
+
+Connection-budget peers test stage sharing, distinct-address fallback, and
+protocol failures that must not try another candidate. Twelve queued lifecycle
+cases establish actual FIFO gate admissions across active read retry, terminal
+closure, disconnect, and recoverable rejection. A measured same-process stress
+test samples descriptors, threads, and RSS after warmup on Linux and macOS across
+216 attempts and 54 retry reconnects. Its bounded plateau checks are regression
+evidence, not a proof of leak freedom. For a longer soak:
+
+```console
+python integration/resource_stress.py --rounds 32
+```
+
+This runs 6,912 attempts and 1,728 retry reconnects in one client-test process.
 
 The deterministic suite covers golden wire vectors, malformed responses, the
 python-snap7 emulator, fragmented uploads, and a dedicated PLC-driven download

@@ -13,11 +13,14 @@ from pathlib import Path
 import sequence_conformance
 from compound_operations import run_compound_operations
 from concurrency import run_concurrency
+from connection_budget import run_connection_budget
 from extended_deadlines import run_extended_deadlines
 from mixed_operations import run_mixed_operations
 from multi_batching import run_multi_batching
 from multi_semantics import run_multi_semantics
 from operation_conformance import run as run_operation_conformance
+from queued_lifecycle import run_queued_lifecycle
+from resource_stress import run_resource_stress
 from retry_progress import run_retry_progress
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
@@ -1576,6 +1579,9 @@ def main() -> None:
         run_userdata_completion(root)
         run_transport_resources()
         run_timeout_cleanup(root)
+        run_connection_budget(root)
+        run_queued_lifecycle(root)
+        run_resource_stress(root)
         run_mixed_operations()
         run_operation_conformance()
         run_multi_batching(root)

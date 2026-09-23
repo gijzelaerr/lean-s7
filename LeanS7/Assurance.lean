@@ -280,6 +280,15 @@ structure CoreProtocolAssurance : Prop where
     Value.encodeString maximum value = .ok encoded → encoded.size = maximum + 2
   wstringAllocation : ∀ maximum value encoded,
     Value.encodeWString maximum value = .ok encoded → encoded.size = maximum * 2 + 4
+  stringRoundtrip : ∀ pre suffix maximum value,
+    maximum ≤ Value.maxStringLength → value.toList.length ≤ maximum →
+    (∀ character ∈ value.toList, character.toNat ≤ 255) →
+    (Value.encodeString maximum value >>= fun encoded =>
+      Value.decodeString (pre ++ (encoded ++ suffix)) pre.size) = .ok value
+  wstringRoundtrip : ∀ pre suffix maximum value,
+    maximum ≤ Value.maxWStringLength → Value.utf16Length value ≤ maximum →
+    (Value.encodeWString maximum value >>= fun encoded =>
+      Value.decodeWString (pre ++ (encoded ++ suffix)) pre.size) = .ok value
   disconnectTotal : ∀ state,
     Lifecycle.transition state .disconnect = some .closed
   closedLifecycleTerminal : ∀ event next,
@@ -384,6 +393,8 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact Value.getLReal_putLReal_surrounded_bits
   · exact Value.encodeString_size
   · exact Value.encodeWString_size
+  · exact Value.decodeString_encodeString_surrounded
+  · exact Value.decodeWString_encodeWString_surrounded
   · exact Lifecycle.transition_disconnect
   · exact Lifecycle.closed_is_terminal
   · exact Lifecycle.reconnect_transition
