@@ -711,13 +711,46 @@ def testS7AdvancedVectors : IO Unit := do
       | .ok fragment =>
           check (fragment.isLast && fragment.data == bytes #[0xde, 0xad, 0xbe])
             "upload fragment was decoded incorrectly"
+  let serviceParams := bytes #[0x1b, 0, 0, 0, 0, 0, 0, 0, 9,
+    0x5f, 0x30, 0x41, 0x30, 0x30, 0x30, 0x30, 0x37, 0x50]
+  let downloadAck : S7.Response := {
+    pduType := S7.ackDataType, reference := 0x1234,
+    parameters := bytes #[S7.requestDownloadFunction], data := ByteArray.empty,
+    errorClass := 0, errorCode := 0
+  }
+  check (isOkEq (S7.decodeRequestDownloadAck 0x1234 downloadAck) ())
+    "canonical request-download acknowledgement was rejected"
+  check (match S7.decodeRequestDownloadAck 0x1234
+      { downloadAck with parameters := bytes #[S7.requestDownloadFunction, 0] } with
+    | .error _ => true | .ok _ => false)
+    "request-download acknowledgement with extra parameters was accepted"
+  check (match S7.decodeRequestDownloadAck 0x1234
+      { downloadAck with data := bytes #[1] } with
+    | .error _ => true | .ok _ => false)
+    "request-download acknowledgement with unexpected data was accepted"
   let serverDownload := bytes #[
-    0x32, 1, 0, 0, 0x12, 0x34, 0, 1, 0, 0, 0x1b]
+    0x32, 1, 0, 0, 0x12, 0x34, 0, 18, 0, 0] ++ serviceParams
   match S7.decodeJobPdu serverDownload with
   | .error err => throw <| IO.userError s!"could not decode PLC download job: {repr err}"
   | .ok job =>
-      check (job.reference == 0x1234 && job.parameters == bytes #[0x1b])
+      check (job.reference == 0x1234 && job.parameters == serviceParams)
         "PLC download job was decoded incorrectly"
+      check (isOkEq (S7.validateDownloadServiceRequest job S7.downloadFunction .dataBlock 7) ())
+        "canonical PLC download service request was rejected"
+      check (match S7.validateDownloadServiceRequest job S7.downloadFunction .dataBlock 8 with
+        | .error _ => true | .ok _ => false)
+        "PLC download service request for the wrong block was accepted"
+      check (match S7.validateDownloadServiceRequest job S7.downloadEndedFunction .dataBlock 7 with
+        | .error _ => true | .ok _ => false)
+        "PLC download service request with the wrong function was accepted"
+      let corruptReserved := { job with parameters := bytes #[0x1b, 1] ++ serviceParams.extract 2 18 }
+      check (match S7.validateDownloadServiceRequest corruptReserved S7.downloadFunction .dataBlock 7 with
+        | .error _ => true | .ok _ => false)
+        "PLC download service request with nonzero reserved bytes was accepted"
+      let unexpectedData := { job with data := bytes #[1] }
+      check (match S7.validateDownloadServiceRequest unexpectedData S7.downloadFunction .dataBlock 7 with
+        | .error _ => true | .ok _ => false)
+        "PLC download service request with unexpected data was accepted"
   check (match S7.decodeJobPdu (bytes #[
       0x32, 1, 0, 0, 0x12, 0x34, 0, 0, 0, 0, 0x1b]) with
     | .error _ => true | .ok _ => false)

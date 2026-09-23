@@ -77,3 +77,15 @@ These are cross-implementation observations, not formal claims about the Python 
   deterministic send-cancellation coverage depends on such a primitive.
 - Physical counter/timer indexing and all real-controller service semantics
   remain unresolved without hardware or captures.
+
+## Download-service validation follow-up
+
+- The Lean client now requires the exact PLC-driven download service parameters:
+  function, seven reserved bytes, and the addressed block type and number. It
+  rejects an unexpected data section for both fragment and completion jobs.
+- Request-download acknowledgements must contain exactly the one-byte service
+  function and no data before the client sends any fragment.
+- The scripted peer now uses full service requests and checks malformed
+  acknowledgements, wrong block numbers, nonzero reserved bytes, truncated
+  parameters, and unexpected data. These are emulator-independent rejection
+  checks, not evidence of behavior on a physical controller.
