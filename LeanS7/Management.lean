@@ -359,6 +359,20 @@ structure Szl where
   data : ByteArray
   deriving BEq
 
+/-- Public typed parsers also accept caller-constructed SZLs, so they must not
+    rely on the transport decoder having checked the declared record extent. -/
+def validateSzlData (szl : Szl) : Except DecodeError Unit := do
+  let expectedSize := szl.recordLength.toNat * szl.recordCount.toNat
+  if szl.data.size != expectedSize then
+    throw (.invalidField 0 s!"SZL records require {expectedSize} data bytes, got {szl.data.size}")
+
+theorem validateSzlData_extent (szl : Szl) (h : validateSzlData szl = .ok ()) :
+    szl.data.size = szl.recordLength.toNat * szl.recordCount.toNat := by
+  simp only [validateSzlData] at h
+  split at h
+  · contradiction
+  · simp_all
+
 def decodeSzlFirst (response : UserDataResponse) : Except DecodeError (UInt16 × UInt16 × ByteArray) := do
   let cursor : Cursor := { data := response.payload }
   let (id, cursor) ← cursor.readUInt16BE
@@ -391,6 +405,7 @@ structure OrderCode where
   deriving Repr, BEq
 
 def parseOrderCode (szl : Szl) : Except DecodeError OrderCode := do
+  validateSzlData szl
   if szl.id != 0x0011 then
     throw (.invalidField 0 s!"expected SZL 0x0011, got {szl.id}")
   if szl.recordLength < 26 || szl.recordCount == 0 then
@@ -413,6 +428,7 @@ structure CpuInfo where
   deriving Repr, BEq
 
 def parseCpuInfo (szl : Szl) : Except DecodeError CpuInfo := do
+  validateSzlData szl
   if szl.id != 0x001c then
     throw (.invalidField 0 s!"expected SZL 0x001c, got {szl.id}")
   return {
@@ -431,6 +447,7 @@ structure CpInfo where
   deriving Repr, BEq
 
 def parseCpInfo (szl : Szl) : Except DecodeError CpInfo := do
+  validateSzlData szl
   if szl.id != 0x0131 then
     throw (.invalidField 0 s!"expected SZL 0x0131, got {szl.id}")
   let cursor : Cursor := { data := szl.data, offset := 2 }
@@ -449,6 +466,7 @@ structure Protection where
   deriving Repr, BEq
 
 def parseProtection (szl : Szl) : Except DecodeError Protection := do
+  validateSzlData szl
   if szl.id != 0x0232 then
     throw (.invalidField 0 s!"expected SZL 0x0232, got {szl.id}")
   let cursor : Cursor := { data := szl.data, offset := 2 }
@@ -460,6 +478,7 @@ def parseProtection (szl : Szl) : Except DecodeError Protection := do
   return { selectorPosition, passwordLevel, validProtectionLevel, modeSelector, startupSelector }
 
 def parseCpuState (szl : Szl) : Except DecodeError CpuState := do
+  validateSzlData szl
   if szl.id != 0x0424 then
     throw (.invalidField 0 s!"expected SZL 0x0424, got {szl.id}")
   let (status, _) ← ({ data := szl.data, offset := 3 } : Cursor).readUInt8

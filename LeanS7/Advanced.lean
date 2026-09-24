@@ -169,6 +169,7 @@ structure ForceEntry where
   deriving Repr, BEq, Inhabited
 
 def decodeForceTable (szl : Szl) : Except DecodeError (Array ForceEntry) := do
+  validateSzlData szl
   if szl.id != 0x0025 then
     throw (.invalidField 0 s!"expected force-table SZL 0x0025, got {szl.id}")
   if szl.data.size % 8 != 0 then

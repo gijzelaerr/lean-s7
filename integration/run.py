@@ -18,6 +18,9 @@ from concurrency import run_concurrency
 from connection_budget import run_connection_budget
 from conversation_conformance import run as run_conversation_conformance
 from extended_deadlines import run_extended_deadlines
+from generative_reconnect import run as run_generative_reconnect
+from import_boundaries import run as run_import_boundaries
+from management_conformance import run as run_management_conformance
 from mixed_operations import run_mixed_operations
 from multi_batching import run_multi_batching
 from multi_semantics import run_multi_semantics
@@ -31,6 +34,7 @@ from retry_budgets import run_retry_budgets
 from retry_progress import run_retry_progress
 from scalability_bench import run as run_scalability_bench
 from session_conformance import run as run_session_conformance
+from session_fuzz import run as run_session_fuzz
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
 from snap7.type import SrvArea
@@ -1588,6 +1592,7 @@ def main() -> None:
         run_retry_progress(root)
         run_retry_budgets(root)
         run_reconnect_faults(root)
+        run_generative_reconnect(root)
         run_write_provenance(root)
         run_userdata_completion(root)
         run_userdata_assurance(root)
@@ -1605,6 +1610,9 @@ def main() -> None:
         run_value_conformance()
         run_conversation_conformance()
         run_session_conformance()
+        run_management_conformance()
+        run_session_fuzz()
+        run_import_boundaries(root)
         run_scalability_bench(rounds=1, smoke=True)
         run_multi_batching(root)
         run_multi_semantics(root)

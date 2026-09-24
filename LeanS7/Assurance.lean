@@ -7,6 +7,8 @@ import LeanS7.BitUpdateAssurance
 import LeanS7.ClockCodecAssurance
 import LeanS7.ValueDecoderAssurance
 import LeanS7.MultiResponseAssurance
+import LeanS7.UserDataDecoderAssurance
+import LeanS7.AdvancedDecoderAssurance
 
 namespace LeanS7
 
@@ -412,6 +414,25 @@ structure CoreProtocolAssurance : Prop where
   userDataIdentity : ∀ previous actual response,
     S7.correlateUserDataFragment (some previous) response = .ok actual →
       response.dataUnitReference = previous ∧ actual = previous
+  userDataCorrelation : ∀ reference group subfunction packet response,
+    S7.decodeUserDataResponse reference group subfunction packet = .ok response →
+      response.reference = reference ∧ response.group = group ∧
+      response.subfunction = subfunction ∧ response.error = 0
+  userDataTransport : ∀ reference group subfunction packet response,
+    S7.decodeUserDataResponse reference group subfunction packet = .ok response →
+      (response.returnCode = 0xff ∧ response.transportSize = S7.octetTransportSize) ∨
+      (response.returnCode = 0x0a ∧ S7.supportsNullUserDataAcknowledgement group subfunction = true ∧
+        response.transportSize = 0 ∧ response.payload.size = 0 ∧ response.hasMoreData = false)
+  userDataPacketExtent : ∀ reference group subfunction packet response,
+    S7.decodeUserDataResponse reference group subfunction packet = .ok response →
+      packet.size = S7.jobHeaderSize + 12 + 4 + response.payload.size
+  publicSzlExtent : ∀ szl, S7.validateSzlData szl = .ok () →
+    szl.data.size = szl.recordLength.toNat * szl.recordCount.toNat
+  blockCountsExtent : ∀ payload result, S7.decodeBlockCounts payload = .ok result → payload.size = 28
+  blockEntriesAlignment : ∀ payload result, S7.decodeBlockEntries payload = .ok result → payload.size % 4 = 0
+  blockInfoExtent : ∀ payload result, S7.decodeBlockInfo payload = .ok result → payload.size = 78
+  forceTableExtent : ∀ szl result, S7.decodeForceTable szl = .ok result →
+    szl.data.size = szl.recordLength.toNat * szl.recordCount.toNat
 
 /-- The implementation satisfies the complete formal contract stated by
     `CoreProtocolAssurance`. -/
@@ -541,5 +562,13 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact S7.decodeAreaReadMany_wire_order
   · exact S7.decodeAreaWriteMany_contract
   · exact S7.correlateUserDataFragment_success
+  · exact S7.decodeUserDataResponse_correlation
+  · exact S7.decodeUserDataResponse_transport
+  · exact S7.decodeUserDataResponse_packet_size
+  · exact S7.validateSzlData_extent
+  · exact S7.decodeBlockCounts_extent
+  · exact S7.decodeBlockEntries_alignment
+  · exact S7.decodeBlockInfo_extent
+  · exact S7.decodeForceTable_extent
 
 end LeanS7

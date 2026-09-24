@@ -21,6 +21,9 @@ import LeanS7.ConversationConformance
 import LeanS7.MultiResponseAssuranceTests
 import LeanS7.UserDataAssuranceTests
 import LeanS7.SessionConformance
+import LeanS7.SessionAssuranceTests
+import LeanS7.AdvancedDecoderAssuranceTests
+import LeanS7.ManagementConformance
 import LeanS7.ValueDecoderAssuranceTests
 import LeanS7.RetryBudgetTests
 import LeanS7.BatchingTests
@@ -909,6 +912,9 @@ def main : IO Unit := do
   MultiResponseAssuranceTests.run
   UserDataAssuranceTests.run
   Conformance.Sessions.validate
+  SessionAssuranceTests.run
+  AdvancedDecoderAssuranceTests.run
+  Conformance.ManagementPdus.validate
   MutationTests.run
   ExpandedMutationTests.run
   StatefulFaultTests.run

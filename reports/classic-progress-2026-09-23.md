@@ -706,3 +706,101 @@ These are cross-implementation observations, not formal claims about the Python 
   PR creation or merge. Final metadata must use the owner's author/committer
   identity and contain no attribution trailers. Hardware validation remains
   separate; python-snap7's repository is untouched.
+
+## Typed management and generative assurance continuation (2026-09-24)
+
+- Owner approved the next five streams in parallel: actual USER_DATA decoder
+  contracts, typed active-request transitions, portable management conversations,
+  reproducible stateful differential fuzzing, and advanced-management audit.
+- Typed phases preserve exported names; universal allowance/no-phantom-attempt
+  proofs and 10,752 state controls are checked. Pure-model terminality was
+  hardened for manually inconsistent closed states; no live Client equivalence
+  claim or production lifecycle-policy change.
+- Audit found that public typed SZL/force-table parsers could accept caller-made
+  Szls with data extent contradicting declared record length/count. A shared
+  validator now protects those public boundaries; transport decodeSzl already
+  enforced this invariant. Block metadata's outer type vs native subtype remains
+  an explicit unresolved API distinction, not a guessed wire restriction.
+- Management corpus and bounded differential-fuzz tooling are being connected.
+  No new commit/push/PR/merge yet; previous validated batch remains local.
+- Portable management refinement passes 180 decoder cases and 16 histories;
+  exact existing sessions JSON is preserved. New generic fixture tokens cover
+  wrapped/repeated zero without claiming Client.readSzl's specialized method.
+- Fifteen advanced actual-decoder contracts and exhaustive public-boundary
+  tests pass focused checks; primary evidence and deferred block-info API/type
+  distinction are tracked in advanced-decoder-evidence-2026-09-24.md.
+- Differential fuzz default passed 256 histories/6,024 events. Read-only review
+  reproduced and fixed the new shrinker's failure to revisit earlier deletions;
+  a nonmonotonic regression control now enforces single-deletion minimization.
+  Replay is bounded to 64 KiB/128 events with strict config/envelope validation.
+  Failed artifact saves preserve original divergence diagnostics and prior files.
+- Seeded live reconnect supplement passed all 32 configurations outside the
+  fixed 75-case matrix; seed5715779 and exact-case replay are retained. No
+  production Client defect was found by these two generative campaigns.
+- USER_DATA module is frozen and focused-checked: four actual arbitrary-packet
+  decoder contracts plus the payload witness extent theorem. Correlation,
+  service-scoped transport, sequential bounded reads/finish and exact accepted
+  packet extent are established; all five use only propext/Quot.sound. Core
+  assurance now includes these boundaries plus public SZL/advanced extents and
+  typed operational-model allowance/terminal/reconnect contracts.
+- All eight corpus exports are wired, including new180/16management cases.
+  Ruff lint/format passes all38Pythonfiles. Differential replay artifacts are
+  bounded and exclusive-created; a failed save leaves earlier evidence intact
+  and retains original divergence diagnostics. The native adapter's post-read
+  line check is a fixture parser limit, not adversarial stream-memory safety.
+- Combined incremental build passed156jobs including all USER_DATA proofs.
+  Final clean build is running. Extendedfuzz must be rerun after it: root started
+  clean while its batched subprocess runner was still active, removing the
+  executable between batches and causing FileNotFoundError. This was an
+  orchestration error, not a protocol divergence; no failure artifact was made.
+  Pinned actionlint1.7.7 passes both workflows.
+- Final root-owned clean build passed156jobs. All proof sources are frozen and
+  included. Running native/eight exact corpus/independent29contract axiom checks
+  plus complete pinned-emulator suite. Extended1,024-history fuzz restarted only
+  after build completion; no more clean/build mutations while batched executable
+  consumers are active. Source/format/whitespace checks remain green.
+- Final native suite passed, including all new typed/advanced exhaustive cases.
+  All eight corpus exports match checked-in files exactly; existing session JSON
+  remains unchanged. Root independently audited29newcheckedcontracts plus the
+  extended CoreProtocolAssurance: only standard propext/Classical.choice/
+  Quot.sound, with supported block-code roundtrip axiom-free. No admissions,
+  native certificates or new user axioms. Full integration/extendedfuzz pending.
+- Restarted extendedfuzz passed1,024histories/23,730events with no divergence,
+  including702permitted/544denied retry decisions. Raw counters and reproduction,
+  artifact/minimization bounds and orchestration distinction are recorded in
+  session-fuzz-2026-09-24.json/.md. Full emulator suite remains in progress.
+- First full final emulator suite passed all campaigns, but stress baseline
+  was40,173,568bytes (peak40,222,720) versus prior~5.6MB. New JSON/session-model
+  tooling was unnecessarily on the native client import path. Moving adapter
+  to separate lean-s7-fuzz executable and keeping typed-model proofs standalone
+  (rather than inside CoreProtocolAssurance) avoids that coupling; actual
+  USER_DATA/advanced protocol contracts remain in the core. Revalidation needed
+  after this evidence-driven late implementation correction; no commit yet.
+- Separated-tool incremental build passed159jobs. Focused actual-client stress
+  verifies restored baseline5,652,480bytes, peak5,718,016 (+65,536), FD8/8 and
+  threads7/7. Added portable import-graph regression guard with four negative
+  controls so JSON/session fixture imports cannot return through core/Main.
+  Updated required local checks and CI to build the separate fuzz executable.
+  All source consumers stopped before the next mandatory final clean build.
+- Final separated-tool clean build passed159jobs. Rerunning native/eightcorpus/
+  independentaxiom checks plus the complete pinned-emulator suite and1,024-case
+  fuzz against the separate executable. Pinned actionlint passes both workflows
+  after buildtarget update; Ruff lint/format passes all39Pythonfiles. No further
+  implementation edits planned unless final validation exposes a defect.
+- Final separated-tool native suite/eight exact corpus comparisons pass again.
+  Independent axiom audit retains29contracts plus core, standard axioms only.
+  Extended fuzz against lean-s7-fuzz passes1,024/23,730 with identical recorded
+  coverage counters. Core protocol assurance has no session/JSON tooling imports;
+  all eight typed operational-model proofs remain separately checked/imported by
+  native tests. Final full emulator suite remains in progress.
+- Final separated-tool complete pinned-emulator/scripted-peer suite passed,
+  including32seeded live supplements, default256histories/6,024events,180/16
+  managementoracle, import-boundary guard, all75reconnectstage/31USER_DATA peers
+  and every prior transfer/deadline/overlap/queued/transport campaign. Stress
+  passed216attempts/54reconnects, FD8/8, threads7/7, RSS5,636,096/5,718,016
+  (+81,920bytes); static JSON baseline cost is eliminated from normal client.
+- All five approved streams and full combined local checks are complete.
+  Recording one coherent local commit with owner author/committer identity under
+  standing commit approval; no new push/PR/merge. Remaining block-info API
+  distinction is documented, not silently changed. No physical-controller,
+  industrial safety, full IO-equivalence or exactly-once-write claim.

@@ -221,6 +221,7 @@ lake exe lean-s7
 To run the end-to-end suite against python-snap7 3.0.0:
 
 ```console
+lake build lean-s7-fuzz
 python -m pip install "python-snap7==3.0.0"
 python integration/run.py
 ```
@@ -463,6 +464,46 @@ RSS samples are post-operation, not allocation or peak-memory measurements.
 The integration suite runs small correctness-only smoke cases without timing
 thresholds. No client optimization is inferred from these measurements alone.
 See the [recorded baseline and measurement limits](reports/scalability-2026-09-24.md).
+
+Active-request phases are now typed rather than string-valued. Eight actual
+pure-transition contracts establish allowance preservation, terminal closed
+state and unchanged sends/write progress on failed reconnects; 10,752 transition
+controls accompany them. The session artifact's JSON remains unchanged. These
+contracts describe the pure model, not a formal equivalence proof of Client IO.
+
+`conformance/v1/management.json` adds 180 management decoder cases and 16 generic
+opaque-payload continuation histories. Run
+`python integration/management_conformance.py` or regenerate with
+`lake exe lean-s7-conformance management`. Tokens include repeated/wrapped zero;
+zero and nonzero identities, both ACK dialects and terminal malformations are
+covered. Generic continuation fixtures are not typed SZL/block records or an
+assertion that all services use identical continuation request methods.
+
+`python integration/session_fuzz.py` compares 256 seeded histories with the
+independent oracle using actual Lean session transitions and S7 response codecs.
+Build its separate test tool with `lake build lean-s7-fuzz`; JSON fixture/parser
+dependencies and pure session-model proofs stay outside the normal client
+executable and core-library import path.
+An import-boundary regression check enforces that separation.
+On divergence it saves a single-deletion-minimized replay artifact without
+overwriting prior evidence. Replay with `--replay PATH`; extend with
+`--per-seed 256` (1,024 cases across four fixed seeds). A separate
+`python integration/generative_reconnect.py` campaign runs 32 seeded live Client
+conversations outside the fixed reconnect matrix, with `--seed`/`--case` replay.
+Neither layer proves full IO equivalence, cancellation or remote write effects.
+See the [recorded fuzz coverage and replay limits](reports/session-fuzz-2026-09-24.md).
+
+Public typed SZL and force-table parsers now validate caller-constructed record
+extents as well as transport-decoded inputs. Advanced decoder contracts and
+exhaustive boundary tests cover block counts/lists/info and force records without
+inventing restrictions on opaque fields. See the
+[advanced audit and retained limitations](reports/advanced-decoder-evidence-2026-09-24.md).
+
+Actual USER_DATA decoder contracts now prove correlation and zero parameter
+error, FF/09 success versus exact service-scoped empty/final 0A/00 ACKs,
+bounded sequential payload reads and complete data-section consumption. Every
+accepted packet has exactly `10 + 12 + 4 + payload.size` bytes. These arbitrary
+input implications do not depend on packets produced by the local encoder.
 
 Connection-budget peers test stage sharing, distinct-address fallback, and
 protocol failures that must not try another candidate. Twelve queued lifecycle

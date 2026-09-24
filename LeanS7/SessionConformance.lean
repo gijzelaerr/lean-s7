@@ -20,11 +20,29 @@ inductive Event where
   | failure (kind : ClientErrorKind)
   | response (pdu : ByteArray)
 
+/-- Typed phases of this single-wire model, not states of native Client IO. -/
+inductive Phase where
+  | idle | ready | awaiting | reconnectCotp | reconnectSetup | failed | completed | closed
+  deriving BEq, DecidableEq, Repr
+
+instance : LawfulBEq Phase where
+  eq_of_beq := by intro a b h; cases a <;> cases b <;> first | rfl | contradiction
+  rfl := by intro a; cases a <;> rfl
+
+def Phase.name : Phase → String
+  | .idle => "idle" | .ready => "ready" | .awaiting => "awaiting"
+  | .reconnectCotp => "reconnect-cotp" | .reconnectSetup => "reconnect-setup"
+  | .failed => "failed" | .completed => "completed" | .closed => "closed"
+
+def Phase.acceptsFailure : Phase → Bool
+  | .awaiting | .reconnectCotp | .reconnectSetup => true
+  | _ => false
+
 structure State where
   lifecycle : Lifecycle.State := .connected
   remaining : Nat := 0
   active : Option UInt16 := none
-  phase : String := "idle"
+  phase : Phase := .idle
   sends : Nat := 0
   progress : WriteProgress.State := {}
 
@@ -51,10 +69,10 @@ private def outcomeName : WriteAttemptOutcome → String
   | .pending => "pending" | .replayedUnknown => "replayed-unknown"
   | .globalRejected => "global-rejected" | .itemResult .success => "success"
   | .itemResult (.failure code) => s!"failure:{code.toNat}"
-private def snapshot (state : State) : Json := Json.mkObj [
+def snapshot (state : State) : Json := Json.mkObj [
   ("lifecycle", toJson (stateName state.lifecycle)),
   ("remaining", toJson state.remaining), ("active_reference", toJson (state.active.map UInt16.toNat)),
-  ("phase", toJson state.phase), ("sends", toJson state.sends),
+  ("phase", toJson state.phase.name), ("sends", toJson state.sends),
   ("attempts", Json.arr (state.progress.trace.map fun attempt => Json.mkObj [
     ("location", locationJson attempt.location), ("outcome", toJson (outcomeName attempt.outcome))]))]
 private def accepted : Json := Json.mkObj [("status", "accept")]
@@ -63,27 +81,43 @@ private def rejected (category : String) : Json := Json.mkObj [
 private def payload (location : WriteLocation) : ByteArray :=
   ByteArray.mk ((Array.range location.range.count).map fun index =>
     UInt8.ofNat (location.range.start * 7 + index * 29))
-private def request (config : Config) : Except S7.EncodeError ByteArray :=
+def request (config : Config) : Except S7.EncodeError ByteArray :=
   if config.write then S7.encodeAreaWriteMany config.reference
     (config.locations.map fun location => { range := location.range, payload := payload location })
   else S7.encodeAreaReadMany config.reference (config.locations.map (·.range))
 
-private def failure (config : Config) (state : State) (kind : ClientErrorKind) : State × Json :=
+def failure (config : Config) (state : State) (kind : ClientErrorKind) : State × Json :=
   match retryBudgetAfter state.remaining (state.lifecycle == .closed) kind
       (if config.write then .potentiallyMutating else .readOnly) config.allow with
   | some remaining =>
     ({ state with
-       remaining, lifecycle := .disconnected, phase := "reconnect-cotp",
-       progress := if config.write && state.phase == "awaiting" then state.progress.replay else state.progress },
+       remaining, lifecycle := .disconnected, phase := .reconnectCotp,
+       progress := if config.write && state.phase == .awaiting then state.progress.replay else state.progress },
      Json.mkObj [("status", "accept"), ("retry", true)])
   | none =>
     ({ state with
-       lifecycle := .disconnected, active := none, phase := "failed",
-       progress := if config.write && kind == .plcRejected && state.phase == "awaiting"
+       lifecycle := if state.lifecycle == .closed then .closed else .disconnected,
+       active := none, phase := if state.lifecycle == .closed then .closed else .failed,
+       progress := if config.write && kind == .plcRejected && state.phase == .awaiting
          then state.progress.globalReject else state.progress },
      Json.mkObj [("status", "accept"), ("retry", false)])
 
-private def step (config : Config) (state : State) (event : Event) : State × Json := Id.run do
+def sentProgress (config : Config) (state : State) : Except DecodeError WriteProgress.State :=
+  if config.write then state.progress.sent config.locations else .ok state.progress
+
+def acknowledgedProgress (config : Config) (state : State) (results : Array S7.WriteItemResult) :
+    Except DecodeError WriteProgress.State :=
+  if config.write then state.progress.acknowledge results else .ok state.progress
+
+def decodeResults (config : Config) (packet : ByteArray) :
+    Except DecodeError (Array S7.WriteItemResult) := do
+  let response ← S7.decodeResponse packet
+  if config.write then S7.decodeAreaWriteMany config.reference config.locations.size response
+  else do
+    discard <| S7.decodeAreaReadMany config.reference (config.locations.map (·.range)) response
+    return #[]
+
+def step (config : Config) (state : State) (event : Event) : State × Json := Id.run do
   match event with
   | .begin =>
       if state.lifecycle != .connected then return (state, rejected "not-connected")
@@ -91,47 +125,41 @@ private def step (config : Config) (state : State) (event : Event) : State × Js
       let .ok _ := request config | return (state, rejected "request-codec")
       return ({ state with
         remaining := config.budget, active := some config.reference,
-        phase := "ready", sends := 0, progress := {} }, accepted)
+        phase := .ready, sends := 0, progress := {} }, accepted)
   | .send =>
-      if state.lifecycle != .connected || state.active.isNone || state.phase != "ready" then
+      if state.lifecycle != .connected || state.active.isNone || state.phase != .ready then
         return (state, rejected "send-phase")
-      let .ok progress := if config.write then state.progress.sent config.locations else .ok state.progress
+      let .ok progress := sentProgress config state
         | return (state, rejected "write-progress")
-      return ({ state with sends := state.sends + 1, phase := "awaiting", progress }, accepted)
+      return ({ state with sends := state.sends + 1, phase := .awaiting, progress }, accepted)
   | .failure kind =>
-      if state.active.isNone || !["awaiting", "reconnect-cotp", "reconnect-setup"].contains state.phase then
+      if state.active.isNone || !state.phase.acceptsFailure then
         return (state, rejected "failure-phase")
       return failure config state kind
   | .reconnectSetup =>
-      if state.active.isNone || state.phase != "reconnect-cotp" then
+      if state.active.isNone || state.phase != .reconnectCotp then
         return (state, rejected "reconnect-phase")
-      return ({ state with phase := "reconnect-setup" }, accepted)
+      return ({ state with phase := .reconnectSetup }, accepted)
   | .reconnected =>
-      if state.active.isNone || state.phase != "reconnect-setup" || state.lifecycle != .disconnected then
+      if state.active.isNone || state.phase != .reconnectSetup || state.lifecycle != .disconnected then
         return (state, rejected "reconnect-phase")
-      return ({ state with lifecycle := .connected, phase := "ready" }, accepted)
+      return ({ state with lifecycle := .connected, phase := .ready }, accepted)
   | .response packet =>
-      if state.lifecycle != .connected || state.active.isNone || state.phase != "awaiting" then
+      if state.lifecycle != .connected || state.active.isNone || state.phase != .awaiting then
         return (state, rejected "response-phase")
-      let decoded : Except DecodeError (Array S7.WriteItemResult) := do
-        let response ← S7.decodeResponse packet
-        if config.write then S7.decodeAreaWriteMany config.reference config.locations.size response
-        else do
-          discard <| S7.decodeAreaReadMany config.reference (config.locations.map (·.range)) response
-          return #[]
-      match decoded with
+      match decodeResults config packet with
       | .error error =>
         let kind := match error with | .remoteFailure .. => ClientErrorKind.plcRejected | _ => .protocol
         let (next, _) := failure config state kind
         return (next, rejected "response-codec")
       | .ok results =>
-        let .ok progress := if config.write then state.progress.acknowledge results else .ok state.progress
+        let .ok progress := acknowledgedProgress config state results
           | return (state, rejected "write-progress")
-        return ({ state with active := none, phase := "completed", progress }, accepted)
+        return ({ state with active := none, phase := .completed, progress }, accepted)
   | .disconnect =>
-      return ({ state with lifecycle := .closed, active := none, phase := "closed" }, accepted)
+      return ({ state with lifecycle := .closed, active := none, phase := .closed }, accepted)
 
-private def eventJson : Event → Json
+def eventJson : Event → Json
   | .begin => Json.mkObj [("operation", "begin")]
   | .send => Json.mkObj [("operation", "send")]
   | .reconnectSetup => Json.mkObj [("operation", "reconnect-setup")]
@@ -139,16 +167,18 @@ private def eventJson : Event → Json
   | .disconnect => Json.mkObj [("operation", "disconnect")]
   | .failure kind => Json.mkObj [("operation", "failure"), ("error_kind", toJson (kindName kind))]
   | .response packet => Json.mkObj [("operation", "response"), ("response_pdu", octets packet)]
-private def run (test : Case) : Array Json := Id.run do
-  let mut state : State := {}
+def runEvents (config : Config) (events : Array Event) (initial : State := {}) : Array Json := Id.run do
+  let mut state := initial
   let mut trace := #[]
-  for event in test.events do
-    let (next, result) := step test.config state event
+  for event in events do
+    let (next, result) := step config state event
     state := next
     trace := trace.push (Json.mkObj [("result", result), ("snapshot", snapshot state)])
   return trace
 
-private def response (config : Config) (reference : UInt16) (count : Nat) : ByteArray :=
+private def run (test : Case) : Array Json := runEvents test.config test.events
+
+def response (config : Config) (reference : UInt16) (count : Nat) : ByteArray :=
   let data := if config.write then bytes ((Array.range config.locations.size).map fun _ => 255)
     else Id.run do
       let mut data := ByteArray.empty
@@ -222,13 +252,13 @@ def validate : IO Unit := do
   let mut state : State := {}
   for event in test.events[:9] do state := (step test.config state event).1
   unless state.remaining == 0 && state.sends == 1 && state.active.isNone &&
-      state.phase == "failed" && state.progress.trace.size == 2 &&
+      state.phase == .failed && state.progress.trace.size == 2 &&
       state.progress.snapshot.replayedUncertain.size == 2 do
     throw <| IO.userError "failed reconnect manufactured write attempts"
   let some recovered := (casesFor 7)[1]? | throw <| IO.userError "missing fixed replay control"
   let mut successState : State := {}
   for event in recovered.events[:8] do successState := (step recovered.config successState event).1
-  unless successState.phase == "completed" && successState.active.isNone &&
+  unless successState.phase == .completed && successState.active.isNone &&
       successState.sends == 2 && successState.progress.trace.size == 4 &&
       successState.progress.snapshot.replayedUncertain.size == 2 &&
       successState.progress.snapshot.acknowledged.size == 2 do

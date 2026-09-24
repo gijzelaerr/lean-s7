@@ -297,3 +297,31 @@ validate reference/count/payload; success clears the active reference without
 erasing earlier replay uncertainty. Disconnect is terminal. These single-wire
 operational contracts are not a formal IO-client equivalence theorem, scheduling
 model, remote-effects model or exactly-once-write guarantee.
+
+## Management codec conversations
+
+Generate `management.json` with `lake exe lean-s7-conformance management` and run
+`python integration/management_conformance.py` for the independent stdlib oracle.
+Schema version 1, protocol `classic S7 management codec conversations`, contains
+180 `decoder_cases` and 16 `continuation_cases`.
+
+Decoder inputs specify reference, group, subfunction and complete unframed PDU
+octets. Accepted expectations include payload, sequence, data-unit reference,
+continuation flag, return code and transport size. Rejections normalize to
+`protocol` or `plc-rejected`. Service-specific native null ACKs, FF octet ACKs,
+unsupported discriminator shapes, parameter errors, correlation and complete
+packet extents are represented.
+
+Continuation steps supply expected references and exact request/response PDUs.
+The oracle checks previous-token echo and stable identity, then concatenates
+opaque codec payloads literally. Tokens wrap from 255 to zero and may repeat;
+identities may be zero. Expected rejection records the zero-based `failed_step`.
+Later fixture requests remain checked data, not evidence that a client sent
+anything after rejection. These are generic codec histories, not typed SZL/block
+record fixtures or a full Client.readSzl wire specification: the specialized
+SZL continuation request method differs from the generic USER_DATA encoder.
+
+The exporter checks fixed outcomes against actual decoders, bounded fragment
+assembly and literal independent request layouts before emission. Python strictly
+validates schema/types and includes independent mutation controls. Neither this
+artifact nor fuzz comparisons formally verify Python source or physical PLCs.

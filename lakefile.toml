@@ -16,3 +16,7 @@ root = "Tests"
 [[lean_exe]]
 name = "lean-s7-conformance"
 root = "ConformanceMain"
+
+[[lean_exe]]
+name = "lean-s7-fuzz"
+root = "FuzzMain"

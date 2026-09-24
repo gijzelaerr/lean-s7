@@ -1,0 +1,32 @@
+{
+  "cases": 1024,
+  "coverage": {
+    "event:begin": 4447,
+    "event:disconnect": 3015,
+    "event:failure": 3228,
+    "event:reconnect-setup": 2475,
+    "event:reconnected": 3191,
+    "event:response": 2788,
+    "event:send": 4586,
+    "events": 23730,
+    "phase:awaiting": 1614,
+    "phase:closed": 13037,
+    "phase:completed": 442,
+    "phase:failed": 5804,
+    "phase:ready": 1661,
+    "phase:reconnect-cotp": 784,
+    "phase:reconnect-setup": 388,
+    "result:accept": 8110,
+    "result:reject": 15620,
+    "retry:false": 544,
+    "retry:true": 702
+  },
+  "schema_version": 1,
+  "scope": "actual pure session transitions and S7 response codecs; not Client IO equivalence",
+  "seeds": [
+    7,
+    2026,
+    65535,
+    23063
+  ]
+}
