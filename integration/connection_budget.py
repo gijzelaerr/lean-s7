@@ -14,7 +14,7 @@ from multi_batching import _ack, _receive, _request, _send
 def _closed(connection: socket.socket) -> None:
     # A fresh per-stage timeout would still be running at this point. The
     # short read window distinguishes it from expiry of the total budget.
-    connection.settimeout(0.03)
+    connection.settimeout(0.2)
     try:
         data = connection.recv(1)
     except ConnectionResetError:
@@ -60,16 +60,19 @@ def _serve(
                 return
             if mode in ("candidate-disconnected", "candidate-budget") and position == 0:
                 if mode == "candidate-budget":
-                    time.sleep(0.18)
+                    time.sleep(1.0)
                 # A distinct endpoint may be tried after transport EOF.
                 return
             if mode == "candidate-budget":
                 # The first endpoint consumed most of the shared budget. This
-                # delay alone fits 250 ms but must not receive a fresh budget.
-                time.sleep(0.12)
+                # A 2.5 s second stage fits a fresh 3 s allowance, but exceeds
+                # the 2 s left after the first stage's 1 s delay.
+                time.sleep(2.5)
                 _closed(connection)
                 return
-            if mode in ("cotp-only", "combined", "disabled"):
+            if mode == "combined":
+                time.sleep(1.0)
+            elif mode in ("cotp-only", "disabled"):
                 time.sleep(0.18)
             _confirm(connection, cr)
             if mode.startswith("candidate-"):
@@ -79,7 +82,7 @@ def _serve(
             if mode in ("combined", "operation"):
                 # Withhold the reply entirely after waiting less than a fresh
                 # timeout; early EOF proves the earlier budget remained active.
-                time.sleep(0.12 if mode == "operation" else 0.18)
+                time.sleep(1.5 if mode == "operation" else 2.5)
                 _closed(connection)
                 return
             if mode in ("setup-only", "disabled"):
@@ -191,7 +194,7 @@ def _run_pending_tcp_budget(root: Path) -> None:
                 "127.0.0.1",
                 port,
                 port,
-                "combined",
+                "pending-tcp",
             ],
             cwd=root,
             check=True,

@@ -37,3 +37,29 @@ and tag check results outside the source tree, keeping the tested commit fixed.
   whitespace checks. Independent endpoint library fingerprint:
   `cd50afa408251588a7a781dc7083f34a5cb8d3bc4bc6aa561d05b6bdddb220b8`.
   Ready to commit/push; exact branch and tag CI remain release gates.
+
+- Candidate `fbaa460` passed Linux; macOS passed all revised compound scenarios,
+  both deadline rounds and all three mutation controls. It then exposed another
+  fixture margin in the `combined` connection test: an initial 180 ms stage
+  had to complete inside a 250 ms total limit before reaching the intended
+  second stage. Scaled combined/fallback controls to a 3 s shared allowance,
+  a 1 s first peer stage and a 2.5 s second stage. The latter still fits a
+  fresh 3 s budget but exceeds the 2 s remaining on the original deadline.
+  The operation control uses a 1 s limit with a withheld 1.5 s response;
+  closure observation has 200 ms slack. Production deadlines are unchanged.
+
+- Focused connection validation passed all nine portable cases. Scaling the
+  shared `combined` mode initially changed the independent pending-TCP probe's
+  timing too; local testing caught its two-second process timeout. Isolated that
+  probe under `pending-tcp`, preserving its original 250 ms budget and two-second
+  process-exit assertion. All ten locally applicable controls now pass. Starting
+  the full clean verification again before the fix-forward commit.
+
+- Final fix-forward local validation passed: clean build (165 jobs), complete
+  native suite, eight exact corpus comparisons, full pinned emulator/fault
+  integration including revised connection and repeated compound controls,
+  native endpoint PDU240/480 profiles, Ruff lint/format, actionlint and whitespace
+  checks. The earlier candidate's platform evidence is
+  [run 35982464937](https://github.com/gijzelaerr/lean-s7/actions/runs/35982464937);
+  it is not evidence for this fix-forward revision. Ready to commit/push and
+  verify both branch and tag runs before release publication.

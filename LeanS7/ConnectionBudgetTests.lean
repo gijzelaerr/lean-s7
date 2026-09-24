@@ -46,11 +46,12 @@ def runIntegration (host firstPortString secondPortString mode : String) : IO Un
   let some firstPort := firstPortString.toNat? | throw <| IO.userError "invalid first port"
   let some secondPort := secondPortString.toNat? | throw <| IO.userError "invalid second port"
   let start ← IO.monoMsNow
-  let expectedTimeout := mode == "combined" || mode == "operation" || mode == "candidate-budget"
+  let expectedTimeout := mode == "combined" || mode == "operation" || mode == "candidate-budget" ||
+    mode == "pending-tcp"
   let expectedProtocol := mode == "candidate-protocol"
   -- Success controls include hostname resolution and hosted scheduling;
   -- only the rejection controls intentionally need the tight shared budget.
-  let connectionBudget := if expectedTimeout || expectedProtocol then 250 else 3000
+  let connectionBudget := if expectedProtocol || mode == "pending-tcp" then 250 else 3000
   let outcome ← try
     if mode.startsWith "candidate-" then
       let first : Std.Net.SocketAddress := .v4 <| Std.Net.SocketAddressV4.mk address (UInt16.ofNat firstPort)
@@ -65,7 +66,7 @@ def runIntegration (host firstPortString secondPortString mode : String) : IO Un
         endpoint := if expectedTimeout then .ipv4 address else .hostname host,
         port := UInt16.ofNat firstPort
         connectTimeoutMs := if mode == "disabled" then none else some connectionBudget
-        operationTimeoutMs := some (if mode == "operation" then 80 else 1000) }
+        operationTimeoutMs := some (if mode == "operation" then 1000 else 6000) }
       client.disconnect
     pure (none : Option IO.Error)
   catch error => pure (some error)
@@ -78,7 +79,8 @@ def runIntegration (host firstPortString secondPortString mode : String) : IO Un
         s!"connection budget changed error category: {error}"
       -- Deliberately generous: the strict evidence is the refused/withheld
       -- next-stage response, not exact scheduler timing on a loaded machine.
-      require (elapsed < 1500) s!"connection timeout did not return promptly: {elapsed} ms"
+      require (elapsed < (if expectedTimeout then 7000 else 1500))
+        s!"connection timeout did not return promptly: {elapsed} ms"
   IO.println s!"connection budget case passed: {mode}/{elapsed} ms"
 
 end LeanS7.ConnectionBudgetTests
