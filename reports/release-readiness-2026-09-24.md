@@ -99,3 +99,18 @@ Further validation and publication results will be appended before release.
   checks. No further source changes are planned before the exact hosted gate.
   Publication will attach an exact-commit validation record to the release
   rather than modifying the tested source revision after CI succeeds.
+
+- Candidate `3c62505` exposed a deterministic oracle gap in the base deadline
+  peer: expiry between a reply and the next continuation legally sends COTP DR,
+  but the peer required an S7 request at that point. The extended peer already
+  allowed this alternative. Added a shared pure discriminator and use it at
+  base upload/continuation/end boundaries. DR must now be a complete canonical
+  seven-byte frame; malformed/truncated/trailing frames are rejected. Added
+  positive/negative self-controls. Lean still independently requires the
+  precise expected result, so early disconnect cannot pass a success control.
+
+- Disconnect-oracle fix-forward passed the full local clean build, native
+  suite, eight exact corpora, full emulator/fault integration, independent
+  native profiles, Ruff lint/format, actionlint and whitespace checks. The same
+  discriminator also covers extended download start/end/insertion boundaries.
+  Ready to publish the candidate for its exact hosted checks.

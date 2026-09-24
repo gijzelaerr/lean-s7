@@ -63,10 +63,47 @@ def _userdata(reference: int, operation: str, index: int, chunk: bytes) -> bytes
 
 
 def _disconnected(frame: bytes) -> None:
-    if len(frame) < 2 or frame[1] != 0x80:
+    if len(frame) != 7 or frame[:2] != b"\x06\x80":
         raise RuntimeError(
             "deadline client sent another request instead of disconnecting"
         )
+
+
+def _decode_next_request(frame: bytes) -> bytes | None:
+    # Expiry can occur after a reply, before the next continuation is sent.
+    # Only a complete DR is an allowed alternative; malformed frames still fail.
+    if len(frame) >= 2 and frame[1] == 0x80:
+        _disconnected(frame)
+        return None
+    if len(frame) < 13 or frame[:3] != b"\x02\xf0\x80":
+        raise RuntimeError("expected deadline-test S7 request or disconnect")
+    return frame[3:]
+
+
+def _next_request(connection: socket.socket) -> bytes | None:
+    return _decode_next_request(_receive(connection))
+
+
+def _self_test() -> None:
+    request = b"\x32\x01" + bytes(8)
+    if _decode_next_request(b"\x02\xf0\x80" + request) != request:
+        raise AssertionError("deadline peer changed an ordinary request")
+    dr = b"\x06\x80\0\x01\0\x02\0"
+    if _decode_next_request(dr) is not None:
+        raise AssertionError("deadline peer rejected between-exchange disconnect")
+    for frame in (
+        b"",
+        b"\x06\x80",
+        dr[:-1],
+        dr + b"\0",
+        b"\x05" + dr[1:],
+        b"\x02\xf0\x80",
+    ):
+        try:
+            _decode_next_request(frame)
+        except RuntimeError:
+            continue
+        raise AssertionError("deadline peer accepted a malformed frame")
 
 
 def _delay(connection: socket.socket, interval: float) -> bool:
@@ -103,7 +140,9 @@ def _serve(
                 _disconnected(_receive(connection))
                 return
             if operation == "upload":
-                start = _request(connection)
+                start = _next_request(connection)
+                if start is None:
+                    return
                 if start[10] != 0x1D:
                     raise RuntimeError("expected START_UPLOAD")
                 reference = int.from_bytes(start[4:6], "big")
@@ -115,7 +154,9 @@ def _serve(
                 else bytes([0, 1, 0x10, 2])
             )
             for index in range(4):
-                request = _request(connection)
+                request = _next_request(connection)
+                if request is None:
+                    return
                 reference = int.from_bytes(request[4:6], "big")
                 if operation == "upload":
                     if request[10] != 0x1E or request[17] != 1:
@@ -142,7 +183,9 @@ def _serve(
                     return
                 _send(connection, bytes([2, 0xF0, 0x80]) + response)
             if operation == "upload":
-                end = _request(connection)
+                end = _next_request(connection)
+                if end is None:
+                    return
                 if end[10] != 0x1F or end[17] != 1:
                     raise RuntimeError("invalid END_UPLOAD request")
                 if not _delay(connection, interval):
@@ -155,6 +198,7 @@ def _serve(
 
 
 def run_transfer_deadlines(root: Path) -> None:
+    _self_test()
     for operation in ("upload", "szl", "userdata"):
         cases = [
             (250, "0", 0, "timeout"),

@@ -9,7 +9,15 @@ import subprocess
 import threading
 from pathlib import Path
 
-from transfer_deadlines import _ack, _delay, _disconnected, _receive, _request, _send
+from transfer_deadlines import (
+    _ack,
+    _decode_next_request,
+    _delay,
+    _disconnected,
+    _receive,
+    _request,
+    _send,
+)
 
 
 def _handshake(listener: socket.socket) -> socket.socket:
@@ -34,19 +42,13 @@ def _job(reference: int, function: int) -> bytes:
 
 
 def _next_request(connection: socket.socket) -> bytes | None:
-    frame = _receive(connection)
-    if len(frame) >= 2 and frame[1] == 0x80:
-        # Expiration between a reply and the next request is also legitimate;
-        # the Lean command independently checks the expected outcome.
-        _disconnected(frame)
-        return None
-    if frame[:3] != b"\x02\xf0\x80":
-        raise RuntimeError("expected extended deadline S7 request")
-    return frame[3:]
+    return _decode_next_request(_receive(connection))
 
 
 def _download(connection: socket.socket, interval: float) -> None:
-    start = _request(connection)
+    start = _next_request(connection)
+    if start is None:
+        return
     if start[10] != 0x1A:
         raise RuntimeError("expected deadline REQUEST_DOWNLOAD")
     _send(
@@ -76,10 +78,14 @@ def _download(connection: socket.socket, interval: float) -> None:
     if not _delay(connection, interval):
         return
     _send(connection, b"\x02\xf0\x80" + _job(reference, 0x1C))
-    ended = _request(connection)
+    ended = _next_request(connection)
+    if ended is None:
+        return
     if ended[12:] != b"\x1c":
         raise RuntimeError("invalid deadline DOWNLOAD_ENDED acknowledgment")
-    insert = _request(connection)
+    insert = _next_request(connection)
+    if insert is None:
+        return
     if b"_INSE" not in insert:
         raise RuntimeError("deadline download did not insert block")
     if not _delay(connection, interval):
@@ -154,7 +160,8 @@ def _serve(
             # Spend most of the whole budget before the initial retry. A fresh
             # budget after reconnect would allow the complete transfer to finish.
             with connection:
-                _request(connection)
+                if _next_request(connection) is None:
+                    return
                 if not _delay(connection, 0.23):
                     return
             connection = _handshake(listener)
