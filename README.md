@@ -41,7 +41,7 @@ Experimental: the main classic client surface is implemented, but real-controlle
 compatibility is unvalidated. Do not connect this software to production equipment.
 See the [completion matrix](docs/COMPLETENESS.md) and
 [supported profile and release gates](docs/RELEASE.md).
-Version 0.1.0 release notes are in [docs/releases/0.1.0.md](docs/releases/0.1.0.md).
+Version 0.1.1 release notes are in [docs/releases/0.1.1.md](docs/releases/0.1.1.md).
 
 Implemented:
 

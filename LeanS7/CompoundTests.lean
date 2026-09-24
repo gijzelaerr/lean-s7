@@ -20,15 +20,17 @@ private def wait [Repr α] (task : Task (Except IO.Error α)) : IO α := do
   | .ok value => pure value
   | .error error => throw error
 
-def runIntegration (host portString mode : String) : IO Unit := do
+def runIntegration (host portString mode : String) (freshBudgetControl : Bool := false) : IO Unit := do
   let some port := portString.toNat? | throw <| IO.userError "invalid port"
   let some address := Std.Net.IPv4Addr.ofString host | throw <| IO.userError "invalid host"
   let deadlineCase := mode.endsWith "deadline"
+  unless !freshBudgetControl || deadlineCase do
+    throw <| IO.userError "fresh-budget control requires a deadline scenario"
   let client ← Client.connect {
     endpoint := .ipv4 address, port := UInt16.ofNat port
     connectTimeoutMs := some 1000
-    operationTimeoutMs := some (if deadlineCase then 500 else 2000)
-    transferReceiveTimeoutMs := some (if deadlineCase then 250 else 6000)
+    operationTimeoutMs := some (if deadlineCase then 6000 else 2000)
+    transferReceiveTimeoutMs := some (if deadlineCase then 3000 else 6000)
     reconnectRetries := if mode == "bit-drop" then 1 else 0
     allowPotentiallyMutatingRetries := mode == "bit-drop"
   }
@@ -61,7 +63,14 @@ def runIntegration (host portString mode : String) : IO Unit := do
       wait competing
     else
       let error ← try
-        if mode.startsWith "bit-" then writeBit client mode 0
+        if freshBudgetControl then
+          -- Deliberately incorrect test-only substitute: separate public calls
+          -- each obtain a fresh transfer budget. The peer must reject this.
+          let headerSize := if mode.startsWith "bit-" then 1 else if mode.startsWith "wstring" then 4 else 2
+          let header ← client.dbRead 1 0 headerSize
+          if mode.startsWith "bit-" then client.dbWrite 1 0 (header.set! 0 (header[0]! ||| 1))
+          else discard <| client.dbRead 1 0 222
+        else if mode.startsWith "bit-" then writeBit client mode 0
         else discard <| readText client mode
         pure (none : Option IO.Error)
       catch error => pure (some error)

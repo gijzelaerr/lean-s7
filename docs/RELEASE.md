@@ -3,8 +3,9 @@
 ## Current profile
 
 This is an experimental classic S7comm Lean client and executable specification,
-not a production-qualified driver. Version 0.1.0 is the approved initial
-experimental release, not a compatibility certification. See
+not a production-qualified driver. Version 0.1.0 was the initial experimental
+release; 0.1.1 repairs the compound deadline test fixture and strengthens its
+negative controls. Neither is a compatibility certification. See
 [the completion matrix](COMPLETENESS.md) for the bounded feature scope and open
 gates. S7comm Plus, optimized symbolic access, a native server, and python-snap7
 API parity are not release requirements for this profile.

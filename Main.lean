@@ -705,6 +705,8 @@ def main (args : List String) : IO Unit := do
       ConcurrencyTests.runIntegration host port mode
   | ["integration-compound", host, port, mode] =>
       CompoundTests.runIntegration host port mode
+  | ["integration-compound-fresh-budget", host, port, mode] =>
+      CompoundTests.runIntegration host port mode true
   | ["integration-queued-lifecycle", host, port, mode] =>
       QueuedLifecycleTests.runIntegration host port mode
   | ["integration-resource-stress", host, port] =>

@@ -7,9 +7,12 @@ percentage estimate or a claim that all classic S7 services have been specified.
 
 Baseline: 2026-09-24. Code and evidence on the current branch may be unpublished;
 a local passing check is not a passing check of a published release.
-The owner approved initial experimental version 0.1.0. Its release candidate
-adds full Linux/macOS CI and [official native endpoint cross-tests](../reports/native-interop-2026-09-24.md);
-publication awaits exact-revision hosted results, not hardware qualification.
+Experimental 0.1.0 was published after its exact branch revision passed Linux
+and macOS. The repeated tag run exposed a remaining compound-deadline fixture
+race. The owner approved a fix-forward 0.1.1 release; see
+[the patch validation record](../reports/release-readiness-0.1.1-2026-09-24.md).
+Full Linux/macOS CI and [official native endpoint cross-tests](../reports/native-interop-2026-09-24.md)
+remain required evidence, not hardware qualification.
 
 ## Scope and meaning of completion
 

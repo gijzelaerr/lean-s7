@@ -23,6 +23,22 @@ _BARRIERS = {
     "wstring-success",
 }
 
+# Client test budget: 3 s. A first 1 s stage leaves 2 s of the shared budget;
+# a 2.5 s second-stage window expires it, but not a fresh 3 s stage budget.
+# Keep these independent peer windows explicit, rather than deriving them
+# from the implementation's configured deadline.
+_INITIAL_DEADLINE_DELAY = 1.0
+_SECOND_DEADLINE_WINDOW = 2.5
+_DEADLINE_MODES = ("string-deadline", "wstring-deadline", "bit-deadline")
+
+
+def _refresh_diagnostic(mode: str) -> str:
+    return (
+        "bit write refreshed its receive budget"
+        if mode == "bit-deadline"
+        else "compound body refreshed its receive budget"
+    )
+
 
 def _read_reply(connection: socket.socket, request: bytes, data: bytes) -> None:
     reference = int.from_bytes(request[4:6], "big")
@@ -83,7 +99,9 @@ def _serve(
                 for index in range(1 if mode in ("bit-drop", "bit-deadline") else 8):
                     request = first if index == 0 else _request(connection)
                     _check(request, 4, 0, 1, area)
-                    if mode == "bit-deadline" and not _delay(connection, 0.15):
+                    if mode == "bit-deadline" and not _delay(
+                        connection, _INITIAL_DEADLINE_DELAY
+                    ):
                         raise RuntimeError(
                             "bit deadline expired before its initial response"
                         )
@@ -108,8 +126,8 @@ def _serve(
                         )
                     value = updated
                     if mode == "bit-deadline":
-                        if _delay(connection, 0.15):
-                            raise RuntimeError("bit write refreshed its receive budget")
+                        if _delay(connection, _SECOND_DEADLINE_WINDOW):
+                            raise RuntimeError(_refresh_diagnostic(mode))
                         return
                     if mode == "bit-drop":
                         connection.shutdown(socket.SHUT_RDWR)
@@ -148,7 +166,9 @@ def _serve(
                     data = (
                         header + text + bytes(maximum * (2 if wide else 1) - len(text))
                     )
-                if mode.endswith("deadline") and not _delay(connection, 0.15):
+                if mode.endswith("deadline") and not _delay(
+                    connection, _INITIAL_DEADLINE_DELAY
+                ):
                     raise RuntimeError("compound timed out before valid first response")
                 _read_reply(connection, first, data[:header_size])
                 if mode.endswith(("capacity-shrink", "capacity-grow")):
@@ -173,10 +193,8 @@ def _serve(
                     count = min(222, len(data) - offset)
                     _check(request, 4, offset, count)
                     if mode.endswith("deadline"):
-                        if _delay(connection, 0.15):
-                            raise RuntimeError(
-                                "compound body refreshed its receive budget"
-                            )
+                        if _delay(connection, _SECOND_DEADLINE_WINDOW):
+                            raise RuntimeError(_refresh_diagnostic(mode))
                         return
                     _read_reply(connection, request, data[offset : offset + count])
                 if barrier:
@@ -205,7 +223,9 @@ def _serve(
         pending.set()
 
 
-def run_compound_operations(root: Path) -> None:
+def run_compound_operations(root: Path, deadline_rounds: int = 2) -> None:
+    if not 1 <= deadline_rounds <= 10:
+        raise ValueError("compound deadline rounds must be between 1 and 10")
     modes = (
         "bit-db",
         "bit-input",
@@ -228,7 +248,12 @@ def run_compound_operations(root: Path) -> None:
         "bit-drop",
         "bit-deadline",
     )
-    for mode in modes:
+    cases = [(mode, False) for mode in modes]
+    cases += [
+        (mode, False) for _ in range(deadline_rounds - 1) for mode in _DEADLINE_MODES
+    ]
+    cases += [(mode, True) for mode in _DEADLINE_MODES]
+    for mode, fresh_budget_control in cases:
         errors: list[Exception] = []
         pending, release = threading.Event(), threading.Event()
         with socket.socket() as listener:
@@ -242,7 +267,9 @@ def run_compound_operations(root: Path) -> None:
             process = subprocess.Popen(
                 [
                     str(root / ".lake/build/bin/lean-s7"),
-                    "integration-compound",
+                    "integration-compound-fresh-budget"
+                    if fresh_budget_control
+                    else "integration-compound",
                     "127.0.0.1",
                     str(listener.getsockname()[1]),
                     mode,
@@ -268,9 +295,10 @@ def run_compound_operations(root: Path) -> None:
                         raise RuntimeError("compound competing task barrier failed")
                     release.set()
                 stdout, stderr = process.communicate(timeout=12)
-                if process.returncode:
+                if process.returncode and not fresh_budget_control:
                     raise RuntimeError(f"compound {mode} failed: {stdout}{stderr}")
-                print(stdout.strip())
+                if not fresh_budget_control:
+                    print(stdout.strip())
             finally:
                 release.set()
                 if process.poll() is None:
@@ -279,6 +307,23 @@ def run_compound_operations(root: Path) -> None:
                 worker.join(timeout=6)
             if worker.is_alive():
                 raise RuntimeError("compound peer did not finish")
-            if errors:
+            if fresh_budget_control:
+                # A crash, an earlier timeout, or a malformed request is not
+                # evidence that the oracle detects budget refresh. Require
+                # its precise second-stage diagnostic and client failure.
+                if (
+                    process.returncode == 0
+                    or len(errors) != 1
+                    or str(errors[0]) != _refresh_diagnostic(mode)
+                ):
+                    raise RuntimeError(
+                        f"fresh-budget mutation missed its diagnostic: {mode}; "
+                        f"errors={errors}; client={stdout}{stderr}"
+                    )
+                print(f"compound fresh-budget mutation rejected: {mode}")
+            elif errors:
                 raise errors[0]
-    print(f"compound peers passed: {len(modes)} scenarios")
+    print(
+        f"compound peers passed: {len(modes)} scenarios, "
+        f"{deadline_rounds} deadline rounds, 3 fresh-budget negative controls"
+    )
