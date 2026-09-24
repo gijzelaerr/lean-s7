@@ -1,5 +1,49 @@
 # Classic S7 emulator-only assurance — 2026-09-23
 
+## Completion closure — 2026-09-24 (locally validated)
+
+- Four parallel tracks: finite scoped completion matrix; lossless block-info
+  subtype and returned-number correlation; seeded live correlation/rejection/
+  terminal reuse coverage; supported-profile/release documentation and isolated
+  external Lake consumer smoke. No physical PLC or hard cancellation claim.
+- Working on the existing coherent branch; two previously validated local
+  commits remain unpublished. No new push, PR or merge is authorized by this
+  implementation request. Combined clean validation follows source freeze.
+- Finite matrix and support/release gates authored; isolated external Lake
+  consumer passes public import/proof/codec/Client API smoke without sockets.
+  New live correlation campaign passes16histories/144operations/200staleACKs.
+  Selected model/live differences are explicitly mapped rather than hidden.
+- Native cross-check discovered a shared block-info request defect: Lean and
+  pinned emulator placed the `A` marker before the five digits. Native layout
+  places it after. Codec, exact goldens/corpus, scripted peer and local emulator
+  now use the native layout; underlying python-snap7 repository is unchanged.
+  Local emulator controls pass four distinct identities and nine rejections;
+  malformed/missing identities never default to DB1, and errors retain service
+  correlation. Final combined validation is pending source freeze.
+- Source freeze reached: all focused block/live/native/oracle checks pass.
+  Root-owned final clean build of all four targets is running; no further
+  build/clean mutations are permitted while executable consumers run afterward.
+  Three new numeric profile/correlation contracts have standard axioms only.
+- Final clean build passes163jobs. All native tests and all eight exact corpus
+  comparisons pass; root independently checked three new theorem dependencies
+  and core assurance (standard propext/Classical.choice/Quot.sound only).
+  Ruff0.16.8 passes all42integrationPythonfiles; cached pinned actionlint1.7.7
+  passes both workflows. Complete localhost integration and extended fuzz run
+  are in progress; no further source/build mutations.
+- Final complete pinned python-snap73.0.0 emulator/scripted-peer suite passes,
+  including new16mixedcorrelation histories/144operations/200staleACKs,
+  five block-info identity/preflight peers, four emulator identities/nine
+  rejections, external Lake consumer, all prior campaigns and default pure fuzz.
+  Extended pure fuzz separately passes1,024histories/23,730events again.
+- Resource stress passes216attempts/54retryreconnects: descriptors8/8, threads7/7,
+  RSS baseline5,718,016bytes and peak5,783,552bytes (+65,536bytes). This remains
+  bounded local regression evidence, not leak freedom or native cancellation.
+- All four requested implementation tracks are locally validated and ready for
+  owner review against docs/COMPLETENESS.md. Controller qualification, hard
+  cancellation and exact-revision remote platform checks remain unverified.
+  Recording one related local commit under standing approval; no push, PR,
+  release tag or merge. Underlying python-snap7 repository remains untouched.
+
 ## Scope
 
 Continued classic S7 client assurance without access to a physical PLC. Evidence

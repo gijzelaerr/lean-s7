@@ -42,6 +42,22 @@ def BlockType.ofCode : UInt8 → Option BlockType
   | 0x46 => some .systemFunctionBlock
   | _ => none
 
+/-- Compact block-header subtype, distinct from the directory/request code. -/
+def BlockType.subCode : BlockType → UInt8
+  | .organizationBlock => 0x08
+  | .dataBlock => 0x0a
+  | .systemDataBlock => 0x0b
+  | .function => 0x0c
+  | .systemFunction => 0x0d
+  | .functionBlock => 0x0e
+  | .systemFunctionBlock => 0x0f
+
+/-- Block-info replies carry a 16-bit number even though the request codec has
+    five decimal positions. The correlated client supports only that identity
+    domain; the low-level codec remains available for independent profiles. -/
+def validateBlockInfoNumber (number : Nat) : Except EncodeError Unit := do
+  if number > 65535 then throw (.invalidSize number)
+
 structure BlockCounts where
   organizationBlocks : UInt16 := 0
   dataBlocks : UInt16 := 0
@@ -89,7 +105,7 @@ def encodeGetBlockInfo (reference : UInt16) (blockType : BlockType) (number : Na
   let numberBytes ← decimal5 number
   encodeUserDataHeader reference
     (userDataParameters blocksInfoGroup blockInfoSubfunction 0 false)
-    (bytes #[0xff, octetTransportSize, 0, 8, 0x30, blockType.code, 0x41] ++ numberBytes)
+    (bytes #[0xff, octetTransportSize, 0, 8, 0x30, blockType.code] ++ numberBytes ++ bytes #[0x41])
 
 def decodeBlockCounts (payload : ByteArray) : Except DecodeError BlockCounts := do
   if payload.size != 28 then
@@ -144,7 +160,10 @@ def decodeBlockEntries (payload : ByteArray) : Except DecodeError (Array BlockEn
   return result
 
 structure BlockInfo where
+  /-- Outer response field at payload offset 1; not native Snap7's public subtype. -/
   blockType : UInt8
+  /-- Compact block-header subtype at payload offset 11, retained without normalization. -/
+  subBlockType : UInt8 := 0
   number : UInt16
   language : UInt8
   flags : UInt8
@@ -160,6 +179,13 @@ structure BlockInfo where
   family : String
   name : String
   deriving BEq
+
+/-- Correlate without truncating the requested number. Type fields remain
+    opaque: strict firmware-wide identity rules have not been established. -/
+def correlateBlockInfo (number : Nat) (info : BlockInfo) : Except DecodeError BlockInfo := do
+  if info.number.toNat != number then
+    throw (.invalidField 12 s!"block-info number mismatch: expected {number}, got {info.number}")
+  return info
 
 structure ForceEntry where
   areaCode : UInt16
@@ -207,6 +233,7 @@ def decodeBlockInfo (payload : ByteArray) : Except DecodeError BlockInfo := do
   let dwordAt (offset : Nat) := (Cursor.readUInt32BE { data := payload, offset }).map Prod.fst
   return {
     blockType := ← byteAt 1
+    subBlockType := ← byteAt 11
     flags := ← byteAt 9
     language := ← byteAt 10
     number := ← wordAt 12

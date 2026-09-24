@@ -435,11 +435,16 @@ def Client.listBlocksOfType (client : Client) (blockType : S7.BlockType) :
       client.closeCurrent
       throw error
 
+/-- Return numerically correlated block metadata for numbers 0..65535. Both
+    type fields remain opaque: not all peers populate them consistently. -/
 def Client.getBlockInfo (client : Client) (blockType : S7.BlockType) (number : Nat) :
     IO S7.BlockInfo := do
+  inputOrThrow <| S7.validateBlockInfoNumber number
   let reference ← client.freshReference
   let request ← inputOrThrow <| S7.encodeGetBlockInfo reference blockType number
-  client.readUserDataValue reference S7.blocksInfoGroup S7.blockInfoSubfunction request S7.decodeBlockInfo
+  client.readUserDataValue reference S7.blocksInfoGroup S7.blockInfoSubfunction request fun payload => do
+    let info ← S7.decodeBlockInfo payload
+    S7.correlateBlockInfo number info
 
 private def uploadSafetyLimit : Nat := 64 * 1024 * 1024
 

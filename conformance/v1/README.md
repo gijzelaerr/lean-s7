@@ -116,6 +116,12 @@ cover partial four-byte records.
 `block_info_cases` contains raw 78-byte block-metadata response payloads with
 typed size, identity, date, and text fields. Both truncation and trailing bytes
 must be rejected.
+The accepted `info` expectation includes additive `sub_block_type` (payload
+offset 11); `block_type` retains the outer byte at offset 1. Neither is normalized
+to a request/directory type code. Consumers must not equate the fields. The
+typed client's number-correlation policy is documented separately in
+[the supported profile](../../docs/RELEASE.md) and
+[block-info evidence](../../reports/block-management-2026-09-24.md).
 
 ## Chunk cases
 

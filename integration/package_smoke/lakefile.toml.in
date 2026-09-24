@@ -1,0 +1,10 @@
+name = "classic-consumer-smoke"
+defaultTargets = ["consumer-smoke"]
+
+[[require]]
+name = "lean-s7"
+path = @REPOSITORY_PATH@
+
+[[lean_exe]]
+name = "consumer-smoke"
+root = "Main"

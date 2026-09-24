@@ -296,7 +296,7 @@ structure BlockInfoCase where
   expected : Option S7.BlockInfo
 
 private def completeBlockInfo : ByteArray :=
-  bytes #[0, 0x41, 0, 0, 0, 0, 0, 0, 0, 0xaa, 5, 0, 0, 1,
+  bytes #[0, 0x41, 0, 0, 0, 0, 0, 0, 0, 0xaa, 5, 0x0a, 0, 1,
     0, 0, 1, 0, 0, 0, 0, 0,
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
     0, 0x10, 0, 0, 0, 0x20, 0, 0x30] ++
@@ -305,7 +305,7 @@ private def completeBlockInfo : ByteArray :=
 
 def blockInfoCases : Array BlockInfoCase := #[
   ⟨"complete-block-info", completeBlockInfo, some {
-    blockType := 0x41, number := 1, language := 5, flags := 0xaa,
+    blockType := 0x41, subBlockType := 0x0a, number := 1, language := 5, flags := 0xaa,
     mc7Size := 0x30, loadSize := 0x100, localDataSize := 0x20, sbbSize := 0x10,
     checksum := 0xbeef, version := 0x12,
     codeDateRaw := bytes #[1, 2, 3, 4, 5, 6],
@@ -430,6 +430,7 @@ private def blockEntriesCaseJson (test : BlockEntriesCase) : Json := Json.mkObj 
 
 private def blockInfoJson (info : S7.BlockInfo) : Json := Json.mkObj [
   ("block_type", toJson info.blockType.toNat), ("number", toJson info.number.toNat),
+  ("sub_block_type", toJson info.subBlockType.toNat),
   ("language", toJson info.language.toNat), ("flags", toJson info.flags.toNat),
   ("mc7_size", toJson info.mc7Size.toNat), ("load_size", toJson info.loadSize.toNat),
   ("local_data_size", toJson info.localDataSize.toNat), ("sbb_size", toJson info.sbbSize.toNat),

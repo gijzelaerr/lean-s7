@@ -13,6 +13,31 @@ theorem BlockType.code_injective (left right : BlockType)
   have := congrArg BlockType.ofCode h
   simpa only [BlockType.ofCode_code, Option.some.injEq] using this
 
+/-- The supported correlated-client number profile fits the response field. -/
+theorem validateBlockInfoNumber_bound (number : Nat)
+    (h : validateBlockInfoNumber number = .ok ()) : number ≤ 65535 := by
+  by_cases hn : number > 65535
+  · simp [validateBlockInfoNumber, hn, throw] at h
+  · omega
+
+/-- Successful correlation never aliases a large requested number by truncation. -/
+theorem correlateBlockInfo_number (number : Nat) (info result : BlockInfo)
+    (h : correlateBlockInfo number info = .ok result) : result.number.toNat = number := by
+  by_cases hn : info.number.toNat = number
+  · simp [correlateBlockInfo, hn, pure, Except.pure] at h
+    subst result
+    exact hn
+  · simp [correlateBlockInfo, hn, bind, Except.bind, throw] at h
+
+/-- Numeric correlation does not normalize or erase either type field. -/
+theorem correlateBlockInfo_identity (number : Nat) (info result : BlockInfo)
+    (h : correlateBlockInfo number info = .ok result) : result = info := by
+  unfold correlateBlockInfo at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  split at h
+  · contradiction
+  · exact (Except.ok.inj h).symm
+
 /-- Successful decoding of arbitrary count payloads requires seven complete
     four-byte records. This theorem is not restricted to encoded fixtures. -/
 theorem decodeBlockCounts_extent (payload : ByteArray) (result : BlockCounts)

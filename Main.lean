@@ -20,6 +20,8 @@ import LeanS7.RetryBudgetTests
 import LeanS7.ScalabilityBenchTests
 import LeanS7.ReconnectFaultTests
 import LeanS7.UserDataAssuranceTests
+import LeanS7.LiveCorrelationTests
+import LeanS7.BlockInfoClientTests
 
 open LeanS7 Std.Net
 
@@ -237,6 +239,7 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
       throw <| IO.userError "block-list query did not return DB1"
     let blockInfo ← client.getBlockInfo .dataBlock 1
     unless blockInfo.number == 1 && blockInfo.mc7Size == 4096 &&
+        blockInfo.blockType == 0x41 && blockInfo.subBlockType == 0x0a &&
         blockInfo.author == "SNAP7EMU" do
       throw <| IO.userError "block metadata parsing mismatch"
     let fullBlock ← client.fullUpload .dataBlock 1
@@ -690,6 +693,10 @@ def runMultiBatchingIntegration (host portString pduString countString sizeStrin
 
 def main (args : List String) : IO Unit := do
   match args with
+  | ["integration-block-info-identity", host, port, scenario] =>
+      BlockInfoClientTests.runIntegration host port scenario
+  | ["integration-live-correlation", host, port, plan] =>
+      LiveCorrelationTests.runIntegration host port plan
   | ["integration", host, port] => runIntegration host port
   | ["integration-concurrency", host, port, mode] =>
       ConcurrencyTests.runIntegration host port mode

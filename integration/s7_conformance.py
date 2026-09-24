@@ -228,6 +228,9 @@ def block_info_case(test):
     info = expected["info"]
     comparable = {
         "block_type": actual["block_type"],
+        # The legacy Python parser exposes only the outer field. Cross-check the
+        # additive compact-header subtype directly, without changing that API.
+        "sub_block_type": test["payload"][11],
         "number": actual["block_number"],
         "language": actual["block_lang"],
         "flags": actual["block_flags"],

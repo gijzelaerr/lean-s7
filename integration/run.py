@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import sequence_conformance
+from block_info_identity import run_block_info_identity
 from boundary_operations import run_boundary_operations
 from clock_assurance import run_clock_assurance
 from compound_operations import run_compound_operations
@@ -20,12 +21,14 @@ from conversation_conformance import run as run_conversation_conformance
 from extended_deadlines import run_extended_deadlines
 from generative_reconnect import run as run_generative_reconnect
 from import_boundaries import run as run_import_boundaries
+from live_correlation import run as run_live_correlation
 from management_conformance import run as run_management_conformance
 from mixed_operations import run_mixed_operations
 from multi_batching import run_multi_batching
 from multi_semantics import run_multi_semantics
 from operation_conformance import run as run_operation_conformance
 from overlap_operations import run_overlap_operations
+from package_smoke import run as run_package_smoke
 from queued_batches import run_queued_batches
 from queued_lifecycle import run_queued_lifecycle
 from reconnect_faults import run_reconnect_faults
@@ -177,6 +180,43 @@ class MultiItemServer(Server):
     def _szl_record(record_length: int, records: list[bytes]) -> bytes:
         assert all(len(record) == record_length for record in records)
         return struct.pack(">HH", record_length, len(records)) + b"".join(records)
+
+    def _handle_get_block_info(
+        self, request: dict, userdata_params: dict, client_address: tuple[str, int]
+    ) -> bytes:
+        """Model the native five-digit request, without the pinned parser's fallback."""
+        raw = request.get("data", {}).get("data", b"")
+
+        def rejected() -> bytes:
+            # Retain this service's correlation metadata; the pinned generic
+            # error builder hard-codes the unrelated SZL group/subfunction.
+            reply = self._build_userdata_success_response(request, userdata_params, b"")
+            return reply[:20] + b"\x81\x04" + reply[22:]
+
+        if (
+            len(raw) != 8
+            or raw[:2] != b"\x30\x41"
+            or raw[7] != 0x41
+            or any(not 0x30 <= digit <= 0x39 for digit in raw[2:7])
+        ):
+            return rejected()
+        number = int(raw[2:7])
+        memory = self.memory_areas.get((S7Area.DB, number))
+        # This fixture exposes a 16-bit number and MC7 size, not all block types.
+        if memory is None or number > 65535 or len(memory) > 65535:
+            return rejected()
+        payload = bytearray(78)
+        payload[0], payload[1], payload[11] = 0x30, 0x41, 0x0A
+        struct.pack_into(">H", payload, 12, number)
+        struct.pack_into(">I", payload, 14, len(memory))
+        struct.pack_into(">H", payload, 40, len(memory))
+        payload[42:50] = b"SNAP7EMU"
+        payload[50:58] = b"EMULATOR"
+        payload[58:60] = b"DB"
+        payload[66] = 1
+        return self._build_userdata_success_response(
+            request, userdata_params, bytes(payload)
+        )
 
     def _get_szl_data(self, szl_id: int, szl_index: int) -> bytes | None:
         if szl_id == 0x0000:
@@ -1508,8 +1548,55 @@ def run_transport_failures(root: Path) -> None:
                 raise errors[0]
 
 
+def check_emulator_block_info() -> None:
+    """No sockets: distinguish identities and reject legacy/malformed requests."""
+    server = MultiItemServer()
+    parameters = {"group": 3, "subfunction": 3, "sequence": 0}
+    try:
+        for number, size in ((0, 17), (1, 19), (2, 23), (65535, 29)):
+            server.register_area(SrvArea.DB, number, bytearray(size))
+            raw = b"\x30\x41" + f"{number:05d}".encode() + b"A"
+            reply = server._handle_get_block_info(
+                {"sequence": 22, "data": {"data": raw}}, parameters, ("127.0.0.1", 0)
+            )
+            if (
+                reply[4:6] != b"\x00\x16"
+                or reply[15:17] != b"\x83\x03"
+                or reply[20:26] != b"\x00\x00\xff\x09\x00\x4e"
+                or len(reply) != 104
+                or reply[27] != 0x41
+                or reply[37] != 0x0A
+                or struct.unpack_from(">H", reply, 38)[0] != number
+                or struct.unpack_from(">I", reply, 40)[0] != size
+                or struct.unpack_from(">H", reply, 66)[0] != size
+            ):
+                raise AssertionError("emulator block-info identity/layout mismatch")
+        for raw in (
+            b"\x30\x41A00001",  # old shared codec/emulator bug
+            b"\x30\x410000xA",
+            b"\x30\x4100001B",
+            b"\x30\x4100001",
+            b"\x30\x4100001AA",
+            b"\x31\x4100001A",
+            b"\x30\x4300001A",  # fixture supports only DB metadata
+            b"\x30\x4100003A",  # no fallback to DB1 on missing identity
+            b"\x30\x4199999A",
+        ):
+            reply = server._handle_get_block_info(
+                {"sequence": 22, "data": {"data": raw}}, parameters, ("127.0.0.1", 0)
+            )
+            if reply[15:17] != b"\x83\x03" or reply[20:22] != b"\x81\x04":
+                raise AssertionError(
+                    "emulator accepted malformed/unsupported block identity"
+                )
+    finally:
+        server.destroy()
+    print("emulator block-info controls passed: four identities and nine rejections")
+
+
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
+    check_emulator_block_info()
     port = free_port()
     areas = {
         (SrvArea.DB, 1): bytearray(4096),
@@ -1593,6 +1680,8 @@ def main() -> None:
         run_retry_budgets(root)
         run_reconnect_faults(root)
         run_generative_reconnect(root)
+        run_live_correlation(root)
+        run_block_info_identity(root)
         run_write_provenance(root)
         run_userdata_completion(root)
         run_userdata_assurance(root)
@@ -1613,6 +1702,7 @@ def main() -> None:
         run_management_conformance()
         run_session_fuzz()
         run_import_boundaries(root)
+        run_package_smoke(root)
         run_scalability_bench(rounds=1, smoke=True)
         run_multi_batching(root)
         run_multi_semantics(root)

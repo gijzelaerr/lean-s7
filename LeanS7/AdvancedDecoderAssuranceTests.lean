@@ -5,7 +5,7 @@ namespace LeanS7.AdvancedDecoderAssuranceTests
 private def check (condition : Bool) (label : String) : IO Unit := do
   unless condition do throw <| IO.userError label
 
-private def rejected {α : Type} : Except DecodeError α → Bool
+private def rejected {α ε : Type} : Except ε α → Bool
   | .error _ => true
   | .ok _ => false
 
@@ -118,11 +118,39 @@ def run : IO Unit := do
     match S7.decodeBlockInfo wire with
     | .error err => throw <| IO.userError s!"opaque block-info type rejected: {repr err}"
     | .ok result =>
-      check (result.blockType == UInt8.ofNat raw && result.codeDateRaw == bytes #[22, 23, 24, 25, 26, 27] &&
+      check (result.blockType == UInt8.ofNat raw && result.subBlockType == 11 &&
+        result.codeDateRaw == bytes #[22, 23, 24, 25, 26, 27] &&
         result.interfaceDateRaw == bytes #[28, 29, 30, 31, 32, 33] &&
         result.number == 0x0c0d && result.loadSize == 0x0e0f1011 &&
         result.sbbSize == 0x2223 && result.localDataSize == 0x2627 && result.mc7Size == 0x2829 &&
         result.version == 66 && result.checksum == 0x4445) "block-info field offsets"
+  for raw in [:256] do
+    match S7.decodeBlockInfo (blockInfo.set! 11 (UInt8.ofNat raw)) with
+    | .error err => throw <| IO.userError s!"opaque block-info subtype rejected: {repr err}"
+    | .ok result =>
+      check (result.blockType == 1 && result.subBlockType == UInt8.ofNat raw)
+        "block-info distinct subtype field"
+      check (isExpected (S7.correlateBlockInfo 0x0c0d result) result)
+        "numeric correlation retains arbitrary subtype"
+      for requested in [0, 1, 0x0c0c, 0x0c0e, 65535, 65536 + 0x0c0d, 99999] do
+        check (rejected <| S7.correlateBlockInfo requested result)
+          "block-info numeric mismatch or nontruncating high number"
+  for number in [0, 1, 65534, 65535] do
+    check (!(rejected <| S7.validateBlockInfoNumber number)) "supported block-info number"
+  for number in [65536, 99999, 100000] do
+    check (rejected <| S7.validateBlockInfoNumber number) "unsupported client block-info number"
+  check (!(rejected <| S7.encodeGetBlockInfo 1 .dataBlock 99999))
+    "five-digit low-level block-info request retained"
+  check (rejected <| S7.encodeGetBlockInfo 1 .dataBlock 100000)
+    "six-digit low-level block-info request rejected"
+  for blockType in blockTypes do
+    for (number, digits) in [(0, "00000"), (1, "00001"), (65535, "65535"), (99999, "99999")] do
+      let expected := bytes #[0x32, 7, 0, 0, 0x12, 0x34, 0, 8, 0, 12,
+        0, 1, 0x12, 4, 0x11, 0x43, 3, 0,
+        0xff, 9, 0, 8, 0x30, blockType.code] ++ digits.toUTF8 ++ bytes #[0x41]
+      match S7.encodeGetBlockInfo 0x1234 blockType number with
+      | .ok actual => check (actual == expected) "native block-info ASCII number precedes final A"
+      | .error err => throw <| IO.userError s!"block-info golden encoding rejected: {repr err}"
   for bit in [:256] do
     for value in [:256] do
       let wire := forceRecord (UInt8.ofNat bit) (UInt8.ofNat value)
