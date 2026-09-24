@@ -66,3 +66,20 @@ Further validation and publication results will be appended before release.
   Extended pure-model differential campaign also passed 1,024 histories /
   23,730 events on the unchanged model. Awaiting the fix-forward candidate's
   exact-revision hosted results before tagging; no release tag yet.
+
+- Candidate `00d13bd` passed native tests on both platforms. macOS then exposed
+  another fixture race: the initial retry peer waits 230 ms before closing,
+  while the client test allowed only 250 ms to observe that EOF. An exchange
+  timeout can make the peer return before entering the reconnect handshake.
+  Raised only retry-fixture exchange allowance to 1,000 ms and its successful
+  transfer allowance to 2,000 ms. The rejection control retains its original
+  420 ms shared transfer deadline, so reconnect must still not reset it.
+  Production defaults/deadlines are unchanged. Full local checks will repeat.
+
+- Retry-fixture fix-forward passed the full local clean build, native suite,
+  eight exact corpus reproductions, complete emulator/fault integration,
+  independent native profiles, Ruff lint/format, actionlint and whitespace
+  checks. Resource stress again held descriptors 8→8 and threads 7→7 across
+  216 attempts / 54 retry reconnects (RSS 5,701,632→5,783,552 bytes). Local native
+  library SHA256: `cd50afa408251588a7a781dc7083f34a5cb8d3bc4bc6aa561d05b6bdddb220b8`.
+  Ready for the next exact-revision hosted gate; release remains unpublished.

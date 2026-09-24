@@ -194,7 +194,12 @@ def run_extended_deadlines(root: Path) -> None:
         elif operation.endswith("-continuation-retry"):
             cases = [(120, "600", 0.25, "timeout")]
         elif operation.endswith("-retry"):
-            cases = [(250, "420", 0.23, "timeout"), (250, "1000", 0.01, "accept")]
+            # The peer closes the first connection after 230 ms. A 250 ms
+            # exchange limit leaves only 20 ms to observe EOF: a slow runner
+            # can time out and disconnect the peer before it reaches its
+            # reconnect handshake. Keep the short shared-transfer rejection
+            # budget, but give the exchange/positive controls genuine slack.
+            cases = [(1000, "420", 0.23, "timeout"), (1000, "2000", 0.01, "accept")]
         else:
             cases += [
                 (250, "0", 0, "timeout"),
