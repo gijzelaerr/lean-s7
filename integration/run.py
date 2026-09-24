@@ -9,6 +9,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import sequence_conformance
 from block_info_identity import run_block_info_identity
@@ -1400,6 +1401,37 @@ def run_segmented_integration(root: Path) -> None:
         raise errors[0]
 
 
+def _receive_transport_cleanup(connection: socket.socket) -> bytes:
+    # Only used after sending test response bytes, never while parsing requests.
+    # A rejection can terminate with EOF or reset; timeout/other errors still fail.
+    try:
+        return connection.recv(1024)
+    except ConnectionResetError:
+        return b""
+
+
+def _check_transport_cleanup() -> None:
+    for event, expected in (
+        (b"", b""),
+        (b"disconnect", b"disconnect"),
+        (ConnectionResetError(), b""),
+    ):
+        connection = Mock(spec=socket.socket)
+        connection.recv.side_effect = [event]
+        if _receive_transport_cleanup(connection) != expected:
+            raise AssertionError("transport cleanup changed bytes or missed reset")
+        connection.recv.assert_called_once_with(1024)
+    for event in (TimeoutError("still open"), BrokenPipeError("unexpected error")):
+        connection = Mock(spec=socket.socket)
+        connection.recv.side_effect = event
+        try:
+            _receive_transport_cleanup(connection)
+        except OSError as error:
+            if error is event:
+                continue
+        raise AssertionError("transport cleanup swallowed an unrelated error")
+
+
 def send_trickle(
     connection: socket.socket, pieces: list[bytes], interval: float
 ) -> None:
@@ -1408,7 +1440,7 @@ def send_trickle(
         # so a broken pipe cannot disguise the client's own timeout result.
         readable, _, _ = select.select([connection], [], [], interval)
         if readable:
-            connection.recv(1024)
+            _receive_transport_cleanup(connection)
             return
         connection.sendall(piece)
 
@@ -1489,7 +1521,7 @@ def serve_transport_case(
                 raise ValueError(f"unknown transport case: {mode}")
             # Keep the stream open until the client rejects/disconnects. Missing
             # EOT must hit its receive deadline, not pass due to server-side EOF.
-            while connection.recv(1024):
+            while _receive_transport_cleanup(connection):
                 pass
         if mode == "stale-flood":
             listener.settimeout(0.5)
@@ -1505,6 +1537,7 @@ def serve_transport_case(
 
 
 def run_transport_failures(root: Path) -> None:
+    _check_transport_cleanup()
     for mode, expected in (
         ("exact-budget", "accept"),
         ("fragmented-tcp", "accept"),

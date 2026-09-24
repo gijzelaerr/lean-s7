@@ -63,3 +63,20 @@ and tag check results outside the source tree, keeping the tested commit fixed.
   [run 35982464937](https://github.com/gijzelaerr/lean-s7/actions/runs/35982464937);
   it is not evidence for this fix-forward revision. Ready to commit/push and
   verify both branch and tag runs before release publication.
+
+- Candidate `db5aad9` passed Linux. macOS passed the revised deadlines, resource
+  and lifecycle campaigns and reached the final transport tests, then reset
+  the peer's post-response `recv` during rejection cleanup. The oracle treated
+  reset as an unexpected failure although Lean separately verified its precise
+  rejection. Added a narrow cleanup-only receive helper allowing EOF/reset;
+  strict handshake/request reads and the stale-flood no-retry guard remain.
+  Self-controls verify byte preservation, EOF/reset handling and propagation of
+  timeout and unrelated socket errors. No broad exception suppression.
+
+- Cleanup fix-forward passed focused transport controls and the complete local
+  clean build (165 jobs), native suite, eight exact corpora, full emulator/fault
+  integration, independent native profiles, Ruff lint/format, actionlint and
+  whitespace checks. Resource stress: 216 attempts / 54 retry reconnects,
+  descriptors 8→8, threads 7→7, RSS 5,750,784→5,849,088 bytes. Pending TCP still
+  exits under its independent two-second limit (258 ms observed). Awaiting this
+  fix-forward revision's branch and tag checks before publishing 0.1.1.
