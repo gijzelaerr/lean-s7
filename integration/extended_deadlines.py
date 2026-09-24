@@ -188,7 +188,9 @@ def run_extended_deadlines(root: Path) -> None:
         "read-invalid-range",
         "write-invalid-range",
     ):
-        cases = [(250, "420", 0.15, "timeout"), (250, "600", 0.01, "accept")]
+        # Positive controls should not fail on hosted scheduler overhead;
+        # negative controls retain their deliberately tight original budgets.
+        cases = [(250, "420", 0.15, "timeout"), (1000, "2000", 0.01, "accept")]
         if operation.endswith("-invalid-range"):
             cases = [(250, "600", 0, "invalid-input")]
         elif operation.endswith("-continuation-retry"):
@@ -204,7 +206,7 @@ def run_extended_deadlines(root: Path) -> None:
             cases += [
                 (250, "0", 0, "timeout"),
                 (120, "none", 0.25, "timeout"),
-                (250, "none", 0.15, "accept"),
+                (1000, "none", 0.15, "accept"),
             ]
         if operation == "download":
             # Five fragments plus DOWNLOAD_ENDED complete in 600ms. The

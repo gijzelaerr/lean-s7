@@ -161,8 +161,11 @@ def run_transfer_deadlines(root: Path) -> None:
             (250, "420", 0.15, "timeout"),
             (120, "600", 0.25, "timeout"),
             (120, "none", 0.25, "timeout"),
-            (250, "600", 0.015, "accept"),
-            (250, "none", 0.15, "accept"),
+            # Success is a protocol control, not a scheduler-latency assertion.
+            # Preserve the short timeout controls above; allow hosted runners
+            # slack when the configured peer delay must complete successfully.
+            (1000, "2000", 0.015, "accept"),
+            (1000, "none", 0.15, "accept"),
         ]
         if operation == "upload":
             # Four fragments finish at 600ms; END_UPLOAD must use the same

@@ -83,3 +83,19 @@ Further validation and publication results will be appended before release.
   216 attempts / 54 retry reconnects (RSS 5,701,632→5,783,552 bytes). Local native
   library SHA256: `cd50afa408251588a7a781dc7083f34a5cb8d3bc4bc6aa561d05b6bdddb220b8`.
   Ready for the next exact-revision hosted gate; release remains unpublished.
+
+- Candidate `e4b93c8` again passed macOS native tests but a different positive
+  transfer control failed: upload with a 150 ms peer delay and a 250 ms exchange
+  allowance. Reviewed both deadline fixtures together rather than successively
+  patching individual services: all positive controls now use 1,000 ms exchange
+  allowances and 2,000 ms bounded-transfer allowances (or explicitly disabled
+  transfer limits). All original timeout/rejection controls remain unchanged,
+  including continuation, cleanup, and retry deadline tests. These changes do
+  not change production behavior or remove any tested negative scenario.
+
+- Reviewed-success-controls candidate passed the complete local clean build,
+  native tests, all eight exact corpora, full emulator/fault integration,
+  both independent native profiles, Ruff lint/format, actionlint and whitespace
+  checks. No further source changes are planned before the exact hosted gate.
+  Publication will attach an exact-commit validation record to the release
+  rather than modifying the tested source revision after CI succeeds.
