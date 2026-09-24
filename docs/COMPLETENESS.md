@@ -7,6 +7,9 @@ percentage estimate or a claim that all classic S7 services have been specified.
 
 Baseline: 2026-09-24. Code and evidence on the current branch may be unpublished;
 a local passing check is not a passing check of a published release.
+The owner approved initial experimental version 0.1.0. Its release candidate
+adds full Linux/macOS CI and [official native endpoint cross-tests](../reports/native-interop-2026-09-24.md);
+publication awaits exact-revision hosted results, not hardware qualification.
 
 ## Scope and meaning of completion
 
@@ -78,7 +81,10 @@ tool dependencies into the ordinary client; the
 | H2 — hard native cancellation | A usable cancellable-send/immediate-close runtime primitive, implementation using it, and deterministic stuck-send/cleanup tests. | Logical receive/connect/transfer deadlines are exercised, but native send/close limitations remain. Do not claim bounded native IO termination or universal resource cleanup. This is a runtime dependency, not a reason to add unsafe cancellation workarounds. |
 
 Cross-testing an independently implemented endpoint is valuable additional
-interoperability evidence, but does not waive H1. Source-only comparisons and
+interoperability evidence, but does not waive H1. The
+[official native-server profile](../reports/native-interop-2026-09-24.md) now passes
+locally at PDU240/480 for selected memory, metadata and CPU-state operations;
+uncovered services do not inherit that result. Source-only comparisons and
 standard-library corpus oracles must not be relabeled as native-client execution
 or real-controller captures.
 
@@ -88,6 +94,8 @@ or real-controller captures.
   operations, values, primitive conversations, active sessions and management.
 - [Progress and local validation record](../reports/classic-progress-2026-09-23.md).
 - [Seeded fuzz coverage and replay limits](../reports/session-fuzz-2026-09-24.md).
+- [0.1.0 release-readiness record](../reports/release-readiness-2026-09-24.md) and
+  [release notes](releases/0.1.0.md). Hosted results are revision-specific.
 - [USER_DATA supported profile](../reports/userdata-evidence-2026-09-24.md),
   [advanced decoder audit](../reports/advanced-decoder-evidence-2026-09-24.md) and
   [counter/timer addressing evidence](../reports/addressing-evidence-2026-09-09.md).

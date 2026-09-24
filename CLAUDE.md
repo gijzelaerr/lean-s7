@@ -56,6 +56,15 @@ python integration/run.py
 ```
 
 Also run Python lint and formatting checks on integration harness changes.
+For changes affecting independent endpoint testing, also run:
+
+```console
+python integration/native_snap7_build.py
+python integration/native_snap7.py --library .lake/native-snap7/libsnap7.dylib
+```
+
+Use `libsnap7.so` on Linux. This downloads a pinned official native Snap7 test
+dependency; it is not linked into the client and contacts localhost only.
 GitHub Actions is a final platform check, not a substitute for local testing.
 
 ## Compatibility strategy

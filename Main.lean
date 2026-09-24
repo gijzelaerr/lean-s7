@@ -22,6 +22,7 @@ import LeanS7.ReconnectFaultTests
 import LeanS7.UserDataAssuranceTests
 import LeanS7.LiveCorrelationTests
 import LeanS7.BlockInfoClientTests
+import LeanS7.NativeInteropTests
 
 open LeanS7 Std.Net
 
@@ -693,6 +694,8 @@ def runMultiBatchingIntegration (host portString pduString countString sizeStrin
 
 def main (args : List String) : IO Unit := do
   match args with
+  | ["integration-native", host, port, pdu] =>
+      NativeInteropTests.runIntegration host port pdu
   | ["integration-block-info-identity", host, port, scenario] =>
       BlockInfoClientTests.runIntegration host port scenario
   | ["integration-live-correlation", host, port, plan] =>

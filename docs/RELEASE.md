@@ -3,8 +3,8 @@
 ## Current profile
 
 This is an experimental classic S7comm Lean client and executable specification,
-not a production-qualified driver. The package version in `lakefile.toml` is
-development metadata, not a compatibility certification. See
+not a production-qualified driver. Version 0.1.0 is the approved initial
+experimental release, not a compatibility certification. See
 [the completion matrix](COMPLETENESS.md) for the bounded feature scope and open
 gates. S7comm Plus, optimized symbolic access, a native server, and python-snap7
 API parity are not release requirements for this profile.
@@ -14,7 +14,8 @@ API parity are not release requirements for this profile.
 - Endpoint: IPv4, IPv6 or hostname; classic ISO-on-TCP with configured rack/slot
   or explicit TSAP. Connection negotiation must satisfy both S7 and COTP limits.
 - Validation: local macOS testing, pinned python-snap7 3.0.0 emulator, independent
-  portable-vector oracles and scripted TCP peers. Linux is a CI target; inspect
+  portable-vector oracles, scripted TCP peers and a pinned official native Snap7
+  endpoint. Linux and macOS are full CI targets; inspect
   the results for the exact revision before claiming platform validation.
 - No real Siemens controller family or firmware is qualified yet. Counter/timer
   addressing and controller-specific management semantics need independent
@@ -67,6 +68,23 @@ python integration/package_smoke.py
 
 It uses a local path dependency and opens no sockets. It does not test remote
 Git retrieval, a release archive, cross compilation or PLC interoperability.
+
+Independent endpoint cross-tests build an unmodified, SHA-256-pinned official
+native Snap7 source revision into `.lake/native-snap7`, then exercise localhost
+PDU240/480 profiles. A C++ compiler and network access for the initial source
+archive download are required. The native library is not linked into lean-s7:
+
+```console
+python integration/native_snap7_build.py
+python integration/native_snap7.py --library .lake/native-snap7/libsnap7.dylib
+```
+
+Use `libsnap7.so` on Linux. The test checks the build manifest and library digest,
+then independently compares all registered backing memory after actual Client
+IO. The profile covers DB/I/Q/M memory, batching, typed strings/bits, rejection
+reuse, metadata and CPU-state queries, not unsupported native-server upload or
+other controller-changing services. See
+[the endpoint evidence](../reports/native-interop-2026-09-24.md).
 
 ## Exit gates
 

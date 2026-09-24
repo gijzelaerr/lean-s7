@@ -9,7 +9,17 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            native-library: libsnap7.so
+          - os: macos-latest
+            native-library: libsnap7.dylib
     steps:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
@@ -31,3 +41,5 @@ jobs:
       - run: ruff check integration
       - run: ruff format --check integration
       - run: python integration/run.py
+      - run: python integration/native_snap7_build.py
+      - run: python integration/native_snap7.py --library ".lake/native-snap7/${{ matrix.native-library }}"
