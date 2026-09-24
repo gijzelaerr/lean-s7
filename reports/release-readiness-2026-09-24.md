@@ -114,3 +114,19 @@ Further validation and publication results will be appended before release.
   native profiles, Ruff lint/format, actionlint and whitespace checks. The same
   discriminator also covers extended download start/end/insertion boundaries.
   Ready to publish the candidate for its exact hosted checks.
+
+- Candidate `5b2beac` passed the complete Linux job and progressed through the
+  macOS deadline/reconnect campaigns. Its macOS positive `cotp-only` connection
+  control reset before setup: a 250 ms total budget included hostname lookup
+  plus the peer's 180 ms delay. Give successful connection controls a 3,000 ms
+  budget while retaining hostname coverage. Negative COTP/setup controls keep
+  their 250/80 ms limits but use the explicit loopback address, isolating the
+  intended protocol stages from uncontrolled DNS latency. Expired DNS preflight
+  remains separately checked. Only test configuration changes; production
+  connection/deadline code remains unchanged.
+
+- Connection-control fix-forward passed the complete local clean build,
+  native tests, eight exact corpora, full emulator/fault integration,
+  independent native endpoint profiles, Ruff lint/format, actionlint and
+  whitespace checks. Awaiting its exact-revision Linux/macOS result before
+  publication. No controller or hard-cancellation qualification added.

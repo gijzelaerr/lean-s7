@@ -48,16 +48,23 @@ def runIntegration (host firstPortString secondPortString mode : String) : IO Un
   let start ← IO.monoMsNow
   let expectedTimeout := mode == "combined" || mode == "operation" || mode == "candidate-budget"
   let expectedProtocol := mode == "candidate-protocol"
+  -- Success controls include hostname resolution and hosted scheduling;
+  -- only the rejection controls intentionally need the tight shared budget.
+  let connectionBudget := if expectedTimeout || expectedProtocol then 250 else 3000
   let outcome ← try
     if mode.startsWith "candidate-" then
       let first : Std.Net.SocketAddress := .v4 <| Std.Net.SocketAddressV4.mk address (UInt16.ofNat firstPort)
       let second : Std.Net.SocketAddress := .v4 <| Std.Net.SocketAddressV4.mk address (UInt16.ofNat secondPort)
-      let connection ← Transport.connectResolved #[first, first, second, second] request (some 250)
+      let connection ← Transport.connectResolved #[first, first, second, second] request
+        (some connectionBudget)
       Transport.disconnect connection (some 1000)
     else
       let client ← Client.connect {
-        endpoint := .hostname host, port := UInt16.ofNat firstPort
-        connectTimeoutMs := if mode == "disabled" then none else some 250
+        -- Rejection peers isolate COTP/setup budgets from uncontrolled DNS
+        -- latency. Hostname resolution stays exercised by success controls.
+        endpoint := if expectedTimeout then .ipv4 address else .hostname host,
+        port := UInt16.ofNat firstPort
+        connectTimeoutMs := if mode == "disabled" then none else some connectionBudget
         operationTimeoutMs := some (if mode == "operation" then 80 else 1000) }
       client.disconnect
     pure (none : Option IO.Error)
