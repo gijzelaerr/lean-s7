@@ -440,6 +440,30 @@ budget and terminal-state gates; it does not model socket IO, scheduler ordering
 budget consumption or remote side effects. Live campaigns supply separate IO
 evidence rather than turning this primitive model into a proof of the client.
 
+`conformance/v1/sessions.json` adds 24 seeded active-request histories and
+323 events: an active reference, consumed retry allowance, reconnect stages,
+response validation and chronological write uncertainty. Its independent oracle
+is `python integration/session_conformance.py`; regenerate with
+`lake exe lean-s7-conformance sessions`. These are single-wire operational
+contracts, not a formal equivalence theorem about the IO client. Seventy-five
+live conversations separately exercise failed COTP/setup reconnects, terminal
+malformations, exhausted allowances and whole-transfer deadline carryover.
+
+Actual multi-response decoder theorems establish read count, positional payload
+sizes and sequential wire order, plus write count and per-position status mapping.
+USER_DATA decoding now checks octet transport and permits only the documented
+service-specific empty clock-set/password acknowledgements. SZL/block-list
+continuations retain a stable data-unit identity while echoing opaque sequence
+tokens. See [the evidence and limits](reports/userdata-evidence-2026-09-24.md).
+
+Run `python integration/scalability_bench.py --rounds 3` for verified localhost
+fragmented-read and multi-item measurements at 240/480-byte PDUs. Operation
+timings exclude connection/warmup/verification but include peer/network costs;
+RSS samples are post-operation, not allocation or peak-memory measurements.
+The integration suite runs small correctness-only smoke cases without timing
+thresholds. No client optimization is inferred from these measurements alone.
+See the [recorded baseline and measurement limits](reports/scalability-2026-09-24.md).
+
 Connection-budget peers test stage sharing, distinct-address fallback, and
 protocol failures that must not try another candidate. Twelve queued lifecycle
 cases establish actual FIFO gate admissions across active read retry, terminal

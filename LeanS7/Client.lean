@@ -289,7 +289,7 @@ private def Client.readUserDataValue (client : Client) (reference : UInt16)
 
 private partial def Client.readSzlFragments (client : Client) (id index : UInt16)
     (state : UserDataAssembly.State (16 * 1024 * 1024) 256) (sequence : UInt8)
-    (deadline : Option Nat) : IO ByteArray := do
+    (deadline : Option Nat) (dataUnitReference : Option UInt8) : IO ByteArray := do
   let reference ← client.freshReference
   let request ← if state.count == 0 then
     inputOrThrow <| S7.encodeReadSzl reference id index
@@ -299,6 +299,7 @@ private partial def Client.readSzlFragments (client : Client) (id index : UInt16
     (if state.count == 0 then client.config.reconnectRetries else 0) false deadline .readOnly
   let response ← decodeOrThrow <| S7.decodeUserDataResponse reference S7.szlGroup
     S7.readSzlSubfunction raw
+  let fragmentReference ← decodeOrThrow <| S7.correlateUserDataFragment dataUnitReference response
   let nextPayload ← if state.count == 0 then
     let (actualId, actualIndex, firstPayload) ← orThrow <| S7.decodeSzlFirst response
     if actualId != id || actualIndex != index then
@@ -308,7 +309,7 @@ private partial def Client.readSzlFragments (client : Client) (id index : UInt16
     pure response.payload
   let step ← orThrow <| UserDataAssembly.accept state nextPayload response.hasMoreData
   if response.hasMoreData then
-    client.readSzlFragments id index step.after response.sequence deadline
+    client.readSzlFragments id index step.after response.sequence deadline (some fragmentReference)
   else
     return step.after.data
 
@@ -318,7 +319,7 @@ private def Client.readSzlValue (client : Client) (id index : UInt16)
     let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
     try
       let szl ← orThrow <| S7.decodeSzl id index
-        (← client.readSzlFragments id index (UserDataAssembly.empty _ _) 0 deadline)
+        (← client.readSzlFragments id index (UserDataAssembly.empty _ _) 0 deadline none)
       decode szl
     catch error =>
       client.closeCurrent
@@ -402,16 +403,18 @@ def Client.clearSessionPassword (client : Client) : IO Unit := do
 private partial def Client.userDataFragments (client : Client) (group subfunction : UInt8)
     (firstRequest : UInt16 → Except S7.EncodeError ByteArray)
     (state : UserDataAssembly.State (16 * 1024 * 1024) 256)
-    (sequence : UInt8) (deadline : Option Nat) : IO ByteArray := do
+    (sequence : UInt8) (deadline : Option Nat) (dataUnitReference : Option UInt8) : IO ByteArray := do
   let reference ← client.freshReference
   let request ← if state.count == 0 then inputOrThrow <| firstRequest reference
     else inputOrThrow <| S7.encodeUserDataContinuation reference group subfunction sequence
   let raw ← client.exchangeBytesWithRetries reference request
     (if state.count == 0 then client.config.reconnectRetries else 0) false deadline .readOnly
   let response ← decodeOrThrow <| S7.decodeUserDataResponse reference group subfunction raw
+  let fragmentReference ← decodeOrThrow <| S7.correlateUserDataFragment dataUnitReference response
   let step ← orThrow <| UserDataAssembly.accept state response.payload response.hasMoreData
   if response.hasMoreData then
     client.userDataFragments group subfunction firstRequest step.after response.sequence deadline
+      (some fragmentReference)
   else return step.after.data
 
 def Client.listBlocks (client : Client) : IO S7.BlockCounts := do
@@ -426,7 +429,7 @@ def Client.listBlocksOfType (client : Client) (blockType : S7.BlockType) :
     try
       let payload ← client.userDataFragments S7.blocksInfoGroup S7.listBlocksOfTypeSubfunction
         (fun reference => S7.encodeListBlocksOfType reference blockType)
-        (UserDataAssembly.empty _ _) 0 deadline
+        (UserDataAssembly.empty _ _) 0 deadline none
       orThrow <| S7.decodeBlockEntries payload
     catch error =>
       client.closeCurrent

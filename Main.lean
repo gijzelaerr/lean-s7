@@ -17,6 +17,9 @@ import LeanS7.ClockCodecAssuranceTests
 import LeanS7.OverlapOperationTests
 import LeanS7.QueuedBatchTests
 import LeanS7.RetryBudgetTests
+import LeanS7.ScalabilityBenchTests
+import LeanS7.ReconnectFaultTests
+import LeanS7.UserDataAssuranceTests
 
 open LeanS7 Std.Net
 
@@ -711,6 +714,12 @@ def main (args : List String) : IO Unit := do
       QueuedBatchTests.runIntegration host port pdu mode sizes
   | ["integration-retry-budgets", host, port, mode, budget, drops] =>
       RetryBudgetTests.runIntegration host port mode budget drops
+  | ["benchmark-scalability", host, port, mode, size, rounds] =>
+      ScalabilityBenchTests.runIntegration host port mode size rounds
+  | ["integration-reconnect-faults", host, port, mode, fault, budget, failures] =>
+      ReconnectFaultTests.runIntegration host port mode fault budget failures
+  | ["integration-userdata-assurance", host, port, operation, scenario] =>
+      UserDataAssuranceTests.runIntegration host port operation scenario
   | ["integration-clock-assurance", host, port, digit] =>
       ClockCodecAssuranceTests.runIntegration host port digit
   | ["integration-timeout-cleanup", host, port, mode] =>

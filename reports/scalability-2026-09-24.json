@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "platform": "macOS-26.7-arm64-arm-64bit",
+  "rounds": 3,
+  "timing_scope": "public operation, excluding handshake/warmup/verification; includes localhost peer/network costs",
+  "cases": [
+    {
+      "pdu_bytes": 240,
+      "operation": "read",
+      "size": 16384,
+      "size_unit": "bytes",
+      "samples_ns": [
+        21286417,
+        20367000,
+        19673917
+      ],
+      "median_ns": 20367000,
+      "post_operation_rss_bytes": [
+        6651904,
+        7012352,
+        7290880
+      ],
+      "exchanges_including_warmup": 296
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "read",
+      "size": 65536,
+      "size_unit": "bytes",
+      "samples_ns": [
+        75344125,
+        75347958,
+        76425833
+      ],
+      "median_ns": 75347958,
+      "post_operation_rss_bytes": [
+        7421952,
+        7553024,
+        8044544
+      ],
+      "exchanges_including_warmup": 1184
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "read",
+      "size": 262144,
+      "size_unit": "bytes",
+      "samples_ns": [
+        300364917,
+        305482917,
+        308218667
+      ],
+      "median_ns": 305482917,
+      "post_operation_rss_bytes": [
+        10567680,
+        11583488,
+        12435456
+      ],
+      "exchanges_including_warmup": 4724
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "multi-read",
+      "size": 128,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        1867125,
+        1886708,
+        1984834
+      ],
+      "median_ns": 1886708,
+      "post_operation_rss_bytes": [
+        5914624,
+        5980160,
+        6029312
+      ],
+      "exchanges_including_warmup": 28
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "multi-read",
+      "size": 512,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        7664166,
+        6907334,
+        6944875
+      ],
+      "median_ns": 6944875,
+      "post_operation_rss_bytes": [
+        6553600,
+        6897664,
+        7028736
+      ],
+      "exchanges_including_warmup": 108
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "multi-read",
+      "size": 2048,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        29082792,
+        29194500,
+        29440625
+      ],
+      "median_ns": 29194500,
+      "post_operation_rss_bytes": [
+        7438336,
+        7946240,
+        8323072
+      ],
+      "exchanges_including_warmup": 432
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "multi-write",
+      "size": 128,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        2929958,
+        2893333,
+        2847208
+      ],
+      "median_ns": 2893333,
+      "post_operation_rss_bytes": [
+        6111232,
+        6324224,
+        6438912
+      ],
+      "exchanges_including_warmup": 44
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "multi-write",
+      "size": 512,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        11066542,
+        10665209,
+        11396958
+      ],
+      "median_ns": 11066542,
+      "post_operation_rss_bytes": [
+        6520832,
+        7045120,
+        7307264
+      ],
+      "exchanges_including_warmup": 172
+    },
+    {
+      "pdu_bytes": 240,
+      "operation": "multi-write",
+      "size": 2048,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        44742458,
+        44201167,
+        43907958
+      ],
+      "median_ns": 44201167,
+      "post_operation_rss_bytes": [
+        7979008,
+        8863744,
+        9617408
+      ],
+      "exchanges_including_warmup": 684
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "read",
+      "size": 16384,
+      "size_unit": "bytes",
+      "samples_ns": [
+        8757250,
+        9658625,
+        9859375
+      ],
+      "median_ns": 9658625,
+      "post_operation_rss_bytes": [
+        6422528,
+        6881280,
+        7192576
+      ],
+      "exchanges_including_warmup": 144
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "read",
+      "size": 65536,
+      "size_unit": "bytes",
+      "samples_ns": [
+        39272417,
+        39026084,
+        39802583
+      ],
+      "median_ns": 39272417,
+      "post_operation_rss_bytes": [
+        7553024,
+        7995392,
+        8110080
+      ],
+      "exchanges_including_warmup": 568
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "read",
+      "size": 262144,
+      "size_unit": "bytes",
+      "samples_ns": [
+        154128250,
+        148715083,
+        148901667
+      ],
+      "median_ns": 148901667,
+      "post_operation_rss_bytes": [
+        10534912,
+        11501568,
+        11763712
+      ],
+      "exchanges_including_warmup": 2272
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "multi-read",
+      "size": 128,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        1707750,
+        1909125,
+        1760125
+      ],
+      "median_ns": 1760125,
+      "post_operation_rss_bytes": [
+        5914624,
+        6160384,
+        6209536
+      ],
+      "exchanges_including_warmup": 28
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "multi-read",
+      "size": 512,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        6779375,
+        6873709,
+        7126167
+      ],
+      "median_ns": 6873709,
+      "post_operation_rss_bytes": [
+        6209536,
+        6733824,
+        6881280
+      ],
+      "exchanges_including_warmup": 104
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "multi-read",
+      "size": 2048,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        28679916,
+        26187625,
+        26480167
+      ],
+      "median_ns": 26480167,
+      "post_operation_rss_bytes": [
+        7290880,
+        7700480,
+        8208384
+      ],
+      "exchanges_including_warmup": 412
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "multi-write",
+      "size": 128,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        1774333,
+        2050125,
+        1803000
+      ],
+      "median_ns": 1803000,
+      "post_operation_rss_bytes": [
+        6209536,
+        6275072,
+        6291456
+      ],
+      "exchanges_including_warmup": 28
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "multi-write",
+      "size": 512,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        6646000,
+        6694333,
+        6370750
+      ],
+      "median_ns": 6646000,
+      "post_operation_rss_bytes": [
+        6406144,
+        6668288,
+        6914048
+      ],
+      "exchanges_including_warmup": 104
+    },
+    {
+      "pdu_bytes": 480,
+      "operation": "multi-write",
+      "size": 2048,
+      "size_unit": "caller_items",
+      "samples_ns": [
+        27254875,
+        27075792,
+        27258250
+      ],
+      "median_ns": 27254875,
+      "post_operation_rss_bytes": [
+        8060928,
+        8847360,
+        9682944
+      ],
+      "exchanges_including_warmup": 412
+    }
+  ]
+}

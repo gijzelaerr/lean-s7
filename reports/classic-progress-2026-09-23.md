@@ -655,3 +655,54 @@ These are cross-implementation observations, not formal claims about the Python 
   with full author/committer/message/trailer inspection before publication. No
   PR creation or merge; no claims of full IO termination, exactly-once writes,
   hard native cancellation or physical-controller compatibility.
+
+## Five parallel emulator-only assurance streams (2026-09-24)
+
+- Owner approved all five proposed streams in parallel: reconnect-stage failures,
+  USER_DATA shape/continuation audit, actual multi-response decoder proofs,
+  portable active-request histories, and scalability measurements before changes.
+- Reconnect-stage tests and benchmark harness are implemented. USER_DATA audit
+  reproduced two decoder defects: non-octet FF payload acceptance and rejection
+  of native Snap7's service-specific successful empty acknowledgements. Narrow
+  fixes are backed by native-server and Wireshark source evidence in the new
+  USER_DATA evidence report. Client continuation identity correlation is being
+  connected to both SZL and block-list assembly; sequence tokens stay opaque.
+- Actual decoder proofs and active-request corpus are in progress. No physical
+  controller, production compatibility, exactly-once write, full IO termination,
+  or hard cancellation claim. No commit/push/PR/merge for this batch yet.
+- All five sources are implemented/frozen. Reconnect campaign passed 75 native
+  conversations; portable sessions passed its independent strict oracle at
+  24 cases/323 events with mutation/fixed controls. Actual multi-response tests
+  include 53,760 write byte/position cases, 60 mixed reads and 255 failure codes.
+- Final root-owned clean build passed all 142 jobs. All seven corpus exports
+  matched exactly before the final clean; rerunning all native/corpus/axiom
+  checks and full integration now. Ruff lint/format passes all 35 Python files;
+  pinned actionlint1.7.7 passes both workflows. The stale-reference live fixture
+  now explicitly sets zero stale allowance rather than contradicting the
+  default bounded-stale policy. No production correlation-policy change.
+- Final native tests and all seven exact corpus comparisons passed after clean.
+  Root audited all nine multi-response contracts, both actual continuation-helper
+  contracts and the extended CoreProtocolAssurance: standard Lean axioms only
+  (propext/Classical.choice/Quot.sound). No admissions, native certificates, new
+  user axioms or multi-response decoder algorithm changes. Full integration is
+  still running; benchmark measurements will be recorded once it is idle.
+- Complete final pinned python-snap7 3.0.0 emulator/scripted-peer suite passed,
+  including all 75 reconnect-stage cases, all 31 new USER_DATA conversations,
+  active-session oracle 24/24 cases/323 steps, benchmark smoke correctness and
+  every prior transfer/deadline/overlap/queued/transport campaign. Measured stress
+  passed 216 attempts/54 retry reconnects: FD8/8, threads7/7,
+  RSS5,636,096/5,668,864 bytes (+32,768 bytes). Final idle scalability run started;
+  no client algorithm optimizations or publication actions have been taken.
+- Final idle benchmark passed all 18 cases with three measured rounds each.
+  Raw samples and measurement limits are tracked in scalability-2026-09-24.json
+  and scalability-2026-09-24.md. Largest 256-KiB read medians were 305.483 ms at
+  PDU240 and 148.902 ms at PDU480; 2,048-item read/write medians were
+  29.195/44.201 ms and 26.480/27.255 ms respectively. Tested-size scaling is
+  broadly proportional; no speculative core optimization, complexity or PLC
+  performance claim. RSS observations are completion-triggered, not guaranteed
+  inter-operation snapshots, peaks or allocation counts.
+- All five requested streams and combined local checks are complete. Recording
+  one coherent local commit under standing owner commit approval; no new push,
+  PR creation or merge. Final metadata must use the owner's author/committer
+  identity and contain no attribution trailers. Hardware validation remains
+  separate; python-snap7's repository is untouched.

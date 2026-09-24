@@ -31,6 +31,37 @@ structure UserDataResponse where
   payload : ByteArray
   deriving BEq
 
+/-- CPU/SZL and block USER_DATA fragments share a data-unit reference. The
+    sequence byte is a PLC-issued opaque token echoed in the next request,
+    not a locally incremented counter. Zero is permitted as an identity. -/
+def correlateUserDataFragment (expected : Option UInt8) (response : UserDataResponse) :
+    Except DecodeError UInt8 := do
+  if let some previous := expected then
+    if response.dataUnitReference != previous then
+      throw (.invalidField 18 s!"USER_DATA data-unit reference changed from {previous} to {response.dataUnitReference}")
+  return response.dataUnitReference
+
+theorem correlateUserDataFragment_initial (response : UserDataResponse) :
+    correlateUserDataFragment none response = .ok response.dataUnitReference := by
+  rfl
+
+theorem correlateUserDataFragment_success (previous actual : UInt8)
+    (response : UserDataResponse)
+    (h : correlateUserDataFragment (some previous) response = .ok actual) :
+    response.dataUnitReference = previous ∧ actual = previous := by
+  simp only [correlateUserDataFragment, pure, Except.pure] at h
+  split at h
+  · contradiction
+  · simp_all
+
+/-- Native Snap7 emits an empty null-data acknowledgement for these three
+    mutating services. This is not a general permission to treat 0x0a as
+    success for payload-bearing SZL, clock-read, or block services. -/
+def supportsNullUserDataAcknowledgement (group subfunction : UInt8) : Bool :=
+  (group == clockGroup && subfunction == setClockSubfunction) ||
+  (group == securityGroup &&
+    (subfunction == enterPasswordSubfunction || subfunction == clearPasswordSubfunction))
+
 /-- Fixed single-response services must not expose an incomplete fragment.
     Segmented services use their separate bounded assembly paths. -/
 def requireCompleteUserData (response : UserDataResponse) : Except DecodeError ByteArray :=
@@ -173,9 +204,18 @@ def decodeUserDataResponse (expectedReference : UInt16) (expectedGroup expectedS
   let (returnCode, dataCursor) ← dataCursor.readUInt8
   let (transportSize, dataCursor) ← dataCursor.readUInt8
   let (payloadLength, dataCursor) ← dataCursor.readUInt16BE
-  if returnCode != 0xff then
+  let nullAcknowledgement := returnCode == 0x0a &&
+    supportsNullUserDataAcknowledgement expectedGroup expectedSubfunction
+  if returnCode != 0xff && !nullAcknowledgement then
     throw (.remoteFailure (jobHeaderSize + parameterLength.toNat)
       s!"USER_DATA item failed with code {returnCode}")
+  if nullAcknowledgement then
+    if transportSize != 0 || payloadLength != 0 || lastDataUnit != 0 then
+      throw (.invalidField (jobHeaderSize + parameterLength.toNat)
+        "USER_DATA null acknowledgement must be complete with zero transport size and payload length")
+  else if transportSize != octetTransportSize then
+    throw (.invalidField (jobHeaderSize + parameterLength.toNat + 1)
+      s!"expected USER_DATA octet transport size {octetTransportSize}, got {transportSize}")
   let (payload, dataCursor) ← dataCursor.readBytes payloadLength.toNat
   dataCursor.finish
   return {

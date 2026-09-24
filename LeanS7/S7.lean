@@ -985,6 +985,128 @@ private def decodeReadItems : List MemoryRange → Cursor → Except DecodeError
       let (results, cursor) ← decodeReadItems rest cursor
       return (result :: results, cursor)
 
+/-- An ordered read result either has the exact byte length requested at that
+    position, or exposes a non-success PLC return code. -/
+def ReadItemMatches (range : MemoryRange) : ReadItemResult → Prop
+  | .success payload => payload.size = range.count * range.area.elementSize
+  | .failure code => code ≠ 0xff
+
+/-- Positional pairing without dropping or reordering failed response items. -/
+inductive ReadItemsMatch : List MemoryRange → List ReadItemResult → Prop
+  | nil : ReadItemsMatch [] []
+  | cons {range result ranges results} : ReadItemMatches range result →
+      ReadItemsMatch ranges results → ReadItemsMatch (range :: ranges) (result :: results)
+
+theorem ReadItemsMatch.length_eq {ranges : List MemoryRange}
+    {results : List ReadItemResult} (h : ReadItemsMatch ranges results) :
+    ranges.length = results.length := by
+  induction h with
+  | nil => rfl
+  | cons _ _ ih => simpa using congrArg Nat.succ ih
+
+theorem ReadItemsMatch.isEmpty_eq {ranges : List MemoryRange}
+    {results : List ReadItemResult} (h : ReadItemsMatch ranges results) :
+    ranges.isEmpty = results.isEmpty := by
+  cases h <;> rfl
+
+/-- One read item in wire order. All bytes come from sequential bounded reads,
+    the exposed status/payload is the one just read, and only an inter-item odd
+    payload consumes padding. Padding contents are deliberately unspecified. -/
+def ReadItemWireStep (before after : Cursor) (more : Bool)
+    (result : ReadItemResult) : Prop :=
+  ∃ (code : UInt8) (c₁ : Cursor) (transport : UInt8) (c₂ : Cursor)
+      (encodedLength : UInt16) (c₃ : Cursor) (payloadSize : Nat)
+      (payload : ByteArray) (c₄ : Cursor),
+    before.readUInt8 = .ok (code, c₁) ∧
+    c₁.readUInt8 = .ok (transport, c₂) ∧
+    c₂.readUInt16BE = .ok (encodedLength, c₃) ∧
+    payloadSize = (if transport == octetTransportSize then encodedLength.toNat
+      else encodedLength.toNat / 8) ∧
+    (transport ≠ octetTransportSize → encodedLength.toNat % 8 = 0) ∧
+    c₃.readBytes payloadSize = .ok (payload, c₄) ∧
+    (if more && payloadSize % 2 != 0 then
+      ∃ padding : UInt8, c₄.readUInt8 = .ok (padding, after)
+    else after = c₄) ∧
+    result = (if code == 0xff then .success payload else .failure code)
+
+/-- Exact sequential wire correspondence, including failures: no decoded item
+    can be reordered, duplicated, omitted, or sourced from a different payload. -/
+inductive ReadItemsWireOrder : List ReadItemResult → Cursor → Cursor → Prop
+  | nil (cursor : Cursor) : ReadItemsWireOrder [] cursor cursor
+  | cons {result results before middle after} :
+      ReadItemWireStep before middle (!results.isEmpty) result →
+      ReadItemsWireOrder results middle after →
+      ReadItemsWireOrder (result :: results) before after
+
+private theorem responsePayloadSize_contract (transport : UInt8) (encodedLength : UInt16)
+    (offset size : Nat) (h : responsePayloadSize transport encodedLength offset = .ok size) :
+    size = (if transport == octetTransportSize then encodedLength.toNat
+      else encodedLength.toNat / 8) ∧
+      (transport ≠ octetTransportSize → encodedLength.toNat % 8 = 0) := by
+  unfold responsePayloadSize at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  all_goals simp_all
+
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+private theorem decodeReadItems_matches (ranges : List MemoryRange)
+    (cursor next : Cursor) (results : List ReadItemResult)
+    (h : decodeReadItems ranges cursor = .ok (results, next)) :
+    ReadItemsMatch ranges results := by
+  induction ranges generalizing cursor next results with
+  | nil =>
+    simp [decodeReadItems, pure, Except.pure] at h
+    rcases h with ⟨rfl, rfl⟩
+    exact .nil
+  | cons range rest ih =>
+    unfold decodeReadItems at h
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+      MonadExceptOf.throw] at h
+    repeat' (first | contradiction | split at h)
+    all_goals
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩
+      apply ReadItemsMatch.cons
+      · simp only [ReadItemMatches]
+        first
+        | have hsize := Cursor.readBytes_size _ _ _ _ (by assumption)
+          simp_all
+        | simp_all
+      · exact ih _ _ _ (by assumption)
+
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+private theorem decodeReadItems_wire_order (ranges : List MemoryRange)
+    (cursor next : Cursor) (results : List ReadItemResult)
+    (h : decodeReadItems ranges cursor = .ok (results, next)) :
+    ReadItemsWireOrder results cursor next := by
+  induction ranges generalizing cursor next results with
+  | nil =>
+    simp [decodeReadItems, pure, Except.pure] at h
+    rcases h with ⟨rfl, rfl⟩
+    exact .nil _
+  | cons range rest ih =>
+    unfold decodeReadItems at h
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+      MonadExceptOf.throw] at h
+    repeat' (first | contradiction | split at h)
+    all_goals
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩
+      apply ReadItemsWireOrder.cons
+      · have hm := decodeReadItems_matches rest _ _ _ (by assumption)
+        have hp := responsePayloadSize_contract _ _ _ _ (by assumption)
+        refine ⟨_, _, _, _, _, _, _, _, _, by assumption, by assumption,
+          by assumption, hp.1, hp.2, by assumption, ?_, ?_⟩
+        · have he := hm.isEmpty_eq
+          rw [← he]
+          split
+          all_goals first | contradiction | exact ⟨_, by assumption⟩ | rfl
+        · simp_all
+      · exact ih _ _ _ (by assumption)
+
 def decodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange)
     (response : Response) : Except DecodeError (Array ReadItemResult) := do
   if ranges.isEmpty || ranges.size > maxItemCount then
@@ -994,6 +1116,50 @@ def decodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange)
   cursor.finish
   return results.toArray
 
+set_option maxRecDepth 4096 in
+/-- The actual multi-read decoder keeps every requested position, including PLC
+    failures, and checks successful payload lengths against that position's range. -/
+theorem decodeAreaReadMany_matches (reference : UInt16) (ranges : Array MemoryRange)
+    (response : Response) (results : Array ReadItemResult)
+    (h : decodeAreaReadMany reference ranges response = .ok results) :
+    ReadItemsMatch ranges.toList results.toList := by
+  unfold decodeAreaReadMany at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  simp only [Except.ok.injEq] at h
+  subst results
+  simpa using decodeReadItems_matches _ _ _ _ (by assumption)
+
+/-- Successful multi-read decoding returns exactly one result per requested item. -/
+theorem decodeAreaReadMany_size (reference : UInt16) (ranges : Array MemoryRange)
+    (response : Response) (results : Array ReadItemResult)
+    (h : decodeAreaReadMany reference ranges response = .ok results) :
+    results.size = ranges.size := by
+  have hm := decodeAreaReadMany_matches reference ranges response results h
+  have hl := ReadItemsMatch.length_eq hm
+  simpa using hl.symm
+
+set_option maxRecDepth 4096 in
+/-- Every actual multi-read result is backed by the sequential status/payload
+    bytes in this response, and the sequence consumes the complete data section. -/
+theorem decodeAreaReadMany_wire_order (reference : UInt16) (ranges : Array MemoryRange)
+    (response : Response) (results : Array ReadItemResult)
+    (h : decodeAreaReadMany reference ranges response = .ok results) :
+    ∃ next : Cursor,
+      ReadItemsWireOrder results.toList { data := response.data } next ∧
+        next.finish = .ok () := by
+  unfold decodeAreaReadMany at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  simp only [Except.ok.injEq] at h
+  subst results
+  have hw := decodeReadItems_wire_order _ _ _ _ (by assumption)
+  refine ⟨_, by simpa using hw, ?_⟩
+  · have hu : ∀ u : Unit, u = () := by intro u; cases u; rfl
+    simpa only [hu] using (show _ = Except.ok _ from by assumption)
+
 private def decodeWriteItems : Nat → Cursor → Except DecodeError (List WriteItemResult × Cursor)
   | 0, cursor => pure ([], cursor)
   | count + 1, cursor => do
@@ -1001,6 +1167,60 @@ private def decodeWriteItems : Nat → Cursor → Except DecodeError (List Write
       let result := if returnCode == 0xff then WriteItemResult.success else .failure returnCode
       let (results, cursor) ← decodeWriteItems count cursor
       return (result :: results, cursor)
+
+/-- The byte-level mapping used by the actual write acknowledgement decoder. -/
+def WriteItemResult.ofReturnCode (code : UInt8) : WriteItemResult :=
+  if code == 0xff then .success else .failure code
+
+private theorem multi_byte_read_shape (cursor next : Cursor) (code : UInt8)
+    (h : cursor.readUInt8 = .ok (code, next)) :
+    ∃ hbound : cursor.offset < cursor.data.size,
+      code = cursor.data[cursor.offset] ∧ next.data = cursor.data ∧
+        next.offset = cursor.offset + 1 := by
+  unfold Cursor.readUInt8 at h
+  split at h
+  · cases h
+    exact ⟨by assumption, rfl, rfl, rfl⟩
+  · contradiction
+
+private theorem decodeWriteItems_contract (count : Nat) (cursor next : Cursor)
+    (results : List WriteItemResult)
+    (h : decodeWriteItems count cursor = .ok (results, next)) :
+    results.length = count ∧ next.data = cursor.data ∧
+      next.offset = cursor.offset + count ∧
+      ∀ i (hi : i < results.length), ∃ hb : cursor.offset + i < cursor.data.size,
+        results[i] = WriteItemResult.ofReturnCode cursor.data[cursor.offset + i] := by
+  induction count generalizing cursor next results with
+  | zero =>
+    simp [decodeWriteItems, pure, Except.pure] at h
+    rcases h with ⟨rfl, rfl⟩
+    exact ⟨rfl, rfl, by omega, fun i hi => by simp at hi⟩
+  | succ count ih =>
+    unfold decodeWriteItems at h
+    cases hb : cursor.readUInt8 with
+    | error error => simp [hb, bind, Except.bind] at h
+    | ok pair =>
+      rcases pair with ⟨code, middle⟩
+      cases ht : decodeWriteItems count middle with
+      | error error => simp [hb, ht, bind, Except.bind] at h
+      | ok pair =>
+        rcases pair with ⟨tail, last⟩
+        simp only [hb, ht, bind, Except.bind, pure, Except.pure] at h
+        cases h
+        obtain ⟨hbound, hcode, hdata, hoffset⟩ := multi_byte_read_shape _ _ _ hb
+        obtain ⟨hlen, hlastData, hlastOffset, hitems⟩ := ih _ _ _ ht
+        refine ⟨by simp [hlen], hlastData.trans hdata, by omega, ?_⟩
+        intro i hi
+        cases i with
+        | zero =>
+          refine ⟨by simpa using hbound, ?_⟩
+          simp [WriteItemResult.ofReturnCode, hcode]
+        | succ i =>
+          have hi' : i < tail.length := by simpa using hi
+          obtain ⟨hbound', hitem⟩ := hitems i hi'
+          have heq : middle.offset + i = cursor.offset + (i + 1) := by omega
+          refine ⟨by simpa [hdata, heq] using hbound', ?_⟩
+          simpa [hdata, heq] using hitem
 
 def decodeAreaWriteMany (reference : UInt16) (expectedCount : Nat)
     (response : Response) : Except DecodeError (Array WriteItemResult) := do
@@ -1010,6 +1230,42 @@ def decodeAreaWriteMany (reference : UInt16) (expectedCount : Nat)
   let (results, cursor) ← decodeWriteItems expectedCount { data := response.data }
   cursor.finish
   return results.toArray
+
+set_option maxRecDepth 4096 in
+/-- Actual multi-write acknowledgements have one byte and one ordered result per
+    requested item. Each result is exactly the status at the same wire position. -/
+theorem decodeAreaWriteMany_contract (reference : UInt16) (expectedCount : Nat)
+    (response : Response) (results : Array WriteItemResult)
+    (h : decodeAreaWriteMany reference expectedCount response = .ok results) :
+    results.size = expectedCount ∧ response.data.size = expectedCount ∧
+      ∀ i (hi : i < results.size), ∃ hb : i < response.data.size,
+        results[i] = WriteItemResult.ofReturnCode response.data[i] := by
+  unfold decodeAreaWriteMany at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  simp only [Except.ok.injEq] at h
+  subst results
+  have hc := decodeWriteItems_contract _ _ _ _ (by assumption)
+  rcases hc with ⟨hlen, hdata, hoffset, hitems⟩
+  have hfinished : ∀ (cursor : Cursor) (u : Unit), cursor.finish = .ok u →
+      cursor.offset = cursor.data.size := by
+    intro cursor u hf
+    unfold Cursor.finish at hf
+    split at hf
+    · assumption
+    · contradiction
+  have hend := hfinished _ _ (by assumption)
+  refine ⟨by simpa using hlen, by simp_all, ?_⟩
+  intro i hi
+  obtain ⟨hb, hitem⟩ := hitems i (by simpa using hi)
+  exact ⟨by simpa using hb, by simpa using hitem⟩
+
+theorem decodeAreaWriteMany_size (reference : UInt16) (expectedCount : Nat)
+    (response : Response) (results : Array WriteItemResult)
+    (h : decodeAreaWriteMany reference expectedCount response = .ok results) :
+    results.size = expectedCount :=
+  (decodeAreaWriteMany_contract reference expectedCount response results h).1
 
 def decodeDbRead (reference : UInt16) (response : Response) : Except DecodeError ByteArray := do
   validateResponse response reference readFunction

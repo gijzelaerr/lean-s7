@@ -6,6 +6,7 @@ import LeanS7.ValueCodecAssurance
 import LeanS7.BitUpdateAssurance
 import LeanS7.ClockCodecAssurance
 import LeanS7.ValueDecoderAssurance
+import LeanS7.MultiResponseAssurance
 
 namespace LeanS7
 
@@ -394,6 +395,23 @@ structure CoreProtocolAssurance : Prop where
     retryBudgetAfter remaining closed kind safety allow = some next → next < remaining
   retryTraceAccounting : ∀ initial count final,
     RetryBudgetChain initial count final → count + final = initial
+  multiReadCount : ∀ reference ranges response results,
+    S7.decodeAreaReadMany reference ranges response = .ok results → results.size = ranges.size
+  multiReadAlignment : ∀ reference ranges response results,
+    S7.decodeAreaReadMany reference ranges response = .ok results →
+      S7.ReadItemsMatch ranges.toList results.toList
+  multiReadWireOrder : ∀ reference ranges response results,
+    S7.decodeAreaReadMany reference ranges response = .ok results →
+      ∃ next : Cursor, S7.ReadItemsWireOrder results.toList { data := response.data } next ∧
+        next.finish = .ok ()
+  multiWriteContract : ∀ reference count response results,
+    S7.decodeAreaWriteMany reference count response = .ok results →
+      results.size = count ∧ response.data.size = count ∧
+      ∀ i (hi : i < results.size), ∃ hb : i < response.data.size,
+        results[i] = S7.WriteItemResult.ofReturnCode response.data[i]
+  userDataIdentity : ∀ previous actual response,
+    S7.correlateUserDataFragment (some previous) response = .ok actual →
+      response.dataUnitReference = previous ∧ actual = previous
 
 /-- The implementation satisfies the complete formal contract stated by
     `CoreProtocolAssurance`. -/
@@ -518,5 +536,10 @@ theorem coreProtocolAssurance : CoreProtocolAssurance := by
   · exact retryBudgetAfter_invariants
   · exact retryBudgetAfter_decreases
   · exact fun _ _ _ chain => chain.accounting
+  · exact S7.decodeAreaReadMany_size
+  · exact S7.decodeAreaReadMany_matches
+  · exact S7.decodeAreaReadMany_wire_order
+  · exact S7.decodeAreaWriteMany_contract
+  · exact S7.correlateUserDataFragment_success
 
 end LeanS7

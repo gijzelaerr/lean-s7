@@ -273,3 +273,27 @@ The wire year maps 90–99 to 1990–1999 and 00–89 to 2000–2089: an invalid
 source year cannot necessarily be distinguished after its two-digit encoding.
 Weekday must be 1–7 but need not match calendar alignment; no PLC timezone or
 firmware convention is inferred. Floats/NaN semantics and IO are out of scope.
+
+## Active-request histories
+
+Generate `sessions.json` with `lake exe lean-s7-conformance sessions`; run
+`python integration/session_conformance.py` for the independent stdlib oracle.
+Schema version 1, protocol `classic S7 active request histories`, contains 24
+seeded cases and 323 events. It extends, without replacing, the primitive
+`conversations.json` artifact.
+
+Each config supplies `write`, derived `safety`, explicit mutating replay opt-in,
+`budget`, `reference`, write-progress `locations` and complete unframed
+`request_pdu` octets. Events are `begin`, `send`, `failure` (with `error_kind`),
+`reconnect-setup`, `reconnected`, `response` (with complete `response_pdu`), and
+`disconnect`. Every `expected_trace` entry includes the event's `result` and
+a state `snapshot`: lifecycle, remaining allowance, nullable active reference,
+phase, physical operation sends and chronological write attempts.
+
+Beginning an active request is rejected; eligible failures consume allowance,
+including failures during reconnect before any resend. Reconnect progress does
+not manufacture sends or write attempts. Actual Lean S7 response decoders
+validate reference/count/payload; success clears the active reference without
+erasing earlier replay uncertainty. Disconnect is terminal. These single-wire
+operational contracts are not a formal IO-client equivalence theorem, scheduling
+model, remote-effects model or exactly-once-write guarantee.

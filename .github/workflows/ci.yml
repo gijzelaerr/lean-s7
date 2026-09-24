@@ -22,6 +22,7 @@ jobs:
       - run: lake exe lean-s7-conformance operations | diff - conformance/v1/operations.json
       - run: lake exe lean-s7-conformance values | diff - conformance/v1/values.json
       - run: lake exe lean-s7-conformance conversations | diff - conformance/v1/conversations.json
+      - run: lake exe lean-s7-conformance sessions | diff - conformance/v1/sessions.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

@@ -25,9 +25,12 @@ from operation_conformance import run as run_operation_conformance
 from overlap_operations import run_overlap_operations
 from queued_batches import run_queued_batches
 from queued_lifecycle import run_queued_lifecycle
+from reconnect_faults import run_reconnect_faults
 from resource_stress import run_resource_stress
 from retry_budgets import run_retry_budgets
 from retry_progress import run_retry_progress
+from scalability_bench import run as run_scalability_bench
+from session_conformance import run as run_session_conformance
 from snap7.s7protocol import S7Area, S7Function, S7PDUType, S7WordLen
 from snap7.server import Server
 from snap7.type import SrvArea
@@ -35,6 +38,7 @@ from stateful_faults import run_stateful_faults
 from timeout_cleanup import run_timeout_cleanup
 from transfer_deadlines import run_transfer_deadlines
 from transport_resources import run_transport_resources
+from userdata_assurance import run_userdata_assurance
 from userdata_completion import run_userdata_completion
 from value_conformance import run as run_value_conformance
 from write_provenance import run_write_provenance
@@ -231,7 +235,7 @@ class MultiItemServer(Server):
             0x80 | group,
             subfunction,
             sequence,
-            1 if sequence else 0,
+            1,
             1 if has_more else 0,
             0,
             0,
@@ -1583,8 +1587,10 @@ def main() -> None:
         run_stateful_faults(root)
         run_retry_progress(root)
         run_retry_budgets(root)
+        run_reconnect_faults(root)
         run_write_provenance(root)
         run_userdata_completion(root)
+        run_userdata_assurance(root)
         run_transport_resources()
         run_timeout_cleanup(root)
         run_connection_budget(root)
@@ -1598,6 +1604,8 @@ def main() -> None:
         run_operation_conformance()
         run_value_conformance()
         run_conversation_conformance()
+        run_session_conformance()
+        run_scalability_bench(rounds=1, smoke=True)
         run_multi_batching(root)
         run_multi_semantics(root)
         run_reconnect_shrink(root)
