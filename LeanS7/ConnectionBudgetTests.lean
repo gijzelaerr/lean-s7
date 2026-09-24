@@ -27,10 +27,13 @@ def run : IO Unit := do
     pure false
   catch error => pure (classifyClientError error == .timeout)
   require candidates "expired candidates returned a non-budget error"
-  let deadline ← Transport.receiveDeadline (some 120)
-  Transport.withDeadline deadline "first stage" (IO.sleep 80)
+  -- Keep the shared-budget regression, without requiring a hosted scheduler
+  -- to finish the successful stage inside a 40 ms margin. A fresh budget
+  -- would allow the second stage; the original deadline must expire instead.
+  let deadline ← Transport.receiveDeadline (some 3000)
+  Transport.withDeadline deadline "first stage" (IO.sleep 1000)
   let second ← try
-    Transport.withDeadline deadline "second stage" (IO.sleep 80)
+    Transport.withDeadline deadline "second stage" (IO.sleep 2500)
     pure false
   catch error => pure (classifyClientError error == .timeout)
   require second "second connection stage received a fresh budget"

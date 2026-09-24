@@ -48,3 +48,21 @@ Further validation and publication results will be appended before release.
   this identifies that local build, not a portable reproducible-binary promise.
   The candidate is ready to commit and publish for exact-revision Linux/macOS
   checks. Release publication remains gated on both hosted jobs succeeding.
+
+- Candidate `2134bb1` passed the entire Linux job, including the independent
+  endpoint. macOS compiled successfully but exposed a fragile existing unit
+  test: its successful first stage slept 80 ms inside a 120 ms budget, leaving
+  only 40 ms scheduling margin. Increased only that test's shared budget/stage
+  durations to 3,000/1,000/2,500 ms. It still distinguishes the reused deadline
+  from a fresh per-stage budget; production timeout behavior is unchanged.
+  Preparing a fix-forward candidate after repeating the full local checks.
+
+- Fix-forward local validation passed: clean build (165 jobs), complete native
+  tests, eight exact corpora, complete emulator/fault integration, Ruff and
+  actionlint. Resource stress passed 216 attempts / 54 retry reconnects with
+  descriptors 8→8, threads 7→7, and RSS 5,685,248→5,750,784 bytes. Both official
+  native endpoint profiles passed again; the rebuilt local library SHA256 is
+  `e2c25f3f363e30e575856bc20b024bef38aad0b10fe64015ad5fddc8744a57e9`.
+  Extended pure-model differential campaign also passed 1,024 histories /
+  23,730 events on the unchanged model. Awaiting the fix-forward candidate's
+  exact-revision hosted results before tagging; no release tag yet.
