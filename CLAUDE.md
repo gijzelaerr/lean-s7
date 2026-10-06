@@ -35,6 +35,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/Value.lean`: typed DB values, bits, STRING, and WSTRING codecs.
 - `LeanS7/Transport.lean`: TCP, TPKT, and COTP IO.
 - `LeanS7/Client.lean`: client lifecycle and public operations.
+- `CliMain.lean`: read-only-by-default command-line tool; nothing imports it.
 - `Tests.lean`: deterministic unit and golden-packet tests.
 - `integration/run.py`: end-to-end tests against a pinned python-snap7
   emulator on a dynamic localhost port.
@@ -49,11 +50,12 @@ Run the complete local check before every commit:
 
 ```console
 lake clean
-lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms
+lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli
 lake exe lean-s7-tests
 lake exe lean-s7-axioms
 python -m pip install "python-snap7==3.0.0"
 python integration/run.py
+python integration/cli_smoke.py
 python integration/python_snap7_consumer.py
 python integration/corpus_package.py --check
 python integration/corpus_package.py --verify-package
