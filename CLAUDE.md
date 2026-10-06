@@ -49,8 +49,9 @@ Run the complete local check before every commit:
 
 ```console
 lake clean
-lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz
+lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms
 lake exe lean-s7-tests
+lake exe lean-s7-axioms
 python -m pip install "python-snap7==3.0.0"
 python integration/run.py
 ```
