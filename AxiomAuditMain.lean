@@ -10,6 +10,10 @@ def allowedAxioms : List Name := [`propext, `Classical.choice, `Quot.sound]
 def documentedTheorems : List Name :=
   [`LeanS7.Chunking.writeSlices_complete, `LeanS7.S7.decodeAreaRead_size,
    `LeanS7.coreProtocolAssurance,
+   `LeanS7.Correlation.step_deliver_iff, `LeanS7.Correlation.scan_delivered,
+   `LeanS7.Correlation.scan_tooManyStale, `LeanS7.Correlation.allocated_succ,
+   `LeanS7.Correlation.allocated_injective_window,
+   `LeanS7.Correlation.earlier_reply_not_delivered,
    `LeanS7.S7.decodeEndUpload_contract, `LeanS7.S7.decodeRequestDownloadAck_contract,
    `LeanS7.S7.decodePlcControl_contract, `LeanS7.S7.decodeStartUpload_contract,
    `LeanS7.S7.decodeDbWrite_contract, `LeanS7.S7.decodeSetupCommunication_contract,

@@ -8,6 +8,7 @@ import LeanS7.Download
 import LeanS7.Upload
 import LeanS7.UserDataAssembly
 import LeanS7.Lifecycle
+import LeanS7.Correlation
 import LeanS7.RetryPolicy
 import LeanS7.WriteProgress
 
@@ -121,7 +122,7 @@ def Client.connect (config : ClientConfig) : IO Client := do
   return { connection, requestTail, pendingOperations, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
-  client.nextReference.modifyGet fun reference => (reference, reference + 1)
+  client.nextReference.modifyGet fun reference => (reference, Correlation.nextReference reference)
 
 /-- Release the internal reverse history once the caller owns its snapshot. -/
 private def Client.takeWriteProgress (client : Client) : IO WriteProgress := do
@@ -165,11 +166,14 @@ private def Client.exchangeBytesCurrent (client : Client) (reference : UInt16)
   let pduLength ← client.currentPduLength.get
   let deadline := Transport.earlierReceiveDeadline
     (← Transport.receiveDeadline client.config.operationTimeoutMs) transferDeadline
+  let mut waiting := Correlation.Waiting.start reference client.config.maxStaleResponses
   for _ in [0:client.config.maxStaleResponses + 1] do
     let response ← Transport.receiveDataUntil connection.socket deadline
       pduLength.toNat
-    if (← orThrow <| S7.decodePduReference response) == reference then
-      return response
+    match Correlation.step waiting (← orThrow <| S7.decodePduReference response) with
+    | .deliver => return response
+    | .skipStale next => waiting := next
+    | .tooManyStale => break
   throw <| ClientError.protocol s!"too many stale S7 responses while waiting for reference {reference}"
 
 private def Client.exchangeCurrent (client : Client) (reference : UInt16)
