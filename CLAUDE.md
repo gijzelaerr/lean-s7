@@ -54,6 +54,8 @@ lake exe lean-s7-tests
 lake exe lean-s7-axioms
 python -m pip install "python-snap7==3.0.0"
 python integration/run.py
+python integration/corpus_package.py --check
+python integration/corpus_package.py --verify-package
 ```
 
 Also run Python lint and formatting checks on integration harness changes.

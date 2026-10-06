@@ -39,6 +39,8 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install "python-snap7==3.0.0" "ruff==0.16.8"
+      - run: python integration/corpus_package.py --check
+      - run: python integration/corpus_package.py --verify-package
       - run: ruff check integration
       - run: ruff format --check integration
       - run: python integration/run.py
