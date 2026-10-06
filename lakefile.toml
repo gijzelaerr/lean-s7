@@ -20,3 +20,7 @@ root = "ConformanceMain"
 [[lean_exe]]
 name = "lean-s7-fuzz"
 root = "FuzzMain"
+
+[[lean_exe]]
+name = "lean-s7-axioms"
+root = "AxiomAuditMain"

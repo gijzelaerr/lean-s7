@@ -218,8 +218,9 @@ cycles, nor does it provide a coherent controller-wide snapshot.
 Install [Lean through `elan`](https://lean-lang.org/install/), then run:
 
 ```console
-lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz
+lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms
 lake exe lean-s7-tests
+lake exe lean-s7-axioms
 lake exe lean-s7
 ```
 
