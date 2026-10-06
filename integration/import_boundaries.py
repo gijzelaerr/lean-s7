@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-ROOTS = ("LeanS7", "LeanS7.Client", "LeanS7.Assurance", "Main")
+ROOTS = ("LeanS7", "LeanS7.Client", "LeanS7.Assurance", "Main", "CliMain")
 TOOLING = {
     "LeanS7.SessionConformance",
     "LeanS7.SessionAssurance",
@@ -20,6 +20,10 @@ TOOLING = {
 
 def check(graph: dict[str, list[str]], roots: tuple[str, ...] = ROOTS) -> None:
     def visit(name: str, path: tuple[str, ...], seen: set[str]) -> None:
+        if name == "CliMain" and path:
+            raise ValueError(
+                "library imports the command-line tool: " + " -> ".join((*path, name))
+            )
         if (
             name in TOOLING
             or name == "Lean.Data.Json"
@@ -43,12 +47,13 @@ def run(root: Path) -> None:
     sources = [
         root / "LeanS7.lean",
         root / "Main.lean",
+        root / "CliMain.lean",
         *sorted((root / "LeanS7").glob("*.lean")),
     ]
     for source in sources:
         name = ".".join(source.relative_to(root).with_suffix("").parts)
         imports = []
-        for line in source.read_text().splitlines():
+        for line in source.read_text(encoding="utf-8").splitlines():
             match = re.fullmatch(r"\s*import\s+([A-Za-z0-9_. ]+?)\s*(?:--.*)?", line)
             if match:
                 imports.extend(match[1].split())
@@ -59,13 +64,15 @@ def run(root: Path) -> None:
         {"Main": ["LeanS7.SessionFuzz"]},
         {"LeanS7.Assurance": ["Helper"], "Helper": ["Lean.Data.Json.Parser"]},
         {"LeanS7.Assurance": ["LeanS7.SessionAssurance"]},
+        {"LeanS7": ["CliMain"], "CliMain": ["LeanS7"]},
+        {"CliMain": ["LeanS7.SessionFuzz"]},
     ):
         try:
             check(changed)
         except ValueError:
             continue
         raise AssertionError("import-boundary guard accepted tooling regression")
-    print("client import boundaries passed: four public/executable roots")
+    print("client import boundaries passed: five public/executable roots")
 
 
 if __name__ == "__main__":

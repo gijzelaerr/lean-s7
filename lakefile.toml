@@ -24,3 +24,7 @@ root = "FuzzMain"
 [[lean_exe]]
 name = "lean-s7-axioms"
 root = "AxiomAuditMain"
+
+[[lean_exe]]
+name = "lean-s7-cli"
+root = "CliMain"

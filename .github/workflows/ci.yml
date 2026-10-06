@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
         with:
-          build-args: lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms
+          build-args: lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli
       - run: lake exe lean-s7-tests
       - run: lake exe lean-s7-axioms
       - run: lake exe lean-s7-conformance | diff - conformance/v1/tpkt.json
@@ -42,5 +42,6 @@ jobs:
       - run: ruff check integration
       - run: ruff format --check integration
       - run: python integration/run.py
+      - run: python integration/cli_smoke.py
       - run: python integration/native_snap7_build.py
       - run: python integration/native_snap7.py --library ".lake/native-snap7/${{ matrix.native-library }}"

@@ -218,7 +218,7 @@ cycles, nor does it provide a coherent controller-wide snapshot.
 Install [Lean through `elan`](https://lean-lang.org/install/), then run:
 
 ```console
-lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms
+lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli
 lake exe lean-s7-tests
 lake exe lean-s7-axioms
 lake exe lean-s7
@@ -298,6 +298,34 @@ in order reproduces the original bytes exactly. This establishes local transfer
 coverage and payload preservation, not atomic writes or controller persistence.
 
 The project pins its Lean toolchain in `lean-toolchain`.
+
+## Command-line tool
+
+`lean-s7-cli` is a small front end for hands-on testing without writing Lean code. It
+is a separate executable that nothing in the library imports (`integration/import_boundaries.py`
+enforces this).
+
+```console
+lake build lean-s7-cli
+lake exe lean-s7-cli --host 192.0.2.10 --slot 2 info
+lake exe lean-s7-cli --host 192.0.2.10 read db 1 0 16          # hex bytes
+lake exe lean-s7-cli --host 192.0.2.10 read db 1 4 --as real   # typed value
+lake exe lean-s7-cli --host 192.0.2.10 blocks info db 1
+lake exe lean-s7-cli --host 192.0.2.10 --allow-write write db 1 0 --as i16 -2
+```
+
+It is read-only by default: `write`, `cpu stop|hot-start|cold-start` and
+`blocks delete` are refused locally, before any connection, unless `--allow-write` is
+given. Typed values are big-endian DB values (`u8 i8 u16 i16 u32 i32 u64 i64 real
+lreal bit:N`; typed writes support the integer types). Errors print `error: ...`
+and exit with status 1. Clock setting, uploads and downloads are not exposed.
+
+The tool prints a warning on every run: lean-s7 has not been validated against any
+physical controller, and the mutating commands can stop a CPU or change process
+data. `integration/cli_smoke.py` checks the contract above against a localhost
+python-snap7 emulator; that emulator does not return conformant SZL or clock replies,
+so `info`, `state` and `clock` report protocol errors against it and are not covered
+by that test.
 
 ## Client example
 
