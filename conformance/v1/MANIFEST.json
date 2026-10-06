@@ -1,0 +1,73 @@
+{
+  "manifest_version": 1,
+  "corpus": "lean-s7-conformance",
+  "corpus_version": "1.0.0",
+  "lean_s7_version": "0.1.1",
+  "lean_toolchain": "leanprover/lean4:v4.33.1",
+  "files": [
+    {
+      "name": "conversations.json",
+      "protocol": "classic S7 primitive conversation histories",
+      "schema_version": 1,
+      "bytes": 167472,
+      "sha256": "2b58609e1dab2ffab341fb7410fc3acc0a0526edfbd08a078c3eca7a6c6822ca",
+      "generator": "lake exe lean-s7-conformance conversations"
+    },
+    {
+      "name": "cotp-data.json",
+      "protocol": "RFC 2126 COTP class 0 data TPDU",
+      "schema_version": 1,
+      "bytes": 1547,
+      "sha256": "cd8e9b7b7db980a6f2f5d04360d469f97cd4ea9db0aece243eb4a4251a8c9417",
+      "generator": "lake exe lean-s7-conformance cotp"
+    },
+    {
+      "name": "management.json",
+      "protocol": "classic S7 management codec conversations",
+      "schema_version": 1,
+      "bytes": 73497,
+      "sha256": "8bd97383b0e4623121a2f389a723cb73df328a383dc788a146482303df3ab7fc",
+      "generator": "lake exe lean-s7-conformance management"
+    },
+    {
+      "name": "operations.json",
+      "protocol": "classic S7 operation guards and write diagnostics",
+      "schema_version": 1,
+      "bytes": 10044,
+      "sha256": "3bcc702cf99ee7a8e2fe2c1716ba25eedfbdfde8fd3e3582c9d07cd2a503d684",
+      "generator": "lake exe lean-s7-conformance operations"
+    },
+    {
+      "name": "s7.json",
+      "protocol": "classic S7 semantics",
+      "schema_version": 1,
+      "bytes": 24689,
+      "sha256": "dc05ec5672b3e2e6b98da8a081c9c6f239f56a37c9ad262fc807cf5bd98725ce",
+      "generator": "lake exe lean-s7-conformance s7"
+    },
+    {
+      "name": "sessions.json",
+      "protocol": "classic S7 active request histories",
+      "schema_version": 1,
+      "bytes": 179686,
+      "sha256": "7772e719874b11e44f121f76795f263820af78cd6f6d6fae747f0683ea69a8e4",
+      "generator": "lake exe lean-s7-conformance sessions"
+    },
+    {
+      "name": "tpkt.json",
+      "protocol": "RFC 1006 TPKT",
+      "schema_version": 1,
+      "bytes": 2197,
+      "sha256": "e7836ee77bb35f066abd02ac266a448f478bc3906e68770dfd875b2a0c2547de",
+      "generator": "lake exe lean-s7-conformance"
+    },
+    {
+      "name": "values.json",
+      "protocol": "classic S7 typed values and clock",
+      "schema_version": 1,
+      "bytes": 63299,
+      "sha256": "baea97a3385257e5af97eb686a098308e404f1669fbc29542802ecfcd9409db1",
+      "generator": "lake exe lean-s7-conformance values"
+    }
+  ]
+}
