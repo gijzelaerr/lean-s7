@@ -58,6 +58,31 @@ acceptance boundary; it does not silently require a theorem for every IO functio
 | Compression, RAM-to-ROM copy, force-table reads and process-image overrides | Emulator/control vectors, exhaustive force bit/value tests and public SZL metadata checks | Actual force-table identifier/alignment/extent contracts and bit-update properties; not persistent CPU-force semantics | Native format comparisons and independent wire peers/oracles where represented | `forceBit`/`cancelForceBit` are process-image writes, not persistent force-table operations. Maintenance/scan-cycle behavior requires H1. |
 | Validated raw exchange | Reference mismatch, packet validity, conservative retry and terminal-failure tests | Reuses framing/correlation/replay helpers; no semantic theorem for arbitrary raw service payloads | Scripted peer checks | Caller owns service payload interpretation; the escape hatch does not enlarge the supported service profile. |
 
+## Decoder extent and rejection inventory
+
+Every decoder reachable from a public `Client` operation, with the checked theorem
+that states what a *successful* decode implies. "Contract" theorems prove
+correlation (PDU reference), exact parameter/data extents and no trailing bytes;
+none claims anything about field semantics. This inventory is checked by
+`lake exe lean-s7-axioms`, which fails if a named theorem disappears or depends on
+anything beyond `propext`, `Classical.choice` and `Quot.sound`.
+
+| Decoder | Checked theorem | Module |
+| --- | --- | --- |
+| TPKT, COTP data/disconnect | `TPKT.decode_encode`, `COTP.decodeData_encodeData`, `COTP.decodeDisconnectRequest_encodeDisconnectRequest` | [Assurance](../LeanS7/Assurance.lean) |
+| S7 job/response, PDU reference, area reads, multi-item read/write, USER_DATA | Round trips, `decodeAreaRead`/`decodeAreaReadMany`/`decodeAreaWriteMany` extent and count contracts, USER_DATA correlation | [Assurance](../LeanS7/Assurance.lean), [MultiResponseAssurance](../LeanS7/MultiResponseAssurance.lean), [UserDataDecoderAssurance](../LeanS7/UserDataDecoderAssurance.lean) |
+| Setup communication | `decodeSetupCommunication_contract` (reference, 8 parameter bytes, PDU length ≥ 240) | [ResponseDecoderAssurance](../LeanS7/ResponseDecoderAssurance.lean) |
+| DB write acknowledgement | `decodeDbWrite_contract` | ResponseDecoderAssurance |
+| Block upload start/fragment/end | `decodeStartUpload_contract`, `decodeUploadFragment_contract` (data section = 4-byte header + fragment), `decodeEndUpload_contract` | ResponseDecoderAssurance |
+| Download request acknowledgement | `decodeRequestDownloadAck_contract` | ResponseDecoderAssurance |
+| CPU control | `decodePlcControl_contract` | ResponseDecoderAssurance |
+| SZL envelope and first fragment | `decodeSzl_contract` (identity preserved, data = record length × count), `decodeSzlFirst_extent` | ResponseDecoderAssurance |
+| Typed SZL parsers, block counts/entries/info, force table | Extent/alignment contracts | [AdvancedDecoderAssurance](../LeanS7/AdvancedDecoderAssurance.lean) |
+| Clock | Round trip, ten-byte size, malformed-BCD rejection | [ClockCodecAssurance](../LeanS7/ClockCodecAssurance.lean) |
+| Typed values, STRING/WSTRING, REAL/LREAL | Surrounded round trips; floats at the bit level (`getReal_putReal_surrounded_bits`, `getLReal_putLReal_surrounded_bits`); NaN equality stays out of scope | [ValueCodecAssurance](../LeanS7/ValueCodecAssurance.lean), [ValueDecoderAssurance](../LeanS7/ValueDecoderAssurance.lean) |
+| `decodeDbRead` | Delegates to `decodeAreaRead` after correlation; covered through that contract, no separate theorem | [S7](../LeanS7/S7.lean) |
+| COTP connection confirm, `decodeParameters` | Tests and corpora only; no extent theorem yet | [COTP](../LeanS7/COTP.lean) |
+
 ## Finite local-profile exit gates
 
 The remaining work is a bounded closure checklist. A newly discovered defect may
