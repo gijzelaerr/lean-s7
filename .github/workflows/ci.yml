@@ -43,6 +43,7 @@ jobs:
       - run: python integration/corpus_package.py --verify-package
       - run: ruff check integration
       - run: ruff format --check integration
+      - run: python integration/python_snap7_consumer.py
       - run: python integration/run.py
       - run: python integration/native_snap7_build.py
       - run: python integration/native_snap7.py --library ".lake/native-snap7/${{ matrix.native-library }}"
