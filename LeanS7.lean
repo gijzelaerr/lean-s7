@@ -16,3 +16,5 @@ import LeanS7.ClientError
 import LeanS7.Transport
 import LeanS7.Client
 import LeanS7.Assurance
+import LeanS7.Correlation
+import LeanS7.ResponseDecoderAssurance
