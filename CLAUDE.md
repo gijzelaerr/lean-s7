@@ -54,6 +54,7 @@ lake exe lean-s7-tests
 lake exe lean-s7-axioms
 python -m pip install "python-snap7==3.0.0"
 python integration/run.py
+python integration/python_snap7_consumer.py
 ```
 
 Also run Python lint and formatting checks on integration harness changes.
