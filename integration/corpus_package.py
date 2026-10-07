@@ -188,7 +188,8 @@ def package(out: Path, revision: str) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / name).write_bytes(data)
     digest = hashlib.sha256(data).hexdigest()
-    (out / (name + ".sha256")).write_text(f"{digest}  {name}\n")
+    # Bytes, not text mode: Windows would write CRLF, which sha256sum -c rejects.
+    (out / (name + ".sha256")).write_bytes(f"{digest}  {name}\n".encode())
     print(f"wrote {out / name} ({len(data)} bytes, sha256 {digest})")
 
 
