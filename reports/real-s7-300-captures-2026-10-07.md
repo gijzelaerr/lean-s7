@@ -81,6 +81,14 @@ Run when python-snap7 is installed (notes only; they do not fail the harness):
   success.
 - Its block-info request `0AA00001` differs from the real tool's `0A00001B`, which
   confirms the field-order bug in [#927](https://github.com/gijzelaerr/python-snap7/issues/927) (the letter comes after the number).
+- Its read-SZL request differs from the real tool's on every SZL read (all 63 in the
+  status capture): the data header is `0a 00 00 04 <id> <index>` where the real tool
+  sends `ff 09 00 04 <id> <index>` (return code `0xff`, octet-string transport size). Its
+  follow-up request for further SZL fragments uses an eight-byte parameter block with
+  method `0x11` (`00 01 12 04 11 44 01 <seq>`), where the real tool sends twelve bytes with
+  method `0x12` (`00 01 12 08 12 44 01 <seq> 00 00 00 00`), which the Lean encoder
+  reproduces exactly. Whether a PLC tolerates python-snap7's variants was not tested here;
+  this records only that they differ from the real tool.
 - The clock read and list-blocks requests, the block-count reply and the other
   requests/replies it can parse match the real traffic.
 

@@ -493,6 +493,35 @@ def snap7_checks(name: str, items: list[Message]) -> list[Result]:
                         "" if ok else "differs",
                     )
                 )
+            elif message.from_client and (group, sub) == (4, 1):
+                data = userdata_payload(pdu)
+                protocol.sequence = reference - 1
+                sequence = pdu[17]
+                if sequence == 0 and len(data) == 4:
+                    built = protocol.build_read_szl_request(
+                        struct.unpack(">H", data[:2])[0],
+                        struct.unpack(">H", data[2:4])[0],
+                    )
+                    results.append(
+                        Result(
+                            name,
+                            f"{label} read-SZL request",
+                            built == pdu,
+                            "" if built == pdu else "differs",
+                        )
+                    )
+                elif sequence != 0:
+                    built = protocol.build_userdata_followup_request(4, 1, sequence)
+                    detail = (
+                        ""
+                        if built == pdu
+                        else f"python-snap7 {built[10:22].hex()}, real tool {pdu[10:22].hex()}"
+                    )
+                    results.append(
+                        Result(
+                            name, f"{label} SZL follow-up request", built == pdu, detail
+                        )
+                    )
             elif message.from_client and (group, sub) == (3, 3):
                 data = userdata_payload(pdu)
                 protocol.sequence = reference - 1
