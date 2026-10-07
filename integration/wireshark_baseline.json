@@ -1,0 +1,933 @@
+{
+ "tshark": "4.6",
+ "probes": {
+  "management.json/decoder_cases/ff-3-2-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-0-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-10-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-10-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-255-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-255-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-4-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-4-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-7-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-7-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-3-2-9-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-3-2-9-2": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-4-1-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-4-1-0-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-4-1-10-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-4-1-10-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-4-1-255-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-4-1-255-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-4-1-4-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-4-1-4-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-4-1-7-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-4-1-7-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-4-1-9-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-4-1-9-2": {
+   "status": "fixture",
+   "detail": "envelope fields agree; dissector payload parser reports: Malformed Packet (Exception occurred)"
+  },
+  "management.json/decoder_cases/ff-5-1-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-0-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-10-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-10-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-255-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-255-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-4-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-4-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-7-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-7-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-1-9-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-5-1-9-2": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-5-2-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-0-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-10-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-10-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-255-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-255-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-4-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-4-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-7-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-7-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-5-2-9-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-5-2-9-2": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-7-1-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-1-0-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-7-1-10-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-1-10-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-7-1-255-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-1-255-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-7-1-4-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-1-4-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-7-1-7-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-1-7-2": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/ff-7-1-9-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-7-1-9-2": {
+   "status": "fixture",
+   "detail": "envelope fields agree; dissector payload parser reports: Malformed Packet (Exception occurred)"
+  },
+  "management.json/decoder_cases/ff-7-2-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-0-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-10-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-10-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-255-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-255-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-4-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-4-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-7-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-7-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/ff-7-2-9-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/ff-7-2-9-2": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/invalid-continuation-flag": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-0-0-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/null-5-1-0-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-0-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-0-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-10-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-10-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-10-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-10-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-255-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-255-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-255-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-255-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-4-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-4-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-4-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-4-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-7-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-7-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-7-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-7-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-9-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-9-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-9-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-1-9-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-0-0-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/null-5-2-0-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-0-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-0-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-10-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-10-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-10-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-10-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-255-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-255-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-255-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-255-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-4-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-4-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-4-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-4-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-7-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-7-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-7-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-7-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-9-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-9-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-9-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-5-2-9-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-0-0-0": {
+   "status": "agree",
+   "detail": ""
+  },
+  "management.json/decoder_cases/null-7-2-0-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-0-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-0-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-10-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-10-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-10-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-10-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-255-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-255-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-255-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-255-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-4-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-4-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-4-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-4-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-7-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-7-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-7-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-7-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-9-0-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-9-0-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-9-1-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-7-2-9-1-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-unsupported-3-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-unsupported-4-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/null-unsupported-7-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/parameter-error-before-null": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/trailing-packet": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-0": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-1": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-10": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-11": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-12": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-13": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-14": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-15": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-16": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-17": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-18": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-19": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-2": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-20": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-21": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-22": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-23": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-24": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-25": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "management.json/decoder_cases/truncated-26": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-3": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-4": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-5": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-6": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-7": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-8": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/truncated-9": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/wrong-group": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/wrong-reference": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "management.json/decoder_cases/wrong-subfunction": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/multi_item_cases/mixed-read-missing-padding/request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-read-missing-padding/response": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "s7.json/multi_item_cases/mixed-read-odd-padding/request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-read-odd-padding/response": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-read-trailing-byte/request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-read-trailing-byte/response": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/multi_item_cases/mixed-write-missing-status/request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-write-missing-status/response": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "s7.json/multi_item_cases/mixed-write-ordered-status/request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-write-ordered-status/response": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-write-trailing-status/request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/multi_item_cases/mixed-write-trailing-status/response": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/request_cases/clear-session-password": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/download-ended-response": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/download-fragment-response": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/end-upload": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/final-download-fragment-response": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/get-db-info": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/list-blocks": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/list-data-blocks": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/plc-cold-start": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/plc-hot-start": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/plc-stop": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/read-clock": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/request-db-download": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/set-clock": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/set-session-password": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/start-db-upload": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/request_cases/upload-fragment-request": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/response_cases/complete-read": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/response_cases/complete-write": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/response_cases/short-declared-read": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/response_cases/trailing-read-data": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/response_cases/truncated-read": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "s7.json/response_cases/write-answered-by-read": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/upload_cases/last-upload-fragment": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/upload_cases/upload-fragment": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/upload_cases/upload-invalid-continuation-flag": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/upload_cases/upload-invalid-continuation-flag-ff": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/upload_cases/upload-invalid-marker": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/upload_cases/upload-length-mismatch": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/upload_cases/upload-wrong-function": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/complete-szl": {
+   "status": "fixture",
+   "detail": "envelope fields agree; dissector payload parser reports: Malformed Packet (Exception occurred)"
+  },
+  "s7.json/userdata_cases/continuation-with-more-data": {
+   "status": "agree",
+   "detail": ""
+  },
+  "s7.json/userdata_cases/invalid-continuation-flag-ff": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/invalid-continuation-flag-two": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/item-error": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/trailing-userdata-payload": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/truncated-userdata-payload": {
+   "status": "agree",
+   "detail": "dissector also flags the packet"
+  },
+  "s7.json/userdata_cases/userdata-error": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/wrong-function-group": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  },
+  "s7.json/userdata_cases/wrong-subfunction": {
+   "status": "limitation",
+   "detail": "dissector decodes it silently"
+  }
+ }
+}
