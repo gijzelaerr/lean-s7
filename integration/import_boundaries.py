@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-ROOTS = ("LeanS7", "LeanS7.Client", "LeanS7.Assurance", "Main", "CliMain")
+ROOTS = ("LeanS7", "LeanS7.Client", "LeanS7.Assurance", "Main", "CliMain", "DecodeMain")
 TOOLING = {
     "LeanS7.SessionConformance",
     "LeanS7.SessionAssurance",
@@ -20,7 +20,7 @@ TOOLING = {
 
 def check(graph: dict[str, list[str]], roots: tuple[str, ...] = ROOTS) -> None:
     def visit(name: str, path: tuple[str, ...], seen: set[str]) -> None:
-        if name == "CliMain" and path:
+        if name in ("CliMain", "DecodeMain") and path:
             raise ValueError(
                 "library imports the command-line tool: " + " -> ".join((*path, name))
             )
@@ -72,7 +72,7 @@ def run(root: Path) -> None:
         except ValueError:
             continue
         raise AssertionError("import-boundary guard accepted tooling regression")
-    print("client import boundaries passed: five public/executable roots")
+    print("client import boundaries passed: six public/executable roots")
 
 
 if __name__ == "__main__":
