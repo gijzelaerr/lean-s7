@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import logging
 import shutil
 import struct
@@ -680,7 +681,16 @@ def snap7_checks(name: str, items: list[Message]) -> list[Result]:
             elif not message.from_client and (group, sub) == (7, 2) and pdu[22] == 0x0A:
                 parsed = protocol.parse_response(pdu)
                 try:
-                    protocol.check_userdata_response(parsed, 7, 2)
+                    # python-snap7 after #940 accepts this acknowledgement only when asked to.
+                    options = (
+                        {"accept_null_ack": True}
+                        if "accept_null_ack"
+                        in inspect.signature(
+                            protocol.check_userdata_response
+                        ).parameters
+                        else {}
+                    )
+                    protocol.check_userdata_response(parsed, 7, 2, **options)
                     results.append(
                         Result(
                             name, f"{label} set-clock acknowledgement accepted", True
