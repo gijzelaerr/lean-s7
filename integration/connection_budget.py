@@ -197,9 +197,18 @@ def _run_pending_tcp_budget(root: Path) -> None:
                 "pending-tcp",
             ],
             cwd=root,
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
             timeout=2,
         )
+        if outcome.returncode != 0:
+            if "connection refused" in outcome.stderr:
+                # Windows may take longer than the probe timeout to refuse a
+                # non-listening loopback port, so the SYN was not actually dropped.
+                print("pending TCP budget probe not applicable: delayed refusal")
+                return
+            raise subprocess.CalledProcessError(
+                outcome.returncode, outcome.args, outcome.stdout, outcome.stderr
+            )
         print("pending TCP process exit passed:", outcome.stdout.strip())

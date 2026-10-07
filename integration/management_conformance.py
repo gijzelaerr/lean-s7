@@ -264,7 +264,7 @@ def self_test(corpus: dict) -> None:
 
 
 def run(path: Path = DEFAULT_CORPUS) -> None:
-    corpus = json.loads(path.read_text())
+    corpus = json.loads(path.read_text(encoding="utf-8"))
     counts = validate(corpus)
     self_test(corpus)
     print(

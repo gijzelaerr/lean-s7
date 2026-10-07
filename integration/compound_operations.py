@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import select
 import socket
 import struct
 import subprocess
 import threading
 from pathlib import Path
 
+from _compat import stdout_ready
 from concurrency import _handshake
 from multi_batching import _ack, _receive, _request, _send
 from transfer_deadlines import _delay
@@ -288,7 +288,7 @@ def run_compound_operations(root: Path, deadline_rounds: int = 2) -> None:
                     process.stdin.write("launch\n")
                     process.stdin.flush()
                     if (
-                        not select.select([process.stdout], [], [], 5)[0]
+                        not stdout_ready(process.stdout, 5)
                         or process.stdout.readline().strip()
                         != "compound calls launched"
                     ):

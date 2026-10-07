@@ -64,6 +64,8 @@ python integration/corpus_package.py --check
 python integration/corpus_package.py --verify-package
 ```
 
+`integration/run.py` also runs on Windows; the resource-stress and scalability steps, which need Linux/macOS process metrics, are skipped there with a message.
+
 Also run Python lint and formatting checks on integration harness changes.
 For changes affecting independent endpoint testing, also run:
 

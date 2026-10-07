@@ -55,7 +55,9 @@ def normalized(path: Path) -> bytes:
 
 def lean_s7_version() -> str:
     match = re.search(
-        r'^version\s*=\s*"([^"]+)"', (ROOT / "lakefile.toml").read_text(), re.MULTILINE
+        r'^version\s*=\s*"([^"]+)"',
+        (ROOT / "lakefile.toml").read_text(encoding="utf-8"),
+        re.MULTILINE,
     )
     if not match:
         raise CorpusError("lakefile.toml has no version")
@@ -63,7 +65,7 @@ def lean_s7_version() -> str:
 
 
 def toolchain() -> str:
-    return (ROOT / "lean-toolchain").read_text().strip()
+    return (ROOT / "lean-toolchain").read_text(encoding="utf-8").strip()
 
 
 def describe(name: str) -> dict[str, object]:

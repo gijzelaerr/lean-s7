@@ -462,7 +462,9 @@ def runTransportFailureIntegration (host portString expected : String) : IO Unit
     | throw <| IO.userError s!"invalid TCP port: {portString}"
   let client ← Client.connect {
     endpoint := endpointOfString host, port := UInt16.ofNat portNat,
-    operationTimeoutMs := some 300,
+    -- Only the cases that expect a timeout need a tight deadline; the accepting ones
+    -- trickle fragments and must not depend on peer-thread scheduling.
+    operationTimeoutMs := some (if expected == "accept" then 5000 else 300),
     reconnectRetries := if (expected.splitOn "too many stale").length > 1 then 1 else 0
   }
   try
