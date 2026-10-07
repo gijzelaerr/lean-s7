@@ -1,8 +1,8 @@
 {
   "manifest_version": 1,
   "corpus": "lean-s7-conformance",
-  "corpus_version": "1.0.0",
-  "lean_s7_version": "0.1.1",
+  "corpus_version": "1.0.1",
+  "lean_s7_version": "0.2.0",
   "lean_toolchain": "leanprover/lean4:v4.33.1",
   "files": [
     {
