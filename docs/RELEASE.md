@@ -5,7 +5,10 @@
 This is an experimental classic S7comm Lean client and executable specification,
 not a production-qualified driver. Version 0.1.0 was the initial experimental
 release; 0.1.1 repairs the compound deadline test fixture and strengthens its
-negative controls. Neither is a compatibility certification. See
+negative controls. A 0.2.0 candidate (not yet tagged) adds the proved correlation
+core, decoder contracts, a read-only-by-default CLI, differential and real-capture
+evidence and Windows test support; see [its notes](releases/0.2.0.md). None of these
+is a compatibility certification. See
 [the completion matrix](COMPLETENESS.md) for the bounded feature scope and open
 gates. S7comm Plus, optimized symbolic access, a native server, and python-snap7
 API parity are not release requirements for this profile.
