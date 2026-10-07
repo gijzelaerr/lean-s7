@@ -320,7 +320,7 @@ def _check_checker(corpus: dict) -> None:
 
 
 def run(corpus_path: Path = DEFAULT_CORPUS) -> None:
-    corpus = json.loads(corpus_path.read_text())
+    corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
     total = check(corpus)
     _check_checker(corpus)
     print(f"{total}/{total} independent value corpus cases passed")

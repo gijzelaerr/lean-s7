@@ -47,7 +47,7 @@ def main() -> int:
     parser.add_argument("corpus", nargs="?", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--tshark", default="tshark")
     args = parser.parse_args()
-    corpus = json.loads(args.corpus.read_text())
+    corpus = json.loads(args.corpus.read_text(encoding="utf-8"))
     if corpus["schema_version"] != 1:
         raise ValueError("unsupported corpus schema")
     cases = corpus["address_cases"]

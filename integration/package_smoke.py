@@ -16,7 +16,7 @@ def run(root: Path) -> None:
     lake = os.environ.get("LAKE", "lake")
     config = (
         (fixture / "lakefile.toml.in")
-        .read_text()
+        .read_text(encoding="utf-8")
         .replace("@REPOSITORY_PATH@", json.dumps(str(root), ensure_ascii=False))
     )
     # The dependency is a local path: no clone, fetch, publication or PLC IO.

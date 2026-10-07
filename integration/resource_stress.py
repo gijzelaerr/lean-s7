@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import ctypes
 import os
-import select
 import socket
 import subprocess
 import sys
@@ -16,6 +15,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from _compat import stdout_ready
 from multi_batching import _ack, _receive, _request, _send
 
 
@@ -60,7 +60,9 @@ def sample_process(pid: int) -> Sample:
     if sys.platform.startswith("linux"):
         status = dict(
             line.split(":", 1)
-            for line in Path(f"/proc/{pid}/status").read_text().splitlines()
+            for line in Path(f"/proc/{pid}/status")
+            .read_text(encoding="utf-8")
+            .splitlines()
         )
         return Sample(
             len(os.listdir(f"/proc/{pid}/fd")),
@@ -209,6 +211,11 @@ def _serve(listener: socket.socket, errors: list[Exception], rounds: int) -> Non
 def run_resource_stress(root: Path, rounds: int = 1) -> None:
     if not 1 <= rounds <= 1000:
         raise ValueError("stress rounds must be between 1 and 1000")
+    if sys.platform == "win32":
+        # Descriptor/thread/RSS sampling is implemented for Linux (/proc) and macOS
+        # (libproc) only; do not claim a resource-leak result on Windows.
+        print("resource stress skipped: process metrics unsupported on win32")
+        return
     _test_plateau_checker()
     samples: list[Sample] = []
     errors: list[Exception] = []
@@ -236,7 +243,7 @@ def run_resource_stress(root: Path, rounds: int = 1) -> None:
         try:
             assert process.stdout is not None and process.stdin is not None
             for index in range(17):
-                if not select.select([process.stdout], [], [], 8 * rounds)[0]:
+                if not stdout_ready(process.stdout, 8 * rounds):
                     raise RuntimeError(
                         f"resource stress sample stalled; peer errors: {errors}"
                     )

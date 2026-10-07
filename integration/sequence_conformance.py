@@ -146,7 +146,7 @@ def decode_conversation(test: dict) -> dict:
 
 
 def run(corpus_path: Path = DEFAULT_CORPUS) -> None:
-    corpus = json.loads(corpus_path.read_text())
+    corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
     if corpus["schema_version"] != 1 or corpus["protocol"] != "classic S7 semantics":
         raise ValueError("unsupported corpus")
     total = 0

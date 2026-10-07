@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
-import select
 import socket
 import struct
 import subprocess
 import threading
 from pathlib import Path
 
+from _compat import stdout_ready
 from concurrency import _handshake
 from multi_batching import _ack, _receive, _request, _send
 
@@ -179,7 +179,7 @@ def run_queued_lifecycle(root: Path) -> None:
                     assert process.stdin is not None and process.stdout is not None
                     process.stdin.write("admit\n")
                     process.stdin.flush()
-                    if not select.select([process.stdout], [], [], 5)[0]:
+                    if not stdout_ready(process.stdout, 5):
                         raise RuntimeError(
                             "queued lifecycle gate admission output missing"
                         )

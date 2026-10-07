@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import select
 import socket
 import struct
 import subprocess
 import threading
 from pathlib import Path
 
+from _compat import stdout_ready
 from multi_batching import _ack, _receive, _request, _send
 
 
@@ -173,7 +173,7 @@ def run_concurrency(
                 process.stdin.flush()
                 # This line is emitted only after the competing tasks and
                 # disconnect task have been created, while reply one is held.
-                if not select.select([process.stdout], [], [], 5)[0]:
+                if not stdout_ready(process.stdout, 5):
                     raise RuntimeError(
                         "concurrency process did not launch its queued calls"
                     )

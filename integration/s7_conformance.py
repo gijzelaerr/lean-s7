@@ -310,7 +310,7 @@ def write_case(test):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("corpus", nargs="?", type=Path, default=DEFAULT_CORPUS)
-    corpus = json.loads(parser.parse_args().corpus.read_text())
+    corpus = json.loads(parser.parse_args().corpus.read_text(encoding="utf-8"))
     if corpus["schema_version"] != 1 or corpus["protocol"] != "classic S7 semantics":
         raise ValueError("unsupported corpus")
     failures = []

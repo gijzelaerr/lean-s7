@@ -13,6 +13,7 @@ import socket
 import statistics
 import struct
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -180,6 +181,11 @@ def measure(root: Path, pdu: int, mode: str, size: int, rounds: int) -> dict:
 
 
 def run(rounds: int = 3, smoke: bool = False) -> dict:
+    if sys.platform == "win32":
+        print(
+            "scalability benchmark skipped: process memory sampling unsupported on win32"
+        )
+        return {"schema_version": 1, "skipped": "win32", "cases": []}
     root = Path(__file__).resolve().parents[1]
     cases = []
     for pdu in (240, 480):

@@ -102,7 +102,9 @@ def _expected() -> dict[tuple[int, int], bytearray]:
 
 def run(root: Path, library: Path) -> dict:
     _self_test()
-    provenance = json.loads(library.with_suffix(library.suffix + ".json").read_text())
+    provenance = json.loads(
+        library.with_suffix(library.suffix + ".json").read_text(encoding="utf-8")
+    )
     fingerprint = hashlib.sha256(library.read_bytes()).hexdigest()
     if (
         provenance.get("repository") != "davenardella/snap7"
