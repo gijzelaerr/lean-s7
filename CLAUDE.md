@@ -57,6 +57,8 @@ python -m pip install "python-snap7==3.0.0"
 python integration/run.py
 python integration/cli_smoke.py
 python integration/python_snap7_consumer.py
+# also, in a separate virtualenv with python-snap7==3.2.1 (CI does this)
+python integration/python_snap7_consumer.py
 python integration/corpus_package.py --check
 python integration/corpus_package.py --verify-package
 ```

@@ -1,0 +1,1870 @@
+{
+ "cotp-data.json/decode_cases/complete-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/decode_cases/invalid-header-length": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "cotp-data.json/decode_cases/invalid-tpdu-code": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/decode_cases/nonzero-tpdu-number": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "cotp-data.json/decode_cases/segmented-data": {
+  "status": "gap",
+  "detail": "python-snap7 does not expose the end-of-transmission flag"
+ },
+ "cotp-data.json/decode_cases/truncated-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/encode_cases/complete-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/encode_cases/empty-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/encode_cases/segmented-data": {
+  "status": "gap",
+  "detail": "_build_cotp_dt always sets the end-of-transmission bit"
+ },
+ "management.json/decoder_cases/ff-3-2-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-0-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-10-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-10-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-255-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-255-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-4-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-4-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-7-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-7-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-9-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-3-2-9-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-0-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-10-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-10-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-255-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-255-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-4-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-4-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-7-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-7-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-9-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-4-1-9-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-0-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-10-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-10-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-255-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-255-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-4-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-4-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-7-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-7-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-9-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-1-9-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-0-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-10-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-10-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-255-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-255-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-4-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-4-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-7-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-7-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-9-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-5-2-9-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-0-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-10-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-10-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-255-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-255-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-4-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-4-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-7-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-7-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-9-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-1-9-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-0-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-10-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-10-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-255-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-255-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-4-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-4-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-7-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-7-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-9-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/ff-7-2-9-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/invalid-continuation-flag": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-0-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-0-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-0-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-0-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-10-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-10-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-10-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-10-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-255-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-255-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-255-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-255-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-4-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-4-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-4-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-4-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-7-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-7-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-7-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-7-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-9-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-9-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-9-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-1-9-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-0-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-0-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-0-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-0-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-10-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-10-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-10-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-10-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-255-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-255-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-255-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-255-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-4-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-4-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-4-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-4-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-7-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-7-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-7-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-7-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-9-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-9-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-9-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-5-2-9-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-0-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-0-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-0-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-0-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-10-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-10-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-10-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-10-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-255-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-255-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-255-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-255-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-4-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-4-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-4-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-4-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-7-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-7-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-7-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-7-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-9-0-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-9-0-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-9-1-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-7-2-9-1-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-unsupported-3-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-unsupported-4-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/null-unsupported-7-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/parameter-error-before-null": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/trailing-packet": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-0": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-1": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-10": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-11": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-12": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-13": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-14": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-15": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-16": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-17": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-18": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-19": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-2": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-20": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-21": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-22": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-23": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-24": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-25": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-26": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-3": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-4": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-5": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-6": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-7": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-8": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/truncated-9": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/wrong-group": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/wrong-reference": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "management.json/decoder_cases/wrong-subfunction": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/block_count_cases/complete-block-counts": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_count_cases/duplicate-block-count-type": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_count_cases/duplicate-identical-block-count": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_count_cases/trailing-block-counts": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_count_cases/truncated-block-counts": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_count_cases/unknown-block-count-type": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_info_cases/complete-block-info": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_info_cases/trailing-block-info": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_info_cases/truncated-block-info": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_list_cases/complete-block-list": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_list_cases/trailing-block-list": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_list_cases/truncated-block-list": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/multi_item_cases/mixed-read-missing-padding": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.build_multi_read_request"
+ },
+ "s7.json/multi_item_cases/mixed-read-odd-padding": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.build_multi_read_request"
+ },
+ "s7.json/multi_item_cases/mixed-read-trailing-byte": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.build_multi_read_request"
+ },
+ "s7.json/multi_item_cases/mixed-write-missing-status": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.build_multi_read_request"
+ },
+ "s7.json/multi_item_cases/mixed-write-ordered-status": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.build_multi_read_request"
+ },
+ "s7.json/multi_item_cases/mixed-write-trailing-status": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.build_multi_read_request"
+ },
+ "s7.json/request_cases/clear-session-password": {
+  "status": "gap",
+  "detail": "this python-snap7 lacks the builder: 'S7Protocol' object has no attribute 'build_clear_session_password_request'"
+ },
+ "s7.json/request_cases/download-ended-response": {
+  "status": "gap",
+  "detail": "this python-snap7 lacks the builder: 'S7Protocol' object has no attribute 'build_download_ended_response'"
+ },
+ "s7.json/request_cases/download-fragment-response": {
+  "status": "gap",
+  "detail": "this python-snap7 lacks the builder: 'S7Protocol' object has no attribute 'build_download_fragment_response'"
+ },
+ "s7.json/request_cases/end-upload": {
+  "status": "disagree",
+  "detail": "packet differs at byte 7: python-snap7 320100000001000700001f000000000007 corpus 320100000001000800001f00000000000007"
+ },
+ "s7.json/request_cases/final-download-fragment-response": {
+  "status": "gap",
+  "detail": "this python-snap7 lacks the builder: 'S7Protocol' object has no attribute 'build_download_fragment_response'"
+ },
+ "s7.json/request_cases/get-db-info": {
+  "status": "disagree",
+  "detail": "packet differs at byte 18: python-snap7 3207000000010008000c00011204114303000a0000083041413030303031 corpus 3207000000010008000c0001120411430300ff0900083041303030303141"
+ },
+ "s7.json/request_cases/list-blocks": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/list-data-blocks": {
+  "status": "disagree",
+  "detail": "packet differs at byte 9: python-snap7 3207000000010008000800011204114302000a00000430410a00 corpus 320700000001000800060001120411430200ff0900023041"
+ },
+ "s7.json/request_cases/plc-cold-start": {
+  "status": "disagree",
+  "detail": "packet differs at byte 7: python-snap7 320100000001000200002802 corpus 3201000000010016000028000000000000fd0002432009505f50524f4752414d"
+ },
+ "s7.json/request_cases/plc-hot-start": {
+  "status": "disagree",
+  "detail": "packet differs at byte 7: python-snap7 320100000001000200002801 corpus 3201000000010014000028000000000000fd000009505f50524f4752414d"
+ },
+ "s7.json/request_cases/plc-stop": {
+  "status": "disagree",
+  "detail": "packet differs at byte 7: python-snap7 3201000000010001000029 corpus 3201000000010010000029000000000009505f50524f4752414d"
+ },
+ "s7.json/request_cases/read-clock": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/request-db-download": {
+  "status": "gap",
+  "detail": "no python-snap7 builder for request_db_download"
+ },
+ "s7.json/request_cases/set-clock": {
+  "status": "disagree",
+  "detail": "packet differs at byte 9: python-snap7 3207000000010008000c00011204114702000a0000080026092312345603 corpus 3207000000010008000e0001120411470200ff09000a00192609231234567893"
+ },
+ "s7.json/request_cases/set-session-password": {
+  "status": "gap",
+  "detail": "this python-snap7 lacks the builder: 'S7Protocol' object has no attribute 'build_set_session_password_request'"
+ },
+ "s7.json/request_cases/start-db-upload": {
+  "status": "disagree",
+  "detail": "packet differs at byte 7: python-snap7 320100000001001000001d000000000000083431303030303141 corpus 320100000001001200001d00000000000000095f3041303030303141"
+ },
+ "s7.json/request_cases/upload-fragment-request": {
+  "status": "disagree",
+  "detail": "packet differs at byte 7: python-snap7 320100000001000700001e000000000007 corpus 320100000001000800001e00000000000007"
+ },
+ "s7.json/response_cases/complete-read": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/complete-write": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/short-declared-read": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/response_cases/trailing-read-data": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/response_cases/truncated-read": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/response_cases/write-answered-by-read": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/upload_cases/last-upload-fragment": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/upload_cases/upload-fragment": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/upload_cases/upload-invalid-continuation-flag": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/upload_cases/upload-invalid-continuation-flag-ff": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/upload_cases/upload-invalid-marker": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/upload_cases/upload-length-mismatch": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/upload_cases/upload-wrong-function": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.parse_upload_fragment"
+ },
+ "s7.json/userdata_cases/complete-szl": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/continuation-with-more-data": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/invalid-continuation-flag-ff": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/invalid-continuation-flag-two": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/item-error": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/trailing-userdata-payload": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/truncated-userdata-payload": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/userdata-error": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/wrong-function-group": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/userdata_cases/wrong-subfunction": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "s7.json/write_cases/two-word-multi-write": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/declared-length-below-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/declared-length-mismatch": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/maximum-valid": {
+  "status": "gap",
+  "detail": "accepted TPKT payload is not a COTP data TPDU; python-snap7 cannot decode TPKT alone"
+ },
+ "tpkt.json/decode_cases/minimum-valid": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/reserved-input-is-ignored": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/truncated-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/unsupported-version": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/above-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/below-minimum": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "tpkt.json/encode_cases/maximum-valid": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/minimum-valid": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/ordinary-payload": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-2": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-3": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-4": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-5": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-6": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-7": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-8": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-9": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-1": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-12": {
+  "status": "gap",
+  "detail": "python-snap7 derives the weekday from the date; it cannot be supplied"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-13": {
+  "status": "gap",
+  "detail": "python-snap7 derives the weekday from the date; it cannot be supplied"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-3": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-4": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-5": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-6": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-7": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-8": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-9": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-0": {
+  "status": "disagree",
+  "detail": "encoded 00080090010100000001, corpus 00199001010000000001"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-1": {
+  "status": "disagree",
+  "detail": "encoded 00080099123112345605, corpus 00199912311234560013"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-2": {
+  "status": "disagree",
+  "detail": "encoded 00080000022912345602, corpus 00190002291234560093"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-3": {
+  "status": "disagree",
+  "detail": "encoded 00080024022912345604, corpus 00192402291234560103"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-4": {
+  "status": "disagree",
+  "detail": "encoded 00080026092312345603, corpus 00192609231234560993"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-5": {
+  "status": "disagree",
+  "detail": "encoded 00080026092312345603, corpus 00192609231234561003"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-6": {
+  "status": "disagree",
+  "detail": "encoded 00080089123123595906, corpus 00198912312359599997"
+ },
+ "values.json/clock_codec_cases/clock-trailing-byte": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-0": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-1": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-2": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-3": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-4": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-5": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-6": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-7": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-8": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-truncated-9": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-0": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-10": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-11": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-12": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-13": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-14": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-15": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-8": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/clock_codec_cases/clock-weekday-9": {
+  "status": "disagree",
+  "detail": "ten-byte clock payload accepted despite invalid fields"
+ },
+ "values.json/integer_cases/int16-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int64-maximum": {
+  "status": "gap",
+  "detail": "no signed 64-bit encoder in python-snap7 (decoder agrees)"
+ },
+ "values.json/integer_cases/int64-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int64-minimum": {
+  "status": "gap",
+  "detail": "no signed 64-bit encoder in python-snap7 (decoder agrees)"
+ },
+ "values.json/integer_cases/int64-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int64-negative-one": {
+  "status": "gap",
+  "detail": "no signed 64-bit encoder in python-snap7 (decoder agrees)"
+ },
+ "values.json/integer_cases/int64-negative-one-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-byte-order": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-byte-order-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-byte-order": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-byte-order-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-byte-order": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-byte-order-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-zero": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-zero-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-active-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-capacity-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-current-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-declared-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-empty": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-full-capacity": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-latin1-nul": {
+  "status": "ambiguity",
+  "detail": "bytes after the current length differ"
+ },
+ "values.json/string_codec_cases/string-maximum-padding": {
+  "status": "ambiguity",
+  "detail": "bytes after the current length differ"
+ },
+ "values.json/string_codec_cases/string-non-latin1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-short-allocation": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/string_codec_cases/string-short-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-bmp-surrogate-gap": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-capacity-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-current-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-declared-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-embedded-nul": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-empty": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-first-astral": {
+  "status": "disagree",
+  "detail": "encoded 00020001d800dc00, corpus 00020002d800dc00"
+ },
+ "values.json/string_codec_cases/wstring-high-before-ascii": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-high-before-high": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-last-scalar": {
+  "status": "disagree",
+  "detail": "encoded 00020001dbffdfff, corpus 00020002dbffdfff"
+ },
+ "values.json/string_codec_cases/wstring-maximum-padding": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "values.json/string_codec_cases/wstring-mixed-padding": {
+  "status": "disagree",
+  "detail": "encoded 000600030061d83dde006f2200000000, corpus 000600040061d83dde006f2200000000"
+ },
+ "values.json/string_codec_cases/wstring-short-allocation": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/string_codec_cases/wstring-short-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-surrogate-pair": {
+  "status": "disagree",
+  "detail": "encoded 00020001d83dde00, corpus 00020002d83dde00"
+ },
+ "values.json/string_codec_cases/wstring-trailing-low": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-unit-overflow": {
+  "status": "disagree",
+  "detail": "corpus rejects the encode request, python-snap7 accepted it"
+ },
+ "values.json/string_codec_cases/wstring-unpaired-high": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-unpaired-low": {
+  "status": "agree",
+  "detail": ""
+ }
+}
