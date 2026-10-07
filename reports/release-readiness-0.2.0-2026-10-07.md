@@ -1,9 +1,9 @@
 # Classic S7 0.2.0 candidate readiness — 2026-10-07
 
-Version 0.2.0 is **prepared, not tagged or published**. `docs/RELEASE.md` requires the
-repository owner to approve the version, tag and publication; the owner accepted gates
-L1–L4 and asked for the release to be prepared on 2026-10-07. Versions 0.1.0 and 0.1.1
-and their tags are untouched.
+Version 0.2.0 was prepared, tagged and **published on 2026-10-07**. `docs/RELEASE.md`
+requires the repository owner to approve the version, tag and publication; the owner
+accepted gates L1–L4, then approved version 0.2.0 and the `v0.2.0` tag on commit
+`b0fd9c5`. Versions 0.1.0 and 0.1.1 and their tags are untouched.
 
 ## What changed since 0.1.1
 
@@ -39,9 +39,16 @@ edits in this change):
 Every change merged since 0.1.1 (#28–#41) passed the Linux and macOS CI on its own
 branch before merging. That is not evidence for the tagged revision.
 
-**Pending before publication:** CI on the exact tagged revision on Linux and macOS, the
-scheduled resource-soak run for that revision, and the owner's approval of the version
-and tag. Document missing platform evidence rather than borrowing earlier results.
+Exact-revision evidence for tag `v0.2.0` (commit `b0fd9c5`), all green on Linux and macOS:
+
+- [CI on the merge commit of `main`](https://github.com/gijzelaerr/lean-s7/actions/runs/37613626847);
+- [CI on the tag](https://github.com/gijzelaerr/lean-s7/actions/runs/37614264408);
+- [resource soak on the tag](https://github.com/gijzelaerr/lean-s7/actions/runs/37614296100), 32 rounds.
+
+The release attachment `validation-0.2.0.json` records these runs and the local checks.
+The release is at <https://github.com/gijzelaerr/lean-s7/releases/tag/v0.2.0>; corpus
+1.0.1 (identical JSON files, new provenance) is
+[`corpus-v1-1.0.1`](https://github.com/gijzelaerr/lean-s7/releases/tag/corpus-v1-1.0.1).
 
 ## Not covered
 

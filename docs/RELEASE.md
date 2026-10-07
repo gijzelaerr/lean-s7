@@ -5,7 +5,7 @@
 This is an experimental classic S7comm Lean client and executable specification,
 not a production-qualified driver. Version 0.1.0 was the initial experimental
 release; 0.1.1 repairs the compound deadline test fixture and strengthens its
-negative controls. A 0.2.0 candidate (not yet tagged) adds the proved correlation
+negative controls. Version 0.2.0 adds the proved correlation
 core, decoder contracts, a read-only-by-default CLI, differential and real-capture
 evidence and Windows test support; see [its notes](releases/0.2.0.md). None of these
 is a compatibility certification. See
