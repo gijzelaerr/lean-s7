@@ -69,6 +69,9 @@ python integration/native_snap7_build.py
 python integration/native_snap7.py --library .lake/native-snap7/libsnap7.dylib
 ```
 
+For changes affecting the conformance corpus or wire formats, also run the optional
+`python integration/wireshark_corpus.py` (needs `tshark` 4.6.x) and review any baseline change.
+
 Use `libsnap7.so` on Linux. This downloads a pinned official native Snap7 test
 dependency; it is not linked into the client and contacts localhost only.
 GitHub Actions is a final platform check, not a substitute for local testing.

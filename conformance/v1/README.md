@@ -45,6 +45,8 @@ the linked reports; the corpus is derived from this repository's Lean model, whi
 is itself validated against several independent sources and not treated as the
 protocol specification.
 
+Independent decoder checks: [python-snap7](../../reports/python-snap7-consumer-2026-10-06.md) (`integration/python_snap7_consumer.py`) and the [Wireshark S7comm dissector](../../reports/wireshark-corpus-2026-10-07.md) (`integration/wireshark_corpus.py`, optional, needs `tshark`).
+
 ## Primitive conversation histories
 
 Generate `conversations.json` with `lake exe lean-s7-conformance conversations`.
