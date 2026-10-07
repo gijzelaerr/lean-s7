@@ -2,7 +2,7 @@ import LeanS7.Client
 
 /-! Regression vectors taken from public Wireshark captures of a real Siemens S7-300
 (`s7comm_reading_setting_plc_time`, `s7comm_reading_plc_status` and
-`s7comm_downloading_block_db1`; see `reports/real-s7-300-captures-2026-10-07.md` and
+`s7comm_downloading_block_db1`) and from the CISA icsnpp-s7comm trace `snap7.pcap`; see `reports/real-s7-300-captures-2026-10-07.md` and
 `integration/real_captures.py`). Each string is the S7 PDU exactly as captured. They
 show what that PLC and engineering tool exchanged in those sessions; they do not
 qualify any controller family or firmware. -/
@@ -22,6 +22,13 @@ private def downloadJob : String := "320100000100001200001b00000000000000095f304
 private def fragmentReply : String := "320300000100000200e200001b0100de00fb70700101050a0001000001f400000000029147602bb5029147602bb5001c000000000190000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 private def downloadEnded : String := "3203000007000001000000001c"
 private def insertBlock : String := "320100000f00001a000028000000000000fd000a01003041303030303150055f494e5345"
+
+private def startUploadRequest : String := "320100000800001200001d00000000000000095f3042303030303041"
+private def startUploadReply : String := "3203000008000010000000001d000100000000070730303030323136"
+private def uploadFragmentReply : String := "320300000900000200dc00001e0000d800fb70700302070b0000000000d880000000003921002d9804ef6d80122c00000000000000901c031001010100001f0202040001210500140000019f003c01900027741553373330302f45543230304d2073746174696f6e5f310000504c435f31000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005354455020372023202020202020202020202020202020200000d1cc3152481400000000"
+private def endUploadRequest : String := "320100000a00000800001f00000000000007"
+private def endUploadReply : String := "320300000a000001000000001f"
+private def startUploadRefused : String := "32020000150000000000d20c"
 
 private def require (value : Bool) (label : String) : IO Unit :=
   unless value do throw <| IO.userError s!"real device vectors: {label}"
@@ -91,6 +98,38 @@ def run : IO Unit := do
     | .ok _ => pure ()
     | .error _ => throw <| IO.userError "real device vectors: download service job rejected"
   | .error _ => throw <| IO.userError "real device vectors: download job did not decode"
-  IO.println "real S7-300 device vectors passed"
+
+  -- A real single-fragment upload of system data block 0 (216 bytes, upload id 7).
+  require (sameBytes (S7.encodeStartUpload 0x0800 .systemDataBlock 0) startUploadRequest)
+    "start upload request"
+  require (sameBytes (S7.encodeUpload 0x0900 7) "320100000900000800001e00000000000007")
+    "upload request"
+  require (sameBytes (S7.encodeEndUpload 0x0a00 7) endUploadRequest) "end upload request"
+  match S7.decodeResponse (hex startUploadReply) with
+  | .ok response =>
+    match S7.decodeStartUpload 0x0800 response with
+    | .ok start => require (start.uploadId == 7 && start.loadSize == some 216) "start upload reply"
+    | .error _ => throw <| IO.userError "real device vectors: start-upload reply rejected"
+  | .error _ => throw <| IO.userError "real device vectors: start-upload reply did not decode"
+  match S7.decodeResponse (hex uploadFragmentReply) with
+  | .ok response =>
+    match S7.decodeUploadFragment 0x0900 response with
+    | .ok fragment => require (fragment.isLast && fragment.data.size == 216) "upload fragment"
+    | .error _ => throw <| IO.userError "real device vectors: upload fragment rejected"
+  | .error _ => throw <| IO.userError "real device vectors: upload reply did not decode"
+  match S7.decodeResponse (hex endUploadReply) with
+  | .ok response =>
+    match S7.decodeEndUpload 0x0a00 response with
+    | .ok _ => pure ()
+    | .error _ => throw <| IO.userError "real device vectors: end-upload reply rejected"
+  | .error _ => throw <| IO.userError "real device vectors: end-upload reply did not decode"
+  -- The PLC's refusal (error 0xd20c) of a start-upload is rejected, not accepted as an upload.
+  match S7.decodeResponse (hex startUploadRefused) with
+  | .ok response =>
+    match S7.decodeStartUpload 0x1500 response with
+    | .ok _ => throw <| IO.userError "real device vectors: refused start-upload accepted"
+    | .error _ => pure ()
+  | .error _ => pure ()
+  IO.println "real device vectors passed"
 
 end LeanS7.RealDeviceTests

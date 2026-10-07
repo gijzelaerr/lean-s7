@@ -1,12 +1,16 @@
-# Replay of real S7-300 captures — 2026-10-07
+# Replay of real Siemens controller captures — 2026-10-07
 
-`python integration/real_captures.py` replays five public captures of a **real
-Siemens S7-300** (PLC 192.168.1.40, talking to an engineering tool or libnodave)
-through the Lean codecs. The captures are Wireshark's published S7comm samples, listed
-on the [sample captures page](https://wiki.wireshark.org/SampleCaptures#s7comm-s7-communication).
-They are downloaded on demand into `.lake/captures` and pinned by SHA-256; they are not
-stored in this repository, and the check is optional (it needs network access once and
-`lake build lean-s7-decode`).
+`python integration/real_captures.py` replays six public captures of real Siemens
+controllers through the Lean codecs: five of an **S7-300** (PLC 192.168.1.40, talking to
+an engineering tool or libnodave; Wireshark's published S7comm samples, listed on the
+[sample captures page](https://wiki.wireshark.org/SampleCaptures#s7comm-s7-communication))
+and one test trace of the CISA [icsnpp-s7comm](https://github.com/cisagov/icsnpp-s7comm)
+parser (BSD-3-Clause; a Snap7-based client against a device at `:102`, commit
+`58d46fac`), which contains four complete block uploads. The captures are downloaded on
+demand into `.lake/captures` and pinned by SHA-256; they are not stored in this
+repository, and the check is optional (it needs network access once and
+`lake build lean-s7-decode`). The controller behind the CISA trace is not identified
+in the repository, so it is described only as "a device".
 
 This is independent wire evidence from a real controller for the **exact conversations in
 those files**. It does not identify the CPU model or firmware, and it does not qualify
@@ -20,12 +24,13 @@ nothing more is claimed.
 | `s7comm_program_blocklist_onlineview` (`b2e70143`) | 70 | block counts, block lists, block-info requests (incl. PLC error replies) |
 | `s7comm_downloading_block_db1` (`48725bd1`) | 48 | request download, three PLC-driven download-block exchanges, download ended, insert block |
 | `s7comm_varservice_libnodavedemo` (`a1ff275c`) | 16 | single-item variable reads and writes |
+| `icsnpp_snap7_upload` (`2b91f6a8`) | 64 | four complete uploads of system data block 0, a refused OB 0 upload, block counts, clock, CPU stop, copy RAM to ROM, compress and cold start |
 
 ## Method
 
 The harness parses the pcap itself (Ethernet, IPv4, TCP, TPKT, COTP with end-of-TSDU
 reassembly), so no `tshark` is needed; as a cross-check (`--tshark`) its S7 PDU count
-equals Wireshark's `s7comm` frame count for every capture (26, 144, 70, 48, 16). Each PDU
+equals Wireshark's `s7comm` frame count for every capture (26, 144, 70, 48, 16, 64). Each PDU
 then goes through the Lean decoders and encoders via `lean-s7-decode`:
 
 - every PLC USER_DATA response is decoded (envelope; block-count, list and info
@@ -40,7 +45,7 @@ then goes through the Lean decoders and encoders via `lean-s7-decode`:
 
 ## Result
 
-**lean-s7: 295 of 295 checks agree** (28, 141, 76, 47 and 3 per capture). No Lean
+**lean-s7: 351 of 351 checks agree** (28, 141, 76, 48, 3 and 55 per capture). No Lean
 decoder rejected a genuine PLC reply and every request the library builds is
 byte-identical to the real tool's, with one documented exception below.
 
@@ -62,7 +67,21 @@ Facts the real device establishes:
    the `0x1c` end exchange and the `_INSE` job are byte-identical to the Lean encoders'
    output, and the PLC's service jobs validate. The fragment data is `length, 0x00fb, payload`.
    This is download evidence only; the captures contain no block upload (issue #24).
-6. **Block-info request, file-system letter.** The engineering tool's request is
+6. **A real upload matches the Lean model.** The CISA trace performs four complete uploads
+   of system data block 0 (`_0B00000A`): the start-upload request is byte-identical to
+   `encodeStartUpload`; the reply carries upload id 7 and the load size as ASCII digits
+   (`0000216`), which `decodeStartUpload` accepts with size 216; the upload reply is
+   `1e 00` with data `00d8 00fb` plus 216 bytes in a single, last fragment, which
+   `decodeUploadFragment` accepts; the end-upload job and its empty reply decode. The PLC
+   also refuses a start-upload of OB 0 with an acknowledgement carrying error `0xd20c`,
+   which Lean rejects. This is single-fragment, full-block evidence for one device: no
+   multi-fragment upload, no PDU-size variation and no MC7-versus-full-upload comparison
+   (issue #24 stays open for those).
+7. **CPU-control jobs match.** The trace's stop (`0x29`), cold start, copy-RAM-to-ROM
+   (`_MODU`) and compress (`_GARB`) jobs are byte-identical to `encodePlcStop`,
+   `encodePlcColdStart`, `encodeCopyRamToRom` and `encodeCompress`, and the PLC's
+   acknowledgements decode. No CPU state change was confirmed from the captures.
+8. **Block-info request, file-system letter.** The engineering tool's request is
    `'0' type 'NNNNN' 'B'`; Lean and native Snap7 end it with `'A'`. The layout is
    otherwise identical (prefix, type, five digits, letter). Wireshark's S7comm
    dissector names the letter the file system (`A` active, `B` active and passive,
@@ -89,6 +108,12 @@ Run when python-snap7 is installed (notes only; they do not fail the harness):
   method `0x12` (`00 01 12 08 12 44 01 <seq> 00 00 00 00`), which the Lean encoder
   reproduces exactly. Whether a PLC tolerates python-snap7's variants was not tested here;
   this records only that they differ from the real tool.
+- Its upload path matches the real device: the start-upload, upload and end-upload
+  requests are byte-identical and it parses the real replies (upload id 7, length 216, a
+  216-byte last fragment, the empty end-upload reply).
+- Its compress and copy-RAM-to-ROM requests use the PI service name `_MSZL` where the real
+  jobs use `_GARB` and `_MODU` (native Snap7's `TReqFunCompress`/`TReqFunCopyRamToRom`
+  comments name `_GARB` and `_MODU` too); its CPU stop and cold start match.
 - The clock read and list-blocks requests, the block-count reply and the other
   requests/replies it can parse match the real traffic.
 
@@ -97,7 +122,7 @@ confirmed by fact 2 above: a real PLC labels Wednesday 4.
 
 ## Always-on regression vectors
 
-Eleven of the captured PDUs (read clock request and reply, set-clock acknowledgement, a
+Eighteen of the captured PDUs (read clock request and reply, set-clock acknowledgement, a
 SZL request, reply and error reply, the request-download job, a PLC download service job,
 a download fragment reply, the download-ended reply and the insert-block job) are also
 embedded as exact hex in `LeanS7/RealDeviceTests.lean`, which `lake exe lean-s7-tests`
@@ -107,9 +132,10 @@ genuine SZL reply and a PLC error reply that must be rejected.
 
 ## Limits
 
-Five captures from one S7-300 in 2014 show what that PLC did in those sessions. They do
-not show behavior of other CPUs, S7-1200/1500 controllers, firmware versions, password
-protected sessions, uploads, or write-heavy workloads, and the captured client
-(an engineering tool and libnodave) is not lean-s7. Redistribution terms of the
-captures are not stated on the sample page, which is why they are fetched rather than
-committed.
+Five captures from one S7-300 in 2014 and one trace of an unidentified device show what
+those controllers did in those sessions. They do not show behavior of other CPUs,
+S7-1200/1500 controllers, firmware versions, password-protected sessions, multi-fragment
+uploads, or write-heavy workloads, and the captured clients (an engineering tool,
+libnodave and a Snap7-based tool) are not lean-s7. The five Wireshark samples carry no
+stated redistribution terms, and the CISA trace is BSD-3-Clause; all are fetched and
+hash-checked rather than committed.

@@ -17,6 +17,8 @@ Reads one request per line from stdin (`-` stands for empty hex) and prints one 
   enc download REF TYPE NUMBER LOADSIZE MC7SIZE | dlfrag REF LAST HEXPAYLOAD | dlended REF
   enc insert REF TYPE NUMBER
   dlreq FUNCTION TYPE NUMBER HEX -> accept (a PLC-sent download service job validates)
+  enc startupload REF TYPE NUMBER | upload REF ID | endupload REF ID | plcstop REF | plchot REF | plccold REF | compress REF | copyramrom REF
+  startupresp REF HEX | endupresp REF HEX | ctrlresp REF FUNCTION HEX -> accept (PLC acknowledgement decodes)
 
 Anything the decoders refuse prints `reject`. Not part of the library import graph. -/
 
@@ -101,6 +103,41 @@ private def runEncode (parts : List String) : String :=
     | some r, some last, some payload =>
       encoded (S7.encodeDownloadFragmentResponse (UInt16.ofNat r) (last != 0) payload)
     | _, _, _ => "reject"
+  | ["startupload", r, t, number] =>
+    match n r, n t, n number with
+    | some r, some t, some number =>
+      match S7.BlockType.ofCode (UInt8.ofNat t) with
+      | some blockType => encoded (S7.encodeStartUpload (UInt16.ofNat r) blockType number)
+      | none => "reject"
+    | _, _, _ => "reject"
+  | ["upload", r, id] =>
+    match n r, n id with
+    | some r, some id => encoded (S7.encodeUpload (UInt16.ofNat r) (UInt8.ofNat id))
+    | _, _ => "reject"
+  | ["endupload", r, id] =>
+    match n r, n id with
+    | some r, some id => encoded (S7.encodeEndUpload (UInt16.ofNat r) (UInt8.ofNat id))
+    | _, _ => "reject"
+  | ["compress", r] =>
+    match n r with
+    | some r => encoded (S7.encodeCompress (UInt16.ofNat r))
+    | none => "reject"
+  | ["copyramrom", r] =>
+    match n r with
+    | some r => encoded (S7.encodeCopyRamToRom (UInt16.ofNat r))
+    | none => "reject"
+  | ["plcstop", r] =>
+    match n r with
+    | some r => encoded (S7.encodePlcStop (UInt16.ofNat r))
+    | none => "reject"
+  | ["plchot", r] =>
+    match n r with
+    | some r => encoded (S7.encodePlcHotStart (UInt16.ofNat r))
+    | none => "reject"
+  | ["plccold", r] =>
+    match n r with
+    | some r => encoded (S7.encodePlcColdStart (UInt16.ofNat r))
+    | none => "reject"
   | ["dlended", r] =>
     match n r with
     | some r => encoded (S7.encodeDownloadEndedResponse (UInt16.ofNat r))
@@ -142,6 +179,38 @@ private def run (line : String) : String :=
         | .error _ => "reject"
       | _, _ => "reject"
     | _, _, _, _ => "reject"
+  | ["startupresp", reference, hex] =>
+    match reference.toNat?, payload hex with
+    | some r, some pdu =>
+      match S7.decodeResponse pdu with
+      | .error _ => "reject"
+      | .ok response =>
+        match S7.decodeStartUpload (UInt16.ofNat r) response with
+        | .ok start => verdict [toString start.uploadId, match start.loadSize with
+            | some size => toString size
+            | none => "-"]
+        | .error _ => "reject"
+    | _, _ => "reject"
+  | ["endupresp", reference, hex] =>
+    match reference.toNat?, payload hex with
+    | some r, some pdu =>
+      match S7.decodeResponse pdu with
+      | .error _ => "reject"
+      | .ok response =>
+        match S7.decodeEndUpload (UInt16.ofNat r) response with
+        | .ok _ => verdict []
+        | .error _ => "reject"
+    | _, _ => "reject"
+  | ["ctrlresp", reference, function, hex] =>
+    match reference.toNat?, function.toNat?, payload hex with
+    | some r, some f, some pdu =>
+      match S7.decodeResponse pdu with
+      | .error _ => "reject"
+      | .ok response =>
+        match S7.decodePlcControl (UInt16.ofNat r) (UInt8.ofNat f) response with
+        | .ok _ => verdict []
+        | .error _ => "reject"
+    | _, _, _ => "reject"
   | ["upload", reference, hex] =>
     match reference.toNat?, payload hex with
     | some r, some pdu =>
