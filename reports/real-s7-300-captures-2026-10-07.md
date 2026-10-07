@@ -95,6 +95,16 @@ Run when python-snap7 is installed (notes only; they do not fail the harness):
 The weekday encoding of [#924](https://github.com/gijzelaerr/python-snap7/issues/924) is
 confirmed by fact 2 above: a real PLC labels Wednesday 4.
 
+## Always-on regression vectors
+
+Eleven of the captured PDUs (read clock request and reply, set-clock acknowledgement, a
+SZL request, reply and error reply, the request-download job, a PLC download service job,
+a download fragment reply, the download-ended reply and the insert-block job) are also
+embedded as exact hex in `LeanS7/RealDeviceTests.lean`, which `lake exe lean-s7-tests`
+runs without network access. They pin the facts above: byte-identical requests, the
+ten-byte clock with weekday 4 for a Wednesday, the empty set-clock acknowledgement, a
+genuine SZL reply and a PLC error reply that must be rejected.
+
 ## Limits
 
 Five captures from one S7-300 in 2014 show what that PLC did in those sessions. They do

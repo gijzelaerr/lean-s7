@@ -27,6 +27,7 @@ import LeanS7.ManagementConformance
 import LeanS7.ValueDecoderAssuranceTests
 import LeanS7.RetryBudgetTests
 import LeanS7.CorrelationTests
+import LeanS7.RealDeviceTests
 import LeanS7.BatchingTests
 import LeanS7.UserDataAssemblyTests
 
@@ -928,6 +929,7 @@ def main : IO Unit := do
   RetryProgressTests.run
   RetryBudgetTests.run
   CorrelationTests.run
+  RealDeviceTests.run
   WriteProvenanceTests.run
   UserDataCompletionTests.run
   TransportResourceTests.run
