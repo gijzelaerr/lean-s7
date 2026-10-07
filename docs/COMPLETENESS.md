@@ -80,8 +80,8 @@ anything beyond `propext`, `Classical.choice` and `Quot.sound`.
 | Typed SZL parsers, block counts/entries/info, force table | Extent/alignment contracts | [AdvancedDecoderAssurance](../LeanS7/AdvancedDecoderAssurance.lean) |
 | Clock | Round trip, ten-byte size, malformed-BCD rejection | [ClockCodecAssurance](../LeanS7/ClockCodecAssurance.lean) |
 | Typed values, STRING/WSTRING, REAL/LREAL | Surrounded round trips; floats at the bit level (`getReal_putReal_surrounded_bits`, `getLReal_putLReal_surrounded_bits`); NaN equality stays out of scope | [ValueCodecAssurance](../LeanS7/ValueCodecAssurance.lean), [ValueDecoderAssurance](../LeanS7/ValueDecoderAssurance.lean) |
-| `decodeDbRead` | Delegates to `decodeAreaRead` after correlation; covered through that contract, no separate theorem | [S7](../LeanS7/S7.lean) |
-| COTP connection confirm, `decodeParameters` | Tests and corpora only; no extent theorem yet | [COTP](../LeanS7/COTP.lean) |
+| `decodeDbRead` | `decodeDbRead_reduces`: a successful DB read is a successful `decodeAreaRead` of the data-block area, so its reference, extent and payload-size contracts apply | [ResponseDecoderAssurance](../LeanS7/ResponseDecoderAssurance.lean) |
+| COTP connection confirm and variable-part TLV parameters | `COTP.decodeConnectionConfirm_extent` (seven fixed bytes plus the retained parameters, matching length indicator), `COTP.decodeParameters_extent` (TLV headers and values account for every input byte) | [COTP](../LeanS7/COTP.lean) |
 
 ## Finite local-profile exit gates
 

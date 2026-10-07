@@ -146,24 +146,6 @@ theorem decodeUploadFragment_contract (reference : UInt16) (response : Response)
   · simp [decodeUploadFragment, hv, hs, bind, Except.bind, throw, throwThe,
       MonadExceptOf.throw] at h
 
-/-- A successful big-endian word read stays on the same data, advances exactly
-    two bytes, and was fully inside the input. -/
-theorem Cursor.readUInt16BE_ok (cursor next : Cursor) (value : UInt16)
-    (h : cursor.readUInt16BE = .ok (value, next)) :
-    next.data = cursor.data ∧ next.offset = cursor.offset + 2 ∧
-      cursor.offset + 2 ≤ cursor.data.size := by
-  by_cases hl : cursor.offset + 2 ≤ cursor.data.size
-  · rw [Cursor.readUInt16BE_of_available cursor hl] at h
-    injection h with h
-    injection h with _ hn
-    subst hn
-    exact ⟨rfl, rfl, hl⟩
-  · exfalso
-    by_cases h1 : cursor.offset < cursor.data.size
-    · have h2 : ¬(cursor.offset + 1 < cursor.data.size) := by omega
-      simp [Cursor.readUInt16BE, Cursor.readUInt8, h1, h2, bind, Except.bind] at h
-    · simp [Cursor.readUInt16BE, Cursor.readUInt8, h1, bind, Except.bind] at h
-
 /-- The first SZL fragment decoder consumes exactly the four-byte identity header
     and returns every remaining payload byte. -/
 theorem decodeSzlFirst_extent (response : UserDataResponse) (id index : UInt16)
@@ -189,5 +171,18 @@ theorem decodeSzlFirst_extent (response : UserDataResponse) (id index : UInt16)
 
 /-- The compatibility job-PDU decoder is exactly the strict core job decoder. -/
 theorem decodeJobPdu_eq (pdu : ByteArray) : decodeJobPdu pdu = decodeJob pdu := rfl
+
+/-- A successful DB read is exactly a successful `decodeAreaRead` of the data-block
+    area for the byte count its own response header declares, so the
+    reference/extent/payload-size contracts of `decodeAreaRead` apply to it. -/
+theorem decodeDbRead_reduces (reference : UInt16) (response : Response)
+    (payload : ByteArray) (h : decodeDbRead reference response = .ok payload) :
+    ∃ size, decodeAreaRead reference .dataBlocks size response = .ok payload := by
+  simp only [decodeDbRead, bind, Except.bind] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | (exact ⟨_, h⟩)
 
 end LeanS7.S7

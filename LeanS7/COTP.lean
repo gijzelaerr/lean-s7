@@ -60,6 +60,60 @@ private def decodeParametersWithFuel : Nat → Cursor → Except DecodeError (Li
 def decodeParameters (data : ByteArray) : Except DecodeError (List Parameter) :=
   decodeParametersWithFuel data.size { data }
 
+/-- The fuel-bounded TLV decoder consumes exactly the remaining bytes: every
+    decoded parameter accounts for its two header bytes plus its value, and nothing
+    else is read. -/
+theorem decodeParametersWithFuel_extent (fuel : Nat) (cursor : Cursor)
+    (parameters : List Parameter) (hbound : cursor.offset ≤ cursor.data.size)
+    (h : decodeParametersWithFuel fuel cursor = .ok parameters) :
+    (parameters.map fun parameter => 2 + parameter.value.size).sum = cursor.remaining := by
+  induction fuel generalizing cursor parameters with
+  | zero =>
+    simp only [decodeParametersWithFuel] at h
+    split at h
+    · injection h with h
+      subst h
+      simp [*]
+    · contradiction
+  | succ fuel ih =>
+    simp only [decodeParametersWithFuel, bind, Except.bind, pure, Except.pure] at h
+    by_cases hr : cursor.remaining = 0
+    · simp [hr] at h
+      subst h
+      simp [hr]
+    · simp only [hr, if_false] at h
+      repeat' (split at h)
+      all_goals first | (simp at h; done) | skip
+      rename_i x3 v3 e3 x2 v2 e2 x1 v1 e1 x0 v0 e0
+      obtain ⟨d1, o1, l1⟩ := Cursor.readUInt8_ok _ _ _ e3
+      obtain ⟨d2, o2, l2⟩ := Cursor.readUInt8_ok _ _ _ e2
+      obtain ⟨d3, o3, l3⟩ := Cursor.readBytes_next _ _ _ _ e1
+      have hs := Cursor.readBytes_size _ _ _ _ e1
+      rw [d1] at l2
+      have hd2 : v2.snd.data = cursor.data := by rw [d2, d1]
+      have hd1 : v1.snd.data = cursor.data := by rw [d3, hd2]
+      have ho2 : v2.snd.offset = cursor.offset + 2 := by omega
+      have ho1 : v1.snd.offset = cursor.offset + 2 + v2.fst.toNat := by omega
+      unfold Cursor.remaining at l3
+      rw [hd2, ho2] at l3
+      have hbound' : v1.snd.offset ≤ v1.snd.data.size := by rw [hd1]; omega
+      have hrec := ih _ _ hbound' e0
+      unfold Cursor.remaining at hrec ⊢
+      rw [hd1] at hrec
+      injection h with hh
+      subst hh
+      simp only [List.map_cons, List.sum_cons]
+      omega
+
+/-- Every successfully decoded COTP variable part is fully accounted for: the
+    parameters' TLV headers and values sum to exactly the input size, so nothing
+    is skipped or left over. -/
+theorem decodeParameters_extent (data : ByteArray) (parameters : List Parameter)
+    (h : decodeParameters data = .ok parameters) :
+    (parameters.map fun parameter => 2 + parameter.value.size).sum = data.size := by
+  have := decodeParametersWithFuel_extent data.size { data } parameters (by simp) h
+  simpa [Cursor.remaining] using this
+
 /-- Locate the last occurrence of a parameter code, as required by ISO 8073
     duplicate-parameter semantics. -/
 def findLastParameter (parameters : List Parameter) (code : UInt8) : Option ByteArray :=
@@ -201,6 +255,54 @@ def decodeConnectionConfirm (data : ByteArray) : Except DecodeError ConnectionCo
   let (parameters, cursor) ← cursor.readBytes cursor.remaining
   cursor.finish
   return { destinationReference, sourceReference, classOption, parameters }
+
+/-- A decoded connection confirmation accounts for every input byte: the seven fixed
+    header bytes plus the retained negotiation parameters, with a length indicator
+    that matches the packet size. -/
+theorem decodeConnectionConfirm_extent (data : ByteArray) (confirmation : ConnectionConfirm)
+    (h : decodeConnectionConfirm data = .ok confirmation) :
+    data.size = 7 + confirmation.parameters.size ∧
+      ∃ headerLength : UInt8, headerLength.toNat + 1 = data.size := by
+  simp only [decodeConnectionConfirm, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i x6 v6 e6 hA x5 v5 e5 hB x4 v4 e4 x3 v3 e3 x2 v2 e2 x1 v1 e1 x0 v0 e0
+  obtain ⟨da, oa, la⟩ := Cursor.readUInt8_ok _ _ _ e6
+  obtain ⟨db, ob, lb⟩ := Cursor.readUInt8_ok _ _ _ e5
+  obtain ⟨dc, oc, lc⟩ := Cursor.readUInt16BE_ok _ _ _ e4
+  obtain ⟨dd, od, ld⟩ := Cursor.readUInt16BE_ok _ _ _ e3
+  obtain ⟨de, oe, le⟩ := Cursor.readUInt8_ok _ _ _ e2
+  obtain ⟨df, of, lf⟩ := Cursor.readBytes_next _ _ _ _ e1
+  have hs := Cursor.readBytes_size _ _ _ _ e1
+  have hfin : v1.snd.offset = v1.snd.data.size := by
+    unfold Cursor.finish at e0
+    split at e0
+    · assumption
+    · contradiction
+  injection h with hh
+  subst hh
+  have hd6 : v6.snd.data = data := da
+  have hd5 : v5.snd.data = data := by rw [db, da]
+  have hd4 : v4.snd.data = data := by rw [dc, hd5]
+  have hd3 : v3.snd.data = data := by rw [dd, hd4]
+  have hd2 : v2.snd.data = data := by rw [de, hd3]
+  have hd1 : v1.snd.data = data := by rw [df, hd2]
+  simp only [hd6, hd5, hd4, hd3] at lb lc ld le
+  simp only at la
+  unfold Cursor.remaining at lf hs
+  rw [hd2] at lf hs
+  rw [hd1] at hfin
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hA
+  have oa' : v6.snd.offset = 1 := by simpa using oa
+  unfold Cursor.remaining at of
+  rw [hd2] at of
+  refine ⟨?_, v6.fst, ?_⟩
+  · simp only
+    omega
+  · exact hA
 
 /-- Validate the ISO 8073 power-of-two TPDU size codes supported by RFC 1006. -/
 def validateTpduSizeExponent (exponent : UInt8) (offset : Nat) :
