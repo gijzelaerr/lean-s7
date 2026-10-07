@@ -1,3 +1,4 @@
 /.lake/
 /.codex/config.toml
 __pycache__/
+.venv-snap7-latest/

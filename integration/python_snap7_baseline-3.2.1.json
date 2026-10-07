@@ -1,0 +1,1870 @@
+{
+ "cotp-data.json/decode_cases/complete-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/decode_cases/invalid-header-length": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/decode_cases/invalid-tpdu-code": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/decode_cases/nonzero-tpdu-number": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/decode_cases/segmented-data": {
+  "status": "gap",
+  "detail": "python-snap7 does not expose the end-of-transmission flag"
+ },
+ "cotp-data.json/decode_cases/truncated-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/encode_cases/complete-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/encode_cases/empty-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "cotp-data.json/encode_cases/segmented-data": {
+  "status": "gap",
+  "detail": "_build_cotp_dt always sets the end-of-transmission bit"
+ },
+ "management.json/decoder_cases/ff-3-2-0-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-0-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-10-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-10-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-3-2-255-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-255-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-3-2-4-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-4-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-3-2-7-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-7-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-3-2-9-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-3-2-9-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-4-1-0-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-0-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-10-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-10-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-4-1-255-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-255-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-4-1-4-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-4-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-4-1-7-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-7-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-4-1-9-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-4-1-9-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-1-0-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-0-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-10-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-10-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-1-255-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-255-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-1-4-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-4-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-1-7-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-7-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-1-9-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-1-9-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-2-0-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-0-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-10-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-10-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-2-255-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-255-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-2-4-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-4-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-2-7-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-7-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-5-2-9-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-5-2-9-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-1-0-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-0-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-10-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-10-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-1-255-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-255-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-1-4-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-4-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-1-7-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-7-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-1-9-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-1-9-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-2-0-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-0-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-10-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-10-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-2-255-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-255-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-2-4-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-4-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-2-7-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-7-2": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/ff-7-2-9-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/ff-7-2-9-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/invalid-continuation-flag": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "management.json/decoder_cases/null-5-1-0-0-0": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/decoder_cases/null-5-1-0-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-0-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-0-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-10-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-10-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-10-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-10-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-255-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-255-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-255-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-255-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-4-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-4-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-4-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-4-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-7-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-7-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-7-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-7-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-9-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-9-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-9-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-1-9-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-0-0-0": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/decoder_cases/null-5-2-0-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-0-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-0-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-10-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-10-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-10-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-10-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-255-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-255-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-255-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-255-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-4-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-4-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-4-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-4-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-7-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-7-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-7-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-7-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-9-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-9-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-9-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-5-2-9-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-0-0-0": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/decoder_cases/null-7-2-0-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-0-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-0-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-10-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-10-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-10-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-10-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-255-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-255-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-255-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-255-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-4-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-4-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-4-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-4-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-7-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-7-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-7-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-7-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-9-0-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-9-0-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-9-1-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-7-2-9-1-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-unsupported-3-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-unsupported-4-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/null-unsupported-7-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/parameter-error-before-null": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/trailing-packet": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-16": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-17": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-18": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-19": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-20": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-21": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-22": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-23": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-24": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-25": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-26": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-3": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-4": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-5": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-6": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-7": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-8": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/truncated-9": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/wrong-group": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/wrong-reference": {
+  "status": "agree",
+  "detail": ""
+ },
+ "management.json/decoder_cases/wrong-subfunction": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_count_cases/complete-block-counts": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_count_cases/duplicate-block-count-type": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_count_cases/duplicate-identical-block-count": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/block_count_cases/trailing-block-counts": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_count_cases/truncated-block-counts": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_count_cases/unknown-block-count-type": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_info_cases/complete-block-info": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_info_cases/trailing-block-info": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_info_cases/truncated-block-info": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_list_cases/complete-block-list": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_list_cases/trailing-block-list": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/block_list_cases/truncated-block-list": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/multi_item_cases/mixed-read-missing-padding": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/multi_item_cases/mixed-read-odd-padding": {
+  "status": "disagree",
+  "detail": "response with a failed item aborts the whole multi-read"
+ },
+ "s7.json/multi_item_cases/mixed-read-trailing-byte": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/multi_item_cases/mixed-write-missing-status": {
+  "status": "gap",
+  "detail": "python-snap7 has no multi-variable write builder"
+ },
+ "s7.json/multi_item_cases/mixed-write-ordered-status": {
+  "status": "gap",
+  "detail": "python-snap7 has no multi-variable write builder"
+ },
+ "s7.json/multi_item_cases/mixed-write-trailing-status": {
+  "status": "gap",
+  "detail": "python-snap7 has no multi-variable write builder"
+ },
+ "s7.json/request_cases/clear-session-password": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/download-ended-response": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/download-fragment-response": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/end-upload": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/final-download-fragment-response": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/get-db-info": {
+  "status": "disagree",
+  "detail": "packet differs at byte 24: python-snap7 3207000000010008000c0001120411430300ff0900083041413030303031 corpus 3207000000010008000c0001120411430300ff0900083041303030303141"
+ },
+ "s7.json/request_cases/list-blocks": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/list-data-blocks": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/plc-cold-start": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/plc-hot-start": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/plc-stop": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/read-clock": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/request-db-download": {
+  "status": "gap",
+  "detail": "no python-snap7 builder for request_db_download"
+ },
+ "s7.json/request_cases/set-clock": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/set-session-password": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/start-db-upload": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/request_cases/upload-fragment-request": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/complete-read": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/complete-write": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/short-declared-read": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/trailing-read-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/truncated-read": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/response_cases/write-answered-by-read": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/last-upload-fragment": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/upload-fragment": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/upload-invalid-continuation-flag": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/upload-invalid-continuation-flag-ff": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/upload-invalid-marker": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/upload-length-mismatch": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/upload_cases/upload-wrong-function": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/complete-szl": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/continuation-with-more-data": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/invalid-continuation-flag-ff": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/userdata_cases/invalid-continuation-flag-two": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/userdata_cases/item-error": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/trailing-userdata-payload": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/truncated-userdata-payload": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/userdata-error": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/wrong-function-group": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_cases/wrong-subfunction": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/write_cases/two-word-multi-write": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/declared-length-below-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/declared-length-mismatch": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/maximum-valid": {
+  "status": "gap",
+  "detail": "accepted TPKT payload is not a COTP data TPDU; python-snap7 cannot decode TPKT alone"
+ },
+ "tpkt.json/decode_cases/minimum-valid": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/reserved-input-is-ignored": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/truncated-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/decode_cases/unsupported-version": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/above-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/below-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/maximum-valid": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/minimum-valid": {
+  "status": "agree",
+  "detail": ""
+ },
+ "tpkt.json/encode_cases/ordinary-payload": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-2-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-3-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-4-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-5-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-6-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-7-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-false-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-bcd-8-true-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-3": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-4": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-5": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-6": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-7": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-8": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-decoded-9": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-0": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-1": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-12": {
+  "status": "gap",
+  "detail": "python-snap7 derives the weekday from the date; it cannot be supplied"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-13": {
+  "status": "gap",
+  "detail": "python-snap7 derives the weekday from the date; it cannot be supplied"
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-3": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-4": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-5": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-6": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-7": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-8": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-invalid-input-9": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-millisecond-low-bcd-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-0": {
+  "status": "disagree",
+  "detail": "weekday nibble 1, S7 convention (Sunday=1) 2; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-1": {
+  "status": "disagree",
+  "detail": "weekday nibble 5, S7 convention (Sunday=1) 6; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-2": {
+  "status": "disagree",
+  "detail": "weekday nibble 2, S7 convention (Sunday=1) 3; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-3": {
+  "status": "disagree",
+  "detail": "weekday nibble 4, S7 convention (Sunday=1) 5; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-4": {
+  "status": "disagree",
+  "detail": "weekday nibble 3, S7 convention (Sunday=1) 4; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-5": {
+  "status": "disagree",
+  "detail": "weekday nibble 3, S7 convention (Sunday=1) 4; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-roundtrip-6": {
+  "status": "disagree",
+  "detail": "weekday nibble 6, S7 convention (Sunday=1) 7; ten-byte clock reply rejected: Clock response must contain exactly eight bytes"
+ },
+ "values.json/clock_codec_cases/clock-trailing-byte": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-2": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-3": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-4": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-5": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-6": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-7": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-8": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-truncated-9": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-0": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-10": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-11": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-12": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-13": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-14": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-15": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-8": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/clock_codec_cases/clock-weekday-9": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int16-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int32-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int64-maximum": {
+  "status": "gap",
+  "detail": "no signed 64-bit encoder in python-snap7 (decoder agrees)"
+ },
+ "values.json/integer_cases/int64-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int64-minimum": {
+  "status": "gap",
+  "detail": "no signed 64-bit encoder in python-snap7 (decoder agrees)"
+ },
+ "values.json/integer_cases/int64-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int64-negative-one": {
+  "status": "gap",
+  "detail": "no signed 64-bit encoder in python-snap7 (decoder agrees)"
+ },
+ "values.json/integer_cases/int64-negative-one-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-minimum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/int8-minimum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-byte-order": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-byte-order-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint16-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-byte-order": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-byte-order-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint32-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-byte-order": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-byte-order-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint64-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-maximum": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-maximum-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-zero": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/integer_cases/uint8-zero-truncated": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-active-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-capacity-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-current-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-declared-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-empty": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-full-capacity": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-latin1-nul": {
+  "status": "ambiguity",
+  "detail": "bytes after the current length differ"
+ },
+ "values.json/string_codec_cases/string-maximum-padding": {
+  "status": "ambiguity",
+  "detail": "bytes after the current length differ"
+ },
+ "values.json/string_codec_cases/string-non-latin1": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/string-short-allocation": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/string_codec_cases/string-short-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-bmp-surrogate-gap": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-capacity-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-current-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-declared-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-embedded-nul": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-empty": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-first-astral": {
+  "status": "disagree",
+  "detail": "encoder rejected the input: Value contains characters outside the Basic Multilingual Plane (codepoint > U+FFFF), which are not supported by the PLC WSTRING type."
+ },
+ "values.json/string_codec_cases/wstring-high-before-ascii": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-high-before-high": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-last-scalar": {
+  "status": "disagree",
+  "detail": "encoder rejected the input: Value contains characters outside the Basic Multilingual Plane (codepoint > U+FFFF), which are not supported by the PLC WSTRING type."
+ },
+ "values.json/string_codec_cases/wstring-maximum-padding": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "values.json/string_codec_cases/wstring-mixed-padding": {
+  "status": "disagree",
+  "detail": "encoder rejected the input: Value contains characters outside the Basic Multilingual Plane (codepoint > U+FFFF), which are not supported by the PLC WSTRING type."
+ },
+ "values.json/string_codec_cases/wstring-short-allocation": {
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
+ },
+ "values.json/string_codec_cases/wstring-short-header": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-surrogate-pair": {
+  "status": "disagree",
+  "detail": "encoder rejected the input: Value contains characters outside the Basic Multilingual Plane (codepoint > U+FFFF), which are not supported by the PLC WSTRING type."
+ },
+ "values.json/string_codec_cases/wstring-trailing-low": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-unit-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-unpaired-high": {
+  "status": "agree",
+  "detail": ""
+ },
+ "values.json/string_codec_cases/wstring-unpaired-low": {
+  "status": "agree",
+  "detail": ""
+ }
+}

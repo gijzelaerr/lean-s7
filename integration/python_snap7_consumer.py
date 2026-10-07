@@ -12,10 +12,9 @@ is classified as
 * ``disagree``    python-snap7 accepted/rejected or produced different bytes.
 
 The classification of every case is recorded in
-``integration/python_snap7_baseline.json``. The run fails when any case's status
+``integration/python_snap7_baseline-<version>.json``. The run fails when any case's status
 differs from the baseline, so a python-snap7 fix, a regression or a corpus change
-is noticed. ``--update-baseline`` rewrites it after review. Pinned dependency:
-python-snap7 3.0.0. No sockets or controllers are used.
+is noticed. ``--update-baseline`` rewrites it after review. One baseline is kept per reviewed python-snap7 version. No sockets or controllers are used.
 
     python integration/python_snap7_consumer.py [--update-baseline] [--list STATUS]
 """
@@ -23,6 +22,8 @@ python-snap7 3.0.0. No sockets or controllers are used.
 from __future__ import annotations
 
 import argparse
+import datetime
+import importlib.metadata
 import json
 import struct
 import sys
@@ -31,15 +32,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import snap7
 from snap7.connection import ISOTCPConnection
+from snap7.datatypes import S7Area, S7WordLen
 from snap7.s7protocol import S7Protocol
 from snap7.util import getters, setters
 
 ROOT = Path(__file__).resolve().parent.parent
 CORPUS = ROOT / "conformance" / "v1"
-BASELINE = Path(__file__).with_name("python_snap7_baseline.json")
-PINNED_VERSION = "3.0.0"
 
 AGREE, GAP, AMBIGUITY, DISAGREE = "agree", "gap", "ambiguity", "disagree"
 
@@ -195,8 +194,10 @@ def s7_response(case: dict[str, Any]) -> Outcome:
         parsed = protocol.parse_response(pdu)
         if case["operation"] == "read":
             payload = bytes(
-                protocol.extract_read_data(parsed, 0, case["requested_bytes"])
-            )  # type: ignore[arg-type]
+                protocol.extract_read_data(
+                    parsed, S7WordLen.BYTE, case["requested_bytes"]
+                )
+            )
             return verdict(
                 expected,
                 True,
@@ -215,18 +216,325 @@ def s7_upload(case: dict[str, Any]) -> Outcome:
     protocol = S7Protocol()
     try:
         parsed = protocol.parse_response(bytes(case["pdu"]))
-        payload = protocol.parse_upload_response(parsed)
+        payload, is_last = protocol.parse_upload_fragment(parsed)
     except Exception:
         return verdict(expected, False, False, "")
     if expected["status"] == "accept":
-        # The continuation flag is parsed by python-snap7 only as a raw parameter.
+        matches = (
+            payload == bytes(expected["payload"]) and is_last == expected["is_last"]
+        )
         return verdict(
-            expected,
-            True,
-            payload == bytes(expected["payload"]),
-            "fragment payload differs",
+            expected, True, matches, f"fragment {payload.hex()}/{is_last} differs"
         )
     return verdict(expected, True, False, "")
+
+
+def userdata_response(group: int, sub: int, payload: bytes, seq: int = 1) -> bytes:
+    """A well-formed USER_DATA response around ``payload`` (reference 1)."""
+    parameters = bytes([0, 1, 0x12, 8, 0x12, 0x80 | group, sub, seq, 0, 0, 0, 0])
+    data = bytes([0xFF, 9]) + struct.pack(">H", len(payload)) + payload
+    return (
+        struct.pack(">BBHHHH", 0x32, 7, 0, 1, len(parameters), len(data))
+        + parameters
+        + data
+    )
+
+
+def datetime_of(fields: dict[str, int]) -> datetime.datetime:
+    return datetime.datetime(
+        fields["year"],
+        fields["month"],
+        fields["day"],
+        fields["hour"],
+        fields["minute"],
+        fields["second"],
+        fields["millisecond"] * 1000,
+        tzinfo=datetime.UTC,
+    )
+
+
+# --- S7 requests ---------------------------------------------------------------
+
+SECRET = "SECRET"
+REQUESTS: dict[str, Callable[[S7Protocol], bytes]] = {
+    "read_clock": lambda p: p.build_get_clock_request(),
+    "list_blocks": lambda p: p.build_list_blocks_request(),
+    "list_data_blocks": lambda p: p.build_list_blocks_of_type_request(0x41),
+    "plc_stop": lambda p: p.build_plc_control_request("stop"),
+    "plc_hot_start": lambda p: p.build_plc_control_request("hot_start"),
+    "plc_cold_start": lambda p: p.build_plc_control_request("cold_start"),
+    "start_db_upload": lambda p: p.build_start_upload_request(0x41, 1),
+    "upload_fragment": lambda p: p.build_upload_request(7),
+    "end_upload": lambda p: p.build_end_upload_request(7),
+    "set_clock": lambda p: p.build_set_clock_request(
+        datetime.datetime(2026, 9, 23, 12, 34, 56, 789000, tzinfo=datetime.UTC)
+    ),
+    "set_password": lambda p: p.build_set_session_password_request(
+        p.encode_password(SECRET)
+    ),
+    "clear_password": lambda p: p.build_clear_session_password_request(),
+    "get_db_info": lambda p: p.build_get_block_info_request(0x41, 1),
+    "download_fragment_response": lambda p: p.build_download_fragment_response(
+        1, False, b"\xde\xad"
+    ),
+    "final_download_fragment_response": lambda p: p.build_download_fragment_response(
+        1, True, b"\xbe\xef"
+    ),
+    "download_ended_response": lambda p: p.build_download_ended_response(1),
+}
+
+
+def s7_request(case: dict[str, Any]) -> Outcome:
+    builder = REQUESTS.get(case["operation"])
+    if builder is None:
+        raise Gap(f"no python-snap7 builder for {case['operation']}")
+    want = bytes(case["expected_packet"])
+    try:
+        got = builder(S7Protocol())
+    except AttributeError as error:
+        raise Gap(f"this python-snap7 lacks the builder: {error}") from error
+    except Exception as error:
+        return differ(f"builder raised {type(error).__name__}: {error}")
+    if got == want:
+        return agree()
+    first = next(
+        (i for i, (a, b) in enumerate(zip(got, want, strict=False)) if a != b),
+        min(len(got), len(want)),
+    )
+    return differ(
+        f"packet differs at byte {first}: python-snap7 {got.hex()} corpus {want.hex()}"
+    )
+
+
+# --- USER_DATA responses and management codecs --------------------------------
+
+
+def userdata_case(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    group = case.get("group", case.get("expected_group"))
+    sub = case.get("subfunction", case.get("expected_subfunction"))
+    protocol = S7Protocol()
+    try:
+        parsed = protocol.parse_response(bytes(case["pdu"]))
+        if "reference" in case:
+            protocol.sequence = case["reference"]
+            protocol.validate_pdu_reference(parsed["sequence"])
+        protocol.check_userdata_response(parsed, group, sub)
+    except Exception:
+        return verdict(expected, False, False, "")
+    if expected["status"] != "accept":
+        return verdict(expected, True, False, "")
+    parameters = parsed.get("parameters") or {}
+    data = parsed.get("data") or {}
+    got = {
+        "sequence": parameters.get("sequence_number"),
+        "has_more": bool(parameters.get("last_data_unit")),
+        "payload": list(data.get("data", b"")),
+    }
+    want = {
+        "sequence": expected["sequence"],
+        "has_more": expected["has_more_data"],
+        "payload": expected["payload"],
+    }
+    return verdict(expected, True, got == want, f"{got} vs {want}")
+
+
+def block_counts(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    protocol = S7Protocol()
+    try:
+        parsed = protocol.parse_response(
+            userdata_response(3, 1, bytes(case["payload"]))
+        )
+        counts = protocol.parse_list_blocks_response(parsed)
+    except Exception:
+        return verdict(expected, False, False, "")
+    if expected["status"] != "accept":
+        return verdict(expected, True, False, "")
+    names = {
+        "OBCount": "organization_blocks",
+        "FBCount": "function_blocks",
+        "FCCount": "functions",
+        "SFBCount": "system_function_blocks",
+        "SFCCount": "system_functions",
+        "DBCount": "data_blocks",
+        "SDBCount": "system_data_blocks",
+    }
+    got = {names[key]: value for key, value in counts.items() if key in names}
+    return verdict(
+        expected, True, got == expected["counts"], f"{got} vs {expected['counts']}"
+    )
+
+
+def block_list(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    protocol = S7Protocol()
+    try:
+        parsed = protocol.parse_response(
+            userdata_response(3, 2, bytes(case["payload"]))
+        )
+        numbers = protocol.parse_list_blocks_of_type_response(parsed)
+    except Exception:
+        return verdict(expected, False, False, "")
+    if expected["status"] != "accept":
+        return verdict(expected, True, False, "")
+    want = [entry["number"] for entry in expected["entries"]]
+    return verdict(expected, True, list(numbers) == want, f"{numbers} vs {want}")
+
+
+def block_info(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    protocol = S7Protocol()
+    try:
+        parsed = protocol.parse_response(
+            userdata_response(3, 3, bytes(case["payload"]))
+        )
+        info = protocol.parse_get_block_info_response(parsed)
+    except Exception:
+        return verdict(expected, False, False, "")
+    if expected["status"] != "accept":
+        return verdict(expected, True, False, "")
+    want = expected["info"]
+    pairs = {
+        "number": (info.get("block_number"), want["number"]),
+        "mc7": (info.get("mc7_size"), want["mc7_size"]),
+        "load": (info.get("load_size"), want["load_size"]),
+        "local": (info.get("local_data"), want["local_data_size"]),
+        "sbb": (info.get("sbb_length"), want["sbb_size"]),
+        "checksum": (info.get("checksum"), want["checksum"]),
+        "version": (info.get("version"), want["version"]),
+        "flags": (info.get("block_flags"), want["flags"]),
+        "language": (info.get("block_lang"), want["language"]),
+        "outer type": (info.get("block_type"), want["block_type"]),
+        "code date": (list(info.get("code_date", b"")), want["code_date"]),
+        "interface date": (list(info.get("intf_date", b"")), want["interface_date"]),
+    }
+    wrong = [f"{k}: {a!r} vs {b!r}" for k, (a, b) in pairs.items() if a != b]
+    return verdict(expected, True, not wrong, "; ".join(wrong))
+
+
+# --- Clock ---------------------------------------------------------------------
+
+
+def s7_weekday(fields: dict[str, int]) -> int:
+    """S7 DATE_AND_TIME weekday: Sunday = 1 ... Saturday = 7 (native Snap7: tm_wday + 1)."""
+    return datetime_of(fields).isoweekday() % 7 + 1
+
+
+def clock_case(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    wire = expand(case["data"])
+    protocol = S7Protocol()
+    issues: list[str] = []
+    if case["operation"] == "roundtrip":
+        fields = case["input_value"]
+        if expected["status"] != "accept" and fields["weekday"] not in range(1, 8):
+            raise Gap(
+                "python-snap7 derives the weekday from the date; it cannot be supplied"
+            )
+        try:
+            request = protocol.build_set_clock_request(datetime_of(fields))
+        except Exception:
+            return verdict(expected, False, False, "")
+        if expected["status"] != "accept":
+            return verdict(expected, True, False, "")
+        payload = request[-10:]
+        encoded = expand(expected["encoded"])
+        # The final byte is the millisecond digit and weekday nibble: the corpus
+        # supplies an arbitrary weekday, python-snap7 computes one. Compare the rest
+        # exactly, then check python-snap7's weekday against the S7 convention.
+        if payload[:9] != encoded[:9] or (payload[9] & 0xF0) != (encoded[9] & 0xF0):
+            return differ(f"encoded {payload.hex()}, corpus {encoded.hex()}")
+        if payload[9] & 0x0F != s7_weekday(fields):
+            issues.append(
+                f"weekday nibble {payload[9] & 0x0F}, S7 convention (Sunday=1) {s7_weekday(fields)}"
+            )
+    # Decode: python-snap7 reads an eight-byte clock (no century byte), while the
+    # request it builds above, native Snap7 and the corpus use the ten-byte form.
+    try:
+        parsed = protocol.parse_response(userdata_response(7, 1, wire))
+        decoded = protocol.parse_get_clock_response(parsed)
+    except Exception as error:
+        if expected["status"] == "accept":
+            issues.append(f"ten-byte clock reply rejected: {error}")
+            return differ("; ".join(issues))
+        return agree()
+    if expected["status"] != "accept":
+        return differ("ten-byte clock payload accepted despite invalid fields")
+    want = expected["value"]
+    got = (
+        decoded.year,
+        decoded.month,
+        decoded.day,
+        decoded.hour,
+        decoded.minute,
+        decoded.second,
+    )
+    ref = (
+        want["year"],
+        want["month"],
+        want["day"],
+        want["hour"],
+        want["minute"],
+        want["second"],
+    )
+    return verdict(expected, True, got == ref, f"{got} vs {ref}")
+
+
+# --- Writes and multi-item -----------------------------------------------------
+
+
+def word_write(case: dict[str, Any]) -> Outcome:
+    protocol = S7Protocol()
+    payload = bytes(case["payload"])
+    try:
+        request = protocol.build_write_request(S7Area.DB, 1, 0, S7WordLen.WORD, payload)
+    except Exception as error:
+        return differ(f"builder raised {type(error).__name__}: {error}")
+    bit_length = case["count"] * case["element_bytes"] * 8
+    tail = request[-(len(payload) + 4) :]
+    if tail[4:] != bytes(case["expected_payload"]):
+        return differ(f"data payload {tail[4:].hex()} differs")
+    if struct.unpack(">H", tail[2:4])[0] != bit_length:
+        return differ(
+            f"bit length {struct.unpack('>H', tail[2:4])[0]}, corpus {bit_length}"
+        )
+    return agree()
+
+
+def multi_item(case: dict[str, Any]) -> Outcome:
+    if case["operation"] != "read":
+        raise Gap("python-snap7 has no multi-variable write builder")
+    protocol = S7Protocol()
+    items = [(0x84, r["db_number"], r["start"], r["count"]) for r in case["ranges"]]
+    want_request = bytes(case["request_pdu"])
+    expected = case["expected"]
+    if expected["status"] == "accept":
+        try:
+            got = protocol.build_multi_read_request(items)
+        except Exception as error:
+            return differ(f"multi-read builder raised {error}")
+        if got != want_request:
+            return differ(
+                f"request differs: python-snap7 {got.hex()} corpus {want_request.hex()}"
+            )
+    protocol = S7Protocol()
+    try:
+        parsed = protocol.parse_response(bytes(case["response_pdu"]))
+        blocks = protocol.extract_multi_read_data(parsed, len(items))
+    except Exception:
+        if expected["status"] == "accept":
+            return differ("response with a failed item aborts the whole multi-read")
+        return agree()
+    if expected["status"] != "accept":
+        return verdict(expected, True, False, "")
+    want = [
+        bytes(i["payload"]) if i["status"] == "success" else None
+        for i in expected["items"]
+    ]
+    return verdict(
+        expected, True, [bytes(b) for b in blocks] == want, f"{blocks} vs {want}"
+    )
 
 
 # --- Typed values --------------------------------------------------------------
@@ -328,6 +636,25 @@ def string_case(case: dict[str, Any]) -> Outcome:
     return differ(f"encoded {bytes(buffer).hex()}, corpus {want.hex()}")
 
 
+# S7Protocol methods an adapter needs; absent in older python-snap7 versions.
+REQUIRES: dict[str, tuple[str, ...]] = {
+    "s7_upload": ("parse_upload_fragment",),
+    "block_counts": ("parse_list_blocks_response",),
+    "block_list": ("parse_list_blocks_of_type_response",),
+    "block_info": ("parse_get_block_info_response",),
+    "userdata_case": ("check_userdata_response",),
+    "multi_item": ("build_multi_read_request", "extract_multi_read_data"),
+    "clock_case": ("build_set_clock_request", "parse_get_clock_response"),
+}
+
+
+def missing_api(adapter: Callable[[dict[str, Any]], Outcome]) -> str | None:
+    for name in REQUIRES.get(adapter.__name__, ()):
+        if not hasattr(S7Protocol, name):
+            return name
+    return None
+
+
 # --- Driver --------------------------------------------------------------------
 
 ADAPTERS: list[tuple[str, str, Callable[[dict[str, Any]], Outcome]]] = [
@@ -337,6 +664,15 @@ ADAPTERS: list[tuple[str, str, Callable[[dict[str, Any]], Outcome]]] = [
     ("cotp-data.json", "decode_cases", cotp_decode),
     ("s7.json", "response_cases", s7_response),
     ("s7.json", "upload_cases", s7_upload),
+    ("s7.json", "request_cases", s7_request),
+    ("s7.json", "userdata_cases", userdata_case),
+    ("s7.json", "block_count_cases", block_counts),
+    ("s7.json", "block_list_cases", block_list),
+    ("s7.json", "block_info_cases", block_info),
+    ("s7.json", "write_cases", word_write),
+    ("s7.json", "multi_item_cases", multi_item),
+    ("management.json", "decoder_cases", userdata_case),
+    ("values.json", "clock_codec_cases", clock_case),
     ("values.json", "integer_cases", integer_case),
     ("values.json", "string_codec_cases", string_case),
 ]
@@ -348,8 +684,14 @@ def run() -> dict[str, Outcome]:
         corpus = json.loads((CORPUS / name).read_text(encoding="utf-8"))
         if corpus["schema_version"] != 1:
             raise SystemExit(f"{name}: unsupported schema version")
+        absent = missing_api(adapter)
         for case in corpus[array]:
             key = f"{name}/{array}/{case['id']}"
+            if absent:
+                results[key] = Outcome(
+                    GAP, f"this python-snap7 has no S7Protocol.{absent}"
+                )
+                continue
             try:
                 results[key] = adapter(case)
             except Gap as reason:
@@ -365,11 +707,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    installed = getattr(snap7, "__version__", PINNED_VERSION)
-    if installed != PINNED_VERSION:
-        print(
-            f"warning: tested with python-snap7 {PINNED_VERSION}, found {installed}",
-            file=sys.stderr,
+    installed = importlib.metadata.version("python-snap7")
+    baseline_path = Path(__file__).with_name(f"python_snap7_baseline-{installed}.json")
+    if not baseline_path.exists() and not args.update_baseline:
+        raise SystemExit(
+            f"no reviewed baseline for python-snap7 {installed}; review the disagreements "
+            "with --list disagree and record them with --update-baseline"
         )
     results = run()
     counts = Counter(outcome.status for outcome in results.values())
@@ -387,12 +730,12 @@ def main() -> int:
         for key, outcome in sorted(results.items())
     }
     if args.update_baseline:
-        BASELINE.write_text(
+        baseline_path.write_text(
             json.dumps(recorded, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
         )
-        print(f"wrote {BASELINE}")
+        print(f"wrote {baseline_path}")
         return 0
-    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     problems = []
     for key in sorted(set(baseline) | set(recorded)):
         before = baseline.get(key, {}).get("status")
