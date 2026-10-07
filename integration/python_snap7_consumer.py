@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import importlib.metadata
+import inspect
 import json
 import struct
 import sys
@@ -318,6 +319,10 @@ def s7_request(case: dict[str, Any]) -> Outcome:
 # --- USER_DATA responses and management codecs --------------------------------
 
 
+# (group, subfunction) of the USER_DATA services whose success acknowledgement carries no data.
+NO_DATA_SERVICES = {(7, 2), (5, 1), (5, 2)}
+
+
 def userdata_case(case: dict[str, Any]) -> Outcome:
     expected = case["expected"]
     group = case.get("group", case.get("expected_group"))
@@ -328,7 +333,16 @@ def userdata_case(case: dict[str, Any]) -> Outcome:
         if "reference" in case:
             protocol.sequence = case["reference"]
             protocol.validate_pdu_reference(parsed["sequence"])
-        protocol.check_userdata_response(parsed, group, sub)
+        # Services that return no data (set clock, session passwords) are acknowledged
+        # with return code 0x0a; python-snap7 after #940 accepts that only when asked.
+        options = (
+            {"accept_null_ack": True}
+            if (group, sub) in NO_DATA_SERVICES
+            and "accept_null_ack"
+            in inspect.signature(protocol.check_userdata_response).parameters
+            else {}
+        )
+        protocol.check_userdata_response(parsed, group, sub, **options)
     except Exception:
         return verdict(expected, False, False, "")
     if expected["status"] != "accept":
