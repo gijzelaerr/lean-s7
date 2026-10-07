@@ -1,0 +1,31 @@
+name: Real captures
+
+# Optional, scheduled evidence check: replays public captures of real Siemens
+# controllers through the Lean codecs. It downloads the captures (SHA-256 pinned) from
+# their public locations, so a failure can mean a pinned hash changed or a source moved,
+# not only a codec regression. It is not run on pull requests.
+
+"on":
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    name: Replay public captures
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: lean-s7-decode
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install "python-snap7==3.2.1"
+      - name: Replay (lean-s7 checks must agree; python-snap7 results are notes)
+        run: python integration/real_captures.py

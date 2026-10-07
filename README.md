@@ -327,6 +327,24 @@ python-snap7 emulator; that emulator does not return conformant SZL or clock rep
 so `info`, `state` and `clock` report protocol errors against it and are not covered
 by that test.
 
+## Evidence and tools
+
+Every claim above rests on a layer of evidence; none of them is controller qualification.
+Optional checks need extra tools and are not part of the library.
+
+| Evidence | How to run | What it shows | Report |
+| --- | --- | --- | --- |
+| Checked theorems | `lake exe lean-s7-axioms` | Every theorem (1,388) uses only standard axioms; every theorem the docs cite exists. | [completeness matrix](docs/COMPLETENESS.md) |
+| Conformance corpus | `lake exe lean-s7-conformance ...`, [release](https://github.com/gijzelaerr/lean-s7/releases/tag/corpus-v1-1.0.1) | Versioned, language-neutral vectors generated from the Lean model. | [corpus README](conformance/v1/README.md) |
+| Emulator, peers, native Snap7 | `python integration/run.py` (also on Windows) | The client against python-snap7's emulator, scripted fault peers and the official native Snap7 server. | [native interop](reports/native-interop-2026-09-24.md) |
+| python-snap7 differential | `python integration/python_snap7_consumer.py` | 467 corpus cases against python-snap7; a reviewed baseline per version. | [3.2.1](reports/python-snap7-3.2.1-2026-10-07.md), [fixes verified](reports/python-snap7-fixes-verified-2026-10-07.md) |
+| Differential fuzzing | `lake build lean-s7-decode`, `python integration/python_snap7_fuzz.py` | Mutated PDUs: python-snap7 never decodes a different value from an input both accept. | [fuzzing](reports/python-snap7-fuzz-2026-10-07.md) |
+| Wireshark dissector | `python integration/wireshark_corpus.py` (needs `tshark`) | An independent decoder agrees on 73 accepted probes, with no disagreement. | [Wireshark](reports/wireshark-corpus-2026-10-07.md) |
+| Real controller captures | `python integration/real_captures.py` (downloads public captures) | 351 checks agree on five S7-300 captures and one block-upload trace; also run weekly in CI. | [real captures](reports/real-s7-300-captures-2026-10-07.md) |
+
+Differences found this way were reported upstream and fixed in python-snap7 (see the
+reports). `lean-s7-cli` and `lean-s7-decode` are tools outside the library import graph.
+
 ## Client example
 
 ```lean
