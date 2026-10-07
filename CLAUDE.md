@@ -72,6 +72,9 @@ python integration/native_snap7_build.py
 python integration/native_snap7.py --library .lake/native-snap7/libsnap7.dylib
 ```
 
+For wire-format changes, the optional `python integration/real_captures.py` replays public real S7-300 captures
+(needs network once and `lake build lean-s7-decode`); all lean-s7 checks must stay green.
+
 For decoder changes, the optional differential fuzzer `python integration/python_snap7_fuzz.py`
 (needs `lake build lean-s7-decode` and python-snap7 3.2.1) should keep reporting no accepted-but-different values.
 
