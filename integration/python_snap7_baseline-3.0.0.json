@@ -1041,387 +1041,387 @@
  },
  "values.json/clock_codec_cases/clock-bcd-2-false-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-false-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-false-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-false-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-false-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-false-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-true-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-true-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-true-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-true-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-true-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-2-true-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-false-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-false-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-false-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-false-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-false-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-false-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-true-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-true-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-true-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-true-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-true-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-3-true-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-false-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-false-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-false-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-false-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-false-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-false-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-true-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-true-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-true-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-true-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-true-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-4-true-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-false-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-false-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-false-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-false-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-false-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-false-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-true-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-true-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-true-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-true-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-true-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-5-true-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-false-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-false-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-false-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-false-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-false-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-false-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-true-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-true-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-true-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-true-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-true-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-6-true-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-false-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-false-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-false-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-false-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-false-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-false-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-true-10": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-true-11": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-true-12": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-true-13": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-true-14": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-7-true-15": {
   "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-bcd-8-false-10": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-false-11": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-false-12": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-false-13": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-false-14": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-false-15": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-true-10": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-true-11": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-true-12": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-true-13": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-true-14": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-bcd-8-true-15": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-10": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-11": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-12": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-13": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-2": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-3": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-4": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-5": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-6": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-7": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-8": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-9": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-invalid-input-0": {
   "status": "disagree",
@@ -1480,28 +1480,28 @@
   "detail": ""
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-10": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-11": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-12": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-13": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-14": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-15": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-roundtrip-0": {
   "status": "disagree",
@@ -1532,84 +1532,84 @@
   "detail": "encoded 00080089123123595906, corpus 00198912312359599997"
  },
  "values.json/clock_codec_cases/clock-trailing-byte": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-0": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-1": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-2": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-3": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-4": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-5": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-6": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-7": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-8": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-truncated-9": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-0": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-10": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-11": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-12": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-13": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-14": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-15": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-8": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/clock_codec_cases/clock-weekday-9": {
-  "status": "disagree",
-  "detail": "ten-byte clock payload accepted despite invalid fields"
+  "status": "ambiguity",
+  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
  },
  "values.json/integer_cases/int16-maximum": {
   "status": "agree",

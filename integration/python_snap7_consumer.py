@@ -297,6 +297,15 @@ def s7_request(case: dict[str, Any]) -> Outcome:
         return differ(f"builder raised {type(error).__name__}: {error}")
     if got == want:
         return agree()
+    if (
+        case["operation"] == "set_clock"
+        and got[:-1] == want[:-1]
+        and (got[-1] & 0xF0) == (want[-1] & 0xF0)
+    ):
+        return Outcome(
+            AMBIGUITY,
+            "only the weekday nibble differs: python-snap7 derives it from the date",
+        )
     first = next(
         (i for i, (a, b) in enumerate(zip(got, want, strict=False)) if a != b),
         min(len(got), len(want)),
@@ -460,7 +469,15 @@ def clock_case(case: dict[str, Any]) -> Outcome:
             return differ("; ".join(issues))
         return agree()
     if expected["status"] != "accept":
-        return differ("ten-byte clock payload accepted despite invalid fields")
+        visible_digits_valid = all(
+            (byte >> 4) <= 9 and (byte & 0x0F) <= 9 for byte in wire[2:8]
+        )
+        if visible_digits_valid:
+            return Outcome(
+                AMBIGUITY,
+                "python-snap7 decodes no weekday or milliseconds, the only invalid fields",
+            )
+        return differ("ten-byte clock payload with invalid BCD digits accepted")
     want = expected["value"]
     got = (
         decoded.year,
@@ -703,13 +720,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument(
+        "--no-baseline",
+        action="store_true",
+        help="print the results without comparing with or writing a baseline "
+        "(for unreleased builds that report an already reviewed version)",
+    )
+    parser.add_argument(
         "--list", choices=[GAP, AMBIGUITY, DISAGREE, AGREE], action="append"
     )
     args = parser.parse_args()
 
     installed = importlib.metadata.version("python-snap7")
     baseline_path = Path(__file__).with_name(f"python_snap7_baseline-{installed}.json")
-    if not baseline_path.exists() and not args.update_baseline:
+    if not baseline_path.exists() and not args.update_baseline and not args.no_baseline:
         raise SystemExit(
             f"no reviewed baseline for python-snap7 {installed}; review the disagreements "
             "with --list disagree and record them with --update-baseline"
@@ -724,6 +747,9 @@ def main() -> int:
         for key, outcome in sorted(results.items()):
             if outcome.status == status:
                 print(f"  [{status}] {key}: {outcome.detail}")
+
+    if args.no_baseline:
+        return 0
 
     recorded = {
         key: {"status": outcome.status, "detail": outcome.detail}
