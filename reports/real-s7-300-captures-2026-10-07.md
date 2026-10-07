@@ -53,15 +53,15 @@ Facts the real device establishes:
 
 1. **The clock reply is ten data bytes.** For example `ff 09 00 0a | 00 19 14 08 20 11 59 43 91 24`
    is 2014-08-20 11:59:43, reserved byte, century byte `0x19`, millisecond digits and
-   weekday in the last two bytes. The Lean clock decoder accepts all six real replies.
+   weekday in the last two bytes. The Lean clock decoder accepts all seven real replies.
 2. **The weekday nibble is Sunday = 1.** The reply above carries `4` for a Wednesday
    (2014-08-20 is ISO weekday 3).
 3. **A set-clock acknowledgement is return code `0x0a` with no data and error 0.** Lean
    accepts it.
-4. **PLC error replies are visible and rejected.** Three block-info requests (frames 44
-   and 78 of the block-list capture, 38 of the download capture) return error `0xd209`,
-   and one SZL request returns `0xd402`; Lean rejects all four, which the harness
-   requires.
+4. **PLC error replies are visible and rejected.** Four block-info requests (frames 44
+   and 78 of the block-list capture, 38 of the download capture, 24 of the upload trace)
+   return error `0xd209`, one SZL request returns `0xd402` and a start-upload of OB 0
+   returns `0xd20c`; Lean rejects all six, which the harness requires.
 5. **PLC-driven download matches the Lean model exactly:** the request-download job, the
    three `0x1b` fragment exchanges (222, 222 and 56 bytes, continuation flag `1`, `1`, `0`),
    the `0x1c` end exchange and the `_INSE` job are byte-identical to the Lean encoders'
@@ -93,17 +93,17 @@ Facts the real device establishes:
 
 Run when python-snap7 is installed (notes only; they do not fail the harness):
 
-- All six real clock replies are rejected ("Clock response must contain exactly eight
+- All seven real clock replies are rejected ("Clock response must contain exactly eight
   bytes"), which confirms [python-snap7 #925](https://github.com/gijzelaerr/python-snap7/issues/925) against a real PLC.
-- The real set-clock acknowledgement (return code `0x0a`, no data) is rejected as
+- Both real set-clock acknowledgements (return code `0x0a`, no data) are rejected as
   "USERDATA request failed: Object does not exist (0x0a)", although the PLC reported
   success.
 - Its block-info request `0AA00001` differs from the real tool's `0A00001B`, which
   confirms the field-order bug in [#927](https://github.com/gijzelaerr/python-snap7/issues/927) (the letter comes after the number).
-- Its read-SZL request differs from the real tool's on every SZL read (all 88 across the
+- Its read-SZL request differs from the real tool's on every SZL read (all 93 across the
   captures, 66 of them in the status capture): the data header is `0a 00 00 04 <id> <index>` where the real tool
   sends `ff 09 00 04 <id> <index>` (return code `0xff`, octet-string transport size). Its
-  follow-up request for further SZL fragments (all 4 in the captures) uses an eight-byte parameter block with
+  follow-up request for further SZL fragments (all 5 in the captures) uses an eight-byte parameter block with
   method `0x11` (`00 01 12 04 11 44 01 <seq>`), where the real tool sends twelve bytes with
   method `0x12` (`00 01 12 08 12 44 01 <seq> 00 00 00 00`), which the Lean encoder
   reproduces exactly. Whether a PLC tolerates python-snap7's variants was not tested here;
