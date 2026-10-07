@@ -58,10 +58,10 @@ Facts the real device establishes:
    (2014-08-20 is ISO weekday 3).
 3. **A set-clock acknowledgement is return code `0x0a` with no data and error 0.** Lean
    accepts it.
-4. **PLC error replies are visible and rejected.** Three block-info requests (frames 44
-   and 78 of the block-list capture, 38 of the download capture) return error `0xd209`,
-   and one SZL request returns `0xd402`; Lean rejects all four, which the harness
-   requires.
+4. **PLC error replies are visible and rejected.** Four block-info requests (frames 44
+   and 78 of the block-list capture, 38 of the download capture, 24 of the upload trace)
+   return error `0xd209`, one SZL request returns `0xd402` and a start-upload of OB 0
+   returns `0xd20c`; Lean rejects all six, which the harness requires.
 5. **PLC-driven download matches the Lean model exactly:** the request-download job, the
    three `0x1b` fragment exchanges (222, 222 and 56 bytes, continuation flag `1`, `1`, `0`),
    the `0x1c` end exchange and the `_INSE` job are byte-identical to the Lean encoders'
