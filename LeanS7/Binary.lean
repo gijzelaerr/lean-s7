@@ -94,6 +94,34 @@ theorem readBytes_size (cursor next : Cursor) (count : Nat) (payload : ByteArray
     omega
   · contradiction
 
+/-- A successful byte read stays on the same data, advances exactly one byte and
+    started inside the input. -/
+theorem readUInt8_ok (cursor next : Cursor) (value : UInt8)
+    (h : cursor.readUInt8 = .ok (value, next)) :
+    next.data = cursor.data ∧ next.offset = cursor.offset + 1 ∧
+      cursor.offset < cursor.data.size := by
+  unfold readUInt8 at h
+  split at h
+  · injection h with h
+    injection h with _ hn
+    subst hn
+    exact ⟨rfl, rfl, by assumption⟩
+  · contradiction
+
+/-- A successful bounded read stays on the same data and advances exactly the
+    requested number of bytes. -/
+theorem readBytes_next (cursor next : Cursor) (count : Nat) (payload : ByteArray)
+    (h : cursor.readBytes count = .ok (payload, next)) :
+    next.data = cursor.data ∧ next.offset = cursor.offset + count ∧
+      count ≤ cursor.remaining := by
+  unfold readBytes at h
+  split at h
+  · injection h with h
+    injection h with _ hn
+    subst hn
+    exact ⟨rfl, rfl, by assumption⟩
+  · contradiction
+
 /-- A byte read succeeds when the cursor points inside the input. -/
 theorem readUInt8_of_lt (cursor : Cursor) (h : cursor.offset < cursor.data.size) :
     cursor.readUInt8 = .ok (cursor.data[cursor.offset],
@@ -115,6 +143,24 @@ theorem readUInt16BE_of_available (cursor : Cursor)
       cursor.data[cursor.offset].toNat * 256 + result.fst.toNat), result.snd)) = _
   rw [readUInt8_of_lt _ (by simp; omega)]
   rfl
+
+/-- A successful big-endian word read stays on the same data, advances exactly
+    two bytes, and was fully inside the input. -/
+theorem readUInt16BE_ok (cursor next : Cursor) (value : UInt16)
+    (h : cursor.readUInt16BE = .ok (value, next)) :
+    next.data = cursor.data ∧ next.offset = cursor.offset + 2 ∧
+      cursor.offset + 2 ≤ cursor.data.size := by
+  by_cases hl : cursor.offset + 2 ≤ cursor.data.size
+  · rw [readUInt16BE_of_available cursor hl] at h
+    injection h with h
+    injection h with _ hn
+    subst hn
+    exact ⟨rfl, rfl, hl⟩
+  · exfalso
+    by_cases h1 : cursor.offset < cursor.data.size
+    · have h2 : ¬(cursor.offset + 1 < cursor.data.size) := by omega
+      simp [readUInt16BE, readUInt8, h1, h2, bind, Except.bind] at h
+    · simp [readUInt16BE, readUInt8, h1, bind, Except.bind] at h
 
 /-- Four available bytes decode as a big-endian double word and advance the
     cursor four positions. -/
