@@ -28,3 +28,7 @@ root = "AxiomAuditMain"
 [[lean_exe]]
 name = "lean-s7-cli"
 root = "CliMain"
+
+[[lean_exe]]
+name = "lean-s7-decode"
+root = "DecodeMain"

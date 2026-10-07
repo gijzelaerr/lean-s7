@@ -11,7 +11,7 @@ items marked **native-confirmed** or **self-inconsistent** are bugs by an indepe
 or internal standard; the rest are leads or policy differences. The native source is
 the SHA-256-pinned official Snap7 revision `30f37da3114024a71ba93f7fd855c680b97a406f`
 already used by `integration/native_snap7_build.py` (file and symbol names below refer
-to it). Nothing has been reported upstream yet.
+to it). Issues for the evidence-backed bugs were filed afterwards (see the end).
 
 | 3.2.1 result | Cases |
 | --- | ---: |
@@ -107,7 +107,14 @@ for a 206-byte payload, CPU state returns an item error, and the clock reply is 
 bytes. The emulator is therefore not a faithful independent S7 endpoint for those
 services; the native Snap7 endpoint and scripted peers remain the evidence for them.
 
-## Suggested upstream issues
+## Upstream issues
 
-Group 1 (wstring), 2 and 4 (clock encoding), 3 (clock decoding), 5 (block-info request)
-are the actionable ones; 6, 8–10 are hardening. Not filed.
+Filed on 2026-10-07: 1 as [#923](https://github.com/gijzelaerr/python-snap7/issues/923),
+2 as [#924](https://github.com/gijzelaerr/python-snap7/issues/924), 3 as
+[#925](https://github.com/gijzelaerr/python-snap7/issues/925), 4 as
+[#926](https://github.com/gijzelaerr/python-snap7/issues/926), 5 as
+[#927](https://github.com/gijzelaerr/python-snap7/issues/927). Differential fuzzing added
+[#930](https://github.com/gijzelaerr/python-snap7/issues/930) (header error code) and
+[#931](https://github.com/gijzelaerr/python-snap7/issues/931) (block-count table length),
+see [the fuzzing report](python-snap7-fuzz-2026-10-07.md). Items 6 and 8-12 are hardening
+leads and are not filed.

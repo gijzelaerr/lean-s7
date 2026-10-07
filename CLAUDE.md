@@ -36,6 +36,7 @@ The toolchain is pinned in `lean-toolchain`. Do not upgrade it incidentally.
 - `LeanS7/Transport.lean`: TCP, TPKT, and COTP IO.
 - `LeanS7/Client.lean`: client lifecycle and public operations.
 - `CliMain.lean`: read-only-by-default command-line tool; nothing imports it.
+- `DecodeMain.lean`: stdin/stdout decoder oracle for differential fuzzing; nothing imports it.
 - `Tests.lean`: deterministic unit and golden-packet tests.
 - `integration/run.py`: end-to-end tests against a pinned python-snap7
   emulator on a dynamic localhost port.
@@ -50,7 +51,7 @@ Run the complete local check before every commit:
 
 ```console
 lake clean
-lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli
+lake build lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli lean-s7-decode
 lake exe lean-s7-tests
 lake exe lean-s7-axioms
 python -m pip install "python-snap7==3.0.0"
@@ -70,6 +71,9 @@ For changes affecting independent endpoint testing, also run:
 python integration/native_snap7_build.py
 python integration/native_snap7.py --library .lake/native-snap7/libsnap7.dylib
 ```
+
+For decoder changes, the optional differential fuzzer `python integration/python_snap7_fuzz.py`
+(needs `lake build lean-s7-decode` and python-snap7 3.2.1) should keep reporting no accepted-but-different values.
 
 For changes affecting the conformance corpus or wire formats, also run the optional
 `python integration/wireshark_corpus.py` (needs `tshark` 4.6.x) and review any baseline change.
