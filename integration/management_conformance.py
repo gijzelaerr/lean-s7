@@ -81,7 +81,7 @@ def request(
         )
     else:
         parameters = bytes(
-            [0, 1, 0x12, 8, 0x11, 0x40 | group, subfunction, sequence, 0, 0, 0, 0]
+            [0, 1, 0x12, 8, 0x12, 0x40 | group, subfunction, sequence, 0, 0, 0, 0]
         )
         data = b"\x0a\0\0\0"
     return (

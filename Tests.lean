@@ -800,8 +800,14 @@ def testS7AdvancedVectors : IO Unit := do
   check (isOkEq (S7.encodeUserDataContinuation 13 S7.blocksInfoGroup
     S7.listBlocksOfTypeSubfunction 7) (bytes #[
       0x32, 7, 0, 0, 0, 13, 0, 12, 0, 4,
-      0, 1, 0x12, 8, 0x11, 0x43, 2, 7, 0, 0, 0, 0,
+      0, 1, 0x12, 8, 0x12, 0x43, 2, 7, 0, 0, 0, 0,
       0x0a, 0, 0, 0])) "unexpected block-list continuation encoding"
+  -- Every follow-up carries the response method 0x12 (real S7-300 SZL captures and
+  -- the native Snap7 list-blocks-of-type follow-up); the generic and SZL encoders
+  -- must agree wherever they overlap.
+  for sequence in [0, 1, 7, 255] do
+    check ((S7.encodeUserDataContinuation 13 S7.szlGroup S7.readSzlSubfunction sequence).toOption ==
+      (S7.encodeReadSzlContinuation 13 sequence).toOption) "generic and SZL continuation encoders differ"
   let countsPayload := bytes #[
     0x30, 0x38, 0, 1, 0x30, 0x45, 0, 2, 0x30, 0x43, 0, 3,
     0x30, 0x41, 0, 4, 0x30, 0x42, 0, 5, 0x30, 0x44, 0, 6,

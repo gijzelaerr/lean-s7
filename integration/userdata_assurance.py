@@ -64,7 +64,7 @@ def _check_request(
     ):
         raise RuntimeError(f"USER_DATA request header mismatch: {request.hex()}")
     parameters = request[10 : 10 + parameter_length]
-    method = 0x12 if sequence is not None and operation == "szl" else 0x11
+    method = 0x12 if sequence is not None else 0x11
     expected = bytes(
         [
             0,

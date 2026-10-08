@@ -71,3 +71,17 @@ notes say which case changed and why.
 The packaging script uses only the Python standard library and is not part of the
 Lean client's import graph (see `integration/import_boundaries.py`). Publishing a
 PyPI or npm data package is optional and not provided.
+
+## Corrections within a generation
+
+- **1.1.0 — block-list follow-up method.** The 48 follow-up `request_pdu` values of
+  the 16 `management.json` `continuation_cases` carried method `0x11` (request) at PDU
+  byte 14; they now carry `0x12`, which is what the real engineering tool sends for SZL
+  follow-ups (public S7-300 captures) and what the pinned native Snap7 sends for
+  list-blocks-of-type follow-ups (`opListBlocksOfType`). Initial requests, all responses,
+  all `decoder_cases` and every case `id` are unchanged. By the rules above a corrected
+  expectation is a breaking change; it was released as a minor version because the
+  affected bytes were wrong rather than a contract consumers could correctly depend on,
+  and the only known consumers are this repository's own checks. A consumer that compares
+  follow-up request bytes must update to 1.1.0; one that does not compare them is
+  unaffected.

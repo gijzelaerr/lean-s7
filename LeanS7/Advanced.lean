@@ -96,8 +96,7 @@ def encodeListBlocksOfType (reference : UInt16) (blockType : BlockType) :
 def encodeUserDataContinuation (reference : UInt16) (group subfunction sequence : UInt8) :
     Except EncodeError ByteArray :=
   encodeUserDataHeader reference
-    (bytes #[0, 1, 0x12, 0x08, userDataRequestMethod,
-      UInt8.lor userDataRequestType group, subfunction, sequence, 0, 0, 0, 0])
+    (userDataParameters group subfunction sequence true)
     (bytes #[0x0a, 0, 0, 0])
 
 def encodeGetBlockInfo (reference : UInt16) (blockType : BlockType) (number : Nat) :

@@ -109,7 +109,7 @@ private def conversationRequest (test : ConversationCase) (index : Nat) :
 private def requestWire (test : ConversationCase) (index : Nat) : ByteArray :=
   let parameters := if index == 0 then
     bytes #[0,1,0x12,4,0x11,UInt8.lor 0x40 test.group,test.subfunction,0]
-  else bytes #[0,1,0x12,8,0x11,UInt8.lor 0x40 test.group,test.subfunction,
+  else bytes #[0,1,0x12,8,0x12,UInt8.lor 0x40 test.group,test.subfunction,
     sequences[index - 1]!,0,0,0,0]
   let data := if index != 0 then bytes #[10,0,0,0]
     else if test.group == 4 then bytes #[255,9,0,4,4,0x24,0,0]
