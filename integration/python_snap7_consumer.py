@@ -354,11 +354,14 @@ def userdata_case(case: dict[str, Any]) -> Outcome:
         "has_more": bool(parameters.get("last_data_unit")),
         "payload": list(data.get("data", b"")),
     }
+    # Single-response operation cases state only the payload.
     want = {
-        "sequence": expected["sequence"],
-        "has_more": expected["has_more_data"],
+        "sequence": expected.get("sequence"),
+        "has_more": expected.get("has_more_data"),
         "payload": expected["payload"],
     }
+    want = {key: value for key, value in want.items() if value is not None}
+    got = {key: got[key] for key in want}
     return verdict(expected, True, got == want, f"{got} vs {want}")
 
 
@@ -667,6 +670,169 @@ def string_case(case: dict[str, Any]) -> Outcome:
     return differ(f"encoded {bytes(buffer).hex()}, corpus {want.hex()}")
 
 
+def assemble(
+    protocol: S7Protocol,
+    responses: list[bytes],
+    group: int,
+    sub: int,
+    references: list[int],
+) -> tuple[bool, list[int], int | None]:
+    """Parse, validate and concatenate a USER_DATA fragment sequence.
+
+    python-snap7 has no assembler, so this follows the loop its clients would
+    run: validate each reply and stop at the one without the continuation flag.
+    Returns (completed, payload, index of the rejected or last fragment)."""
+    payload: list[int] = []
+    for index, (pdu, reference) in enumerate(zip(responses, references, strict=True)):
+        try:
+            parsed = protocol.parse_response(pdu)
+            protocol.sequence = reference
+            protocol.validate_pdu_reference(parsed["sequence"])
+            protocol.check_userdata_response(parsed, group, sub)
+        except Exception:
+            return False, payload, index
+        payload += list((parsed.get("data") or {}).get("data", b""))
+        if not (parsed.get("parameters") or {}).get("last_data_unit"):
+            return True, payload, index
+    return False, payload, None
+
+
+def userdata_conversation(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    responses = [bytes(pdu) for pdu in case["response_pdus"]]
+    done, payload, stop = assemble(
+        S7Protocol(),
+        responses,
+        case["expected_group"],
+        case["expected_subfunction"],
+        [case["reference"]] * len(responses),
+    )
+    if expected["status"] != "accept" and done and stop != len(responses) - 1:
+        return Outcome(
+            GAP,
+            "python-snap7 has no assembler: a loop that stops at the final fragment "
+            "never sees the fragment the corpus rejects",
+        )
+    if expected["status"] != "accept" and done and len(payload) > case["maximum_bytes"]:
+        return Outcome(
+            GAP,
+            f"python-snap7 has no assembly byte limit (assembled {len(payload)} bytes, "
+            f"corpus limit {case['maximum_bytes']})",
+        )
+    return verdict(expected, done, payload == expected.get("payload"), f"{payload}")
+
+
+def management_continuation(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    steps = case["steps"]
+    group, sub = case["group"], case["subfunction"]
+    protocol = S7Protocol()
+    done, payload, stop = assemble(
+        protocol,
+        [bytes(step["response_pdu"]) for step in steps],
+        group,
+        sub,
+        [step["reference"] for step in steps],
+    )
+    if expected["status"] != "accept":
+        result = verdict(expected, done, False, "")
+        if result.status == AGREE and stop != expected["failed_step"]:
+            result = differ(
+                f"rejected at step {stop}, corpus step {expected['failed_step']}"
+            )
+        return result
+    result = verdict(
+        expected, done, payload == expected["assembled_payload"], f"{payload}"
+    )
+    if result.status != AGREE:
+        return result
+    # Follow-up requests: each is built from the previous reply's sequence number.
+    for index in range(1, len(steps)):
+        previous = protocol.parse_response(bytes(steps[index - 1]["response_pdu"]))
+        protocol.sequence = (steps[index]["reference"] - 1) & 0xFFFF
+        got = protocol.build_userdata_followup_request(
+            group, sub, previous["parameters"]["sequence_number"]
+        )
+        want = bytes(steps[index]["request_pdu"])
+        if got != want:
+            return differ(
+                f"follow-up {index}: python-snap7 {got.hex()} corpus {want.hex()}"
+            )
+    return agree()
+
+
+def address_case(case: dict[str, Any]) -> Outcome:
+    area = case["area"]
+    word_len = {28: S7WordLen.COUNTER, 29: S7WordLen.TIMER}.get(area, S7WordLen.BYTE)
+    want = bytes(case["packet"])[7:]  # strip TPKT and COTP
+    try:
+        got = S7Protocol().build_read_request(
+            S7Area(area), 1 if area == 132 else 0, case["start_bytes"], word_len, 2
+        )
+    except Exception as error:
+        return differ(f"builder raised {type(error).__name__}: {error}")
+    if got == want:
+        return agree()
+    first = next(
+        (i for i, (a, b) in enumerate(zip(got, want, strict=False)) if a != b), 0
+    )
+    return differ(
+        f"differs at byte {first}: python-snap7 {got.hex()} corpus {want.hex()}"
+    )
+
+
+def chunk_case(case: dict[str, Any]) -> Outcome:
+    from snap7.client import Client
+
+    if case["response_overhead_bytes"] != 18:
+        raise Gap("python-snap7 hard-codes an 18-byte read response overhead")
+    client = Client()
+    client.pdu_length = case["pdu_bytes"]
+    word_len = {1: S7WordLen.BYTE, 2: S7WordLen.WORD, 4: S7WordLen.DWORD}[
+        case["element_bytes"]
+    ]
+    try:
+        most = client._read_chunk_count(word_len)
+    except Exception as error:
+        return differ(f"python-snap7 rejected the negotiated PDU: {error}")
+    counts: list[int] = []
+    starts: list[int] = []
+    offset = 0
+    while offset < case["count"]:
+        size = min(case["count"] - offset, most)
+        counts.append(size)
+        starts.append(offset * client._element_address_step(word_len))
+        offset += size
+    if counts == case["expected_counts"] and starts == case["expected_byte_starts"]:
+        return agree()
+    return differ(f"chunks {counts} at {starts}, corpus {case['expected_counts']}")
+
+
+def operation_string_read(case: dict[str, Any]) -> Outcome:
+    expected = case["expected"]
+    if expected.get("category") == "capacity-changed":
+        raise Gap("capacity consistency across two reads is client state, not a codec")
+    if expected.get("category") == "initial-header":
+        raise Gap("the initial header check belongs to the client's first read")
+    wide = case["encoding"] == "utf-16-be"
+    getter = getters.get_wstring if wide else getters.get_string
+    try:
+        value = getter(bytearray(case["body"]), 0)
+    except Exception:
+        return verdict(expected, False, False, "")
+    return verdict(expected, True, value == expected.get("value"), f"decoded {value!r}")
+
+
+def unmapped(reason: str) -> Callable[[dict[str, Any]], Outcome]:
+    """Cases of a corpus array that python-snap7 has no counterpart for."""
+
+    def adapter(case: dict[str, Any]) -> Outcome:
+        raise Gap(reason)
+
+    adapter.__name__ = "unmapped"
+    return adapter
+
+
 # S7Protocol methods an adapter needs; absent in older python-snap7 versions.
 REQUIRES: dict[str, tuple[str, ...]] = {
     "s7_upload": ("parse_upload_fragment",),
@@ -706,6 +872,34 @@ ADAPTERS: list[tuple[str, str, Callable[[dict[str, Any]], Outcome]]] = [
     ("values.json", "clock_codec_cases", clock_case),
     ("values.json", "integer_cases", integer_case),
     ("values.json", "string_codec_cases", string_case),
+    ("s7.json", "userdata_conversation_cases", userdata_conversation),
+    ("s7.json", "address_cases", address_case),
+    ("s7.json", "chunk_cases", chunk_case),
+    ("management.json", "continuation_cases", management_continuation),
+    ("operations.json", "single_userdata_cases", userdata_case),
+    ("operations.json", "string_read_cases", operation_string_read),
+    (
+        "operations.json",
+        "write_progress_cases",
+        unmapped("python-snap7 keeps no per-chunk acknowledged/uncertain write record"),
+    ),
+    (
+        "operations.json",
+        "retry_policy_cases",
+        unmapped("python-snap7 has no operation-aware replay policy API"),
+    ),
+    (
+        "conversations.json",
+        "cases",
+        unmapped(
+            "lifecycle and retry conversations are client state, no python-snap7 API"
+        ),
+    ),
+    (
+        "sessions.json",
+        "cases",
+        unmapped("session-phase transitions are client state, no python-snap7 API"),
+    ),
 ]
 
 
