@@ -66,7 +66,12 @@ defect was found. Final clean/native/emulator/corpus/platform checks are recorde
 in [release readiness](release-readiness-2026-09-24.md).
 
 Native-server upload/full-upload and other unsupported services are excluded
-from this endpoint profile. Their existing scripted-peer/emulator evidence is
+from this endpoint profile. (Update, 2026-10-08: the official server's source
+answers every start-upload with a "need password" header error, so the native
+profile now also asserts that `upload` and `fullUpload` surface that as a
+recoverable PLC rejection. This is evidence for the refusal path only; no
+positive upload evidence exists from this endpoint. The profile also builds and
+passes on Windows with the pinned source and MSVC, producing `snap7.dll`.) Their existing scripted-peer/emulator evidence is
 not relabeled as independent native-server success. Physical counter/timer
 indexing, controller/firmware-specific layouts/availability, controller-changing
 operations and hard cancellation remain unqualified.

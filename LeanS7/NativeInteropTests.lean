@@ -64,8 +64,19 @@ def runIntegration (host portString pduString : String) : IO Unit := do
       let info ← client.getBlockInfo .dataBlock (UInt16.toNat db)
       require (info.number == db && info.blockType == 0 && info.subBlockType == 0x0a &&
         info.mc7Size == 4096 && info.loadSize == 4188) "native DB metadata profile"
-    -- TODO: independent upload/full-upload evidence needs an endpoint that
-    -- implements those services. The official native server does not.
+    -- The official native server implements neither upload nor download: it
+    -- answers every start-upload with a "need password" header error. That is
+    -- independent evidence only for the refusal path: the client must surface a
+    -- PLC rejection, keep the connection and not leave a pending operation.
+    -- Positive upload/full-upload evidence still needs an implementing endpoint.
+    for upload in [client.upload .dataBlock 1, client.fullUpload .dataBlock 1] do
+      let refused ← try
+        discard upload
+        pure (none : Option IO.Error)
+        catch error => pure (some error)
+      require (refused.map classifyClientError == some .plcRejected && (← client.isConnected))
+        "native upload refusal is a recoverable PLC rejection"
+    require ((← client.dbRead 1 0 4) == initial 1 0 4) "reuse after upload refusal"
     let state ← client.getCpuState
     require (state == .running) "native CPU-state query"
     require ((← client.pendingOperationCount) == 0 && (← client.isConnected)) "final healthy lifecycle"
