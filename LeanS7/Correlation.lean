@@ -220,4 +220,114 @@ theorem earlier_reply_not_delivered (start : UInt16) (i j : Nat) (maxStale : Nat
   intro h
   exact hne (allocated_injective_window start i j hi hj h)
 
+/-- Pure bookkeeping for the client serialization gate. Every operation takes a
+    ticket when it is submitted; the ticket may run only once every earlier
+    ticket has finished. `Client.serialized` keeps this state next to its
+    promise chain, takes tickets with `submit`, checks `mayStart` before
+    running the operation and calls `finish` before releasing the next one. -/
+structure Gate where
+  issued : Nat
+  finished : Nat
+  deriving Repr, BEq
+
+def Gate.empty : Gate := { issued := 0, finished := 0 }
+
+/-- Take the next ticket. -/
+def Gate.submit (gate : Gate) : Gate × Nat :=
+  ({ gate with issued := gate.issued + 1 }, gate.issued)
+
+/-- Only the oldest unfinished ticket may run. -/
+def Gate.mayStart (gate : Gate) (ticket : Nat) : Bool :=
+  ticket == gate.finished && ticket < gate.issued
+
+/-- The running ticket completes. Saturating, so a spurious finish cannot
+    count a ticket that was never issued. -/
+def Gate.finish (gate : Gate) : Gate :=
+  if gate.finished < gate.issued then { gate with finished := gate.finished + 1 } else gate
+
+/-- Running and queued tickets. -/
+def Gate.pending (gate : Gate) : Nat := gate.issued - gate.finished
+
+/-- Tickets are handed out in submission order, with no gaps or repeats. -/
+theorem Gate.submit_ticket (gate : Gate) : (gate.submit).2 = gate.issued := rfl
+
+theorem Gate.submit_issued (gate : Gate) : (gate.submit).1.issued = gate.issued + 1 := rfl
+
+theorem Gate.submit_finished (gate : Gate) : (gate.submit).1.finished = gate.finished := rfl
+
+/-- The gate after `k` submissions from empty. -/
+def Gate.afterSubmissions : Nat → Gate
+  | 0 => Gate.empty
+  | k + 1 => (Gate.afterSubmissions k).submit.1
+
+/-- The `k`th submission from an empty gate receives ticket `k`. -/
+theorem Gate.submit_sequence (k : Nat) :
+    (Gate.afterSubmissions k).submit.2 = k := by
+  induction k with
+  | zero => rfl
+  | succ k ih => simp [Gate.afterSubmissions, Gate.submit] at *; simp [ih]
+
+/-- `finished ≤ issued` is preserved by submission and completion. -/
+def Gate.Valid (gate : Gate) : Prop := gate.finished ≤ gate.issued
+
+theorem Gate.empty_valid : Gate.empty.Valid := by simp [Gate.Valid, Gate.empty]
+
+theorem Gate.submit_valid (gate : Gate) (h : gate.Valid) : gate.submit.1.Valid := by
+  unfold Gate.Valid at *; simp [Gate.submit]; omega
+
+theorem Gate.finish_valid (gate : Gate) (h : gate.Valid) : gate.finish.Valid := by
+  unfold Gate.Valid at *; unfold Gate.finish; split <;> simp_all <;> omega
+
+/-- At most one ticket can run at a time. -/
+theorem Gate.mayStart_unique (gate : Gate) (a b : Nat)
+    (ha : gate.mayStart a = true) (hb : gate.mayStart b = true) : a = b := by
+  simp [Gate.mayStart] at ha hb
+  omega
+
+/-- Only an issued ticket can run. -/
+theorem Gate.mayStart_issued (gate : Gate) (ticket : Nat)
+    (h : gate.mayStart ticket = true) : ticket < gate.issued := by
+  simp [Gate.mayStart] at h
+  exact h.2
+
+/-- Submission order is execution order: a ticket may start only after every
+    earlier ticket has finished. -/
+theorem Gate.mayStart_after_earlier (gate : Gate) (earlier ticket : Nat)
+    (h : gate.mayStart ticket = true) (hlt : earlier < ticket) :
+    earlier < gate.finished := by
+  simp [Gate.mayStart] at h
+  omega
+
+/-- A queued ticket (issued but behind the running one) cannot start yet. -/
+theorem Gate.not_mayStart_of_behind (gate : Gate) (ticket : Nat)
+    (h : gate.finished < ticket) : gate.mayStart ticket = false := by
+  simp [Gate.mayStart]
+  omega
+
+/-- Once the running ticket finishes the next one in submission order, and
+    only it, may run. -/
+theorem Gate.finish_next (gate : Gate) (ticket : Nat)
+    (hrunning : gate.mayStart gate.finished = true) :
+    gate.finish.mayStart ticket = true ↔ ticket = gate.finished + 1 ∧ ticket < gate.issued := by
+  have hlt : gate.finished < gate.issued := by
+    simp [Gate.mayStart] at hrunning; exact hrunning
+  simp [Gate.mayStart, Gate.finish, hlt]
+
+/-- Submitting never lets a new ticket jump ahead of queued ones. -/
+theorem Gate.submit_not_next (gate : Gate)
+    (hbusy : gate.finished < gate.issued) :
+    gate.submit.1.mayStart gate.submit.2 = false := by
+  simp [Gate.mayStart, Gate.submit]
+  omega
+
+theorem Gate.pending_submit (gate : Gate) (h : gate.Valid) :
+    gate.submit.1.pending = gate.pending + 1 := by
+  have h' : gate.finished ≤ gate.issued := h
+  simp [Gate.pending, Gate.submit]; omega
+
+theorem Gate.pending_finish (gate : Gate) (hp : 0 < gate.pending) :
+    gate.finish.pending + 1 = gate.pending := by
+  unfold Gate.pending at *; unfold Gate.finish
+  split <;> simp_all <;> omega
+
 end LeanS7.Correlation
