@@ -68,8 +68,9 @@ in [release readiness](release-readiness-2026-09-24.md).
 Native-server upload/full-upload and other unsupported services are excluded
 from this endpoint profile. (Update, 2026-10-08: the official server's source
 answers every start-upload with a "need password" header error, so the native
-profile now also asserts that `upload` and `fullUpload` surface that as a
-recoverable PLC rejection. This is evidence for the refusal path only; no
+profile now also asserts that `upload` surfaces that as a PLC rejection and
+that the client then ends the session cleanly, as it does for every failed block
+upload, with no pending operation. This is evidence for the refusal path only; no
 positive upload evidence exists from this endpoint. The profile also builds and
 passes on Windows with the pinned source and MSVC, producing `snap7.dll`.) Their existing scripted-peer/emulator evidence is
 not relabeled as independent native-server success. Physical counter/timer
