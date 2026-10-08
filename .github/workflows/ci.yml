@@ -51,3 +51,4 @@ jobs:
       - run: python integration/cli_smoke.py
       - run: python integration/native_snap7_build.py
       - run: python integration/native_snap7.py --library ".lake/native-snap7/${{ matrix.native-library }}"
+      - run: python integration/native_client_requests.py --library ".lake/native-snap7/${{ matrix.native-library }}" --check
