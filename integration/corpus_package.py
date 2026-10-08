@@ -42,7 +42,7 @@ GENERATORS = {
 }
 
 # Bump per VERSIONING.md. Hashes below must match whenever this changes.
-CORPUS_VERSION = "1.0.1"
+CORPUS_VERSION = "1.1.0"
 
 
 class CorpusError(Exception):

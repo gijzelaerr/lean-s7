@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "corpus": "lean-s7-conformance",
-  "corpus_version": "1.0.1",
+  "corpus_version": "1.1.0",
   "lean_s7_version": "0.2.0",
   "lean_toolchain": "leanprover/lean4:v4.33.1",
   "files": [
@@ -26,7 +26,7 @@
       "protocol": "classic S7 management codec conversations",
       "schema_version": 1,
       "bytes": 73497,
-      "sha256": "8bd97383b0e4623121a2f389a723cb73df328a383dc788a146482303df3ab7fc",
+      "sha256": "5b1a4f21e33bc5f5e0216834c880173abdc49f7c223a6fcb09956ed0e54cd604",
       "generator": "lake exe lean-s7-conformance management"
     },
     {
