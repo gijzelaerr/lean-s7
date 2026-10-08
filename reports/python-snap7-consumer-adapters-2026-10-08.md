@@ -20,12 +20,13 @@ for them shows up as a baseline change.
 
 ## Leads (not filed; each needs independent evidence)
 
-1. **Follow-up request layout (8 cases).** The corpus follow-up carries an 8-byte
-   parameter block `12 08 11 4x 0y <seq> 00 00` and a data section of `0a 00 00 00`;
-   python-snap7's `build_userdata_followup_request` sends a 4-byte block
-   (`12 04 11 4x 0y <seq>`). Which form real controllers require is not established
-   here; check against the real-capture continuation requests before calling either side
-   wrong.
+1. **Follow-up request layout (8 cases).** Both sides send the same four-byte data
+   section (`0a 00 00 00`). The corpus parameter block is 12 bytes (length byte `08`:
+   `00 01 12 08 11 4x 0y <seq> 00 00 00 00`, header parameter length 12) while
+   python-snap7's `build_userdata_followup_request` sends 8 bytes (length byte `04`:
+   `00 01 12 04 11 4x 0y <seq>`, header parameter length 8). Which form real controllers
+   require is not established here; check against the real-capture continuation requests
+   before calling either side wrong.
 2. **Group/subfunction identity (4 cases, `fragments-*-identity`).** A fragment whose
    group or subfunction changes mid-conversation is not rejected by the loop python-snap7
    supports.
