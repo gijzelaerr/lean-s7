@@ -1,4 +1,132 @@
 {
+ "conversations.json/cases/chunk-prefix-uncertain-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/chunk-prefix-uncertain-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/chunk-prefix-uncertain-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/chunk-prefix-uncertain-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/duplicate-write-order-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/duplicate-write-order-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/duplicate-write-order-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/duplicate-write-order-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/illegal-progress-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/illegal-progress-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/illegal-progress-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/illegal-progress-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/malformed-ack-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/malformed-ack-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/malformed-ack-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/malformed-ack-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/read-retry-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/read-retry-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/read-retry-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/read-retry-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/retry-gates-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/retry-gates-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/retry-gates-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/retry-gates-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-no-replay-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-no-replay-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-no-replay-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-no-replay-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-opt-in-replay-seed-2026": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-opt-in-replay-seed-23063": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-opt-in-replay-seed-65535": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
+ "conversations.json/cases/write-opt-in-replay-seed-7": {
+  "status": "gap",
+  "detail": "lifecycle and retry conversations are client state, no python-snap7 API"
+ },
  "cotp-data.json/decode_cases/complete-data": {
   "status": "agree",
   "detail": ""
@@ -34,6 +162,70 @@
  "cotp-data.json/encode_cases/segmented-data": {
   "status": "gap",
   "detail": "_build_cotp_dt always sets the end-of-transmission bit"
+ },
+ "management.json/continuation_cases/fragments-3-0-identity": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-3-0-none": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/continuation_cases/fragments-3-0-reference": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-3-0-transport": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-3-81-identity": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-3-81-none": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/continuation_cases/fragments-3-81-reference": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-3-81-transport": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-4-0-identity": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-4-0-none": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/continuation_cases/fragments-4-0-reference": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-4-0-transport": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-4-81-identity": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-4-81-none": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "management.json/continuation_cases/fragments-4-81-reference": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
+ },
+ "management.json/continuation_cases/fragments-4-81-transport": {
+  "status": "disagree",
+  "detail": "rejected at step 0, corpus step 2"
  },
  "management.json/decoder_cases/ff-3-2-0-0": {
   "status": "gap",
@@ -755,6 +947,142 @@
   "status": "gap",
   "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
  },
+ "operations.json/retry_policy_cases/retry-mutating-false-opt-in-false": {
+  "status": "gap",
+  "detail": "python-snap7 has no operation-aware replay policy API"
+ },
+ "operations.json/retry_policy_cases/retry-mutating-false-opt-in-true": {
+  "status": "gap",
+  "detail": "python-snap7 has no operation-aware replay policy API"
+ },
+ "operations.json/retry_policy_cases/retry-mutating-true-opt-in-false": {
+  "status": "gap",
+  "detail": "python-snap7 has no operation-aware replay policy API"
+ },
+ "operations.json/retry_policy_cases/retry-mutating-true-opt-in-true": {
+  "status": "gap",
+  "detail": "python-snap7 has no operation-aware replay policy API"
+ },
+ "operations.json/single_userdata_cases/block-info-incomplete": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/clear-password-incomplete": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/clock-complete": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/clock-incomplete": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/empty-complete-ack": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/invalid-continuation-discriminator": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/set-clock-incomplete": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/single_userdata_cases/set-password-incomplete": {
+  "status": "gap",
+  "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
+ },
+ "operations.json/string_read_cases/string-capacity-grows": {
+  "status": "gap",
+  "detail": "capacity consistency across two reads is client state, not a codec"
+ },
+ "operations.json/string_read_cases/string-capacity-shrinks": {
+  "status": "gap",
+  "detail": "capacity consistency across two reads is client state, not a codec"
+ },
+ "operations.json/string_read_cases/string-capacity-stable": {
+  "status": "agree",
+  "detail": ""
+ },
+ "operations.json/string_read_cases/string-current-length-update": {
+  "status": "agree",
+  "detail": ""
+ },
+ "operations.json/string_read_cases/string-invalid-body-current": {
+  "status": "agree",
+  "detail": ""
+ },
+ "operations.json/string_read_cases/string-invalid-initial-current": {
+  "status": "gap",
+  "detail": "the initial header check belongs to the client's first read"
+ },
+ "operations.json/string_read_cases/wstring-capacity-grows": {
+  "status": "gap",
+  "detail": "capacity consistency across two reads is client state, not a codec"
+ },
+ "operations.json/string_read_cases/wstring-capacity-shrinks": {
+  "status": "gap",
+  "detail": "capacity consistency across two reads is client state, not a codec"
+ },
+ "operations.json/string_read_cases/wstring-capacity-stable": {
+  "status": "agree",
+  "detail": ""
+ },
+ "operations.json/string_read_cases/wstring-current-length-update": {
+  "status": "agree",
+  "detail": ""
+ },
+ "operations.json/string_read_cases/wstring-invalid-initial-current": {
+  "status": "gap",
+  "detail": "the initial header check belongs to the client's first read"
+ },
+ "operations.json/string_read_cases/wstring-unpaired-surrogate": {
+  "status": "agree",
+  "detail": ""
+ },
+ "operations.json/write_progress_cases/chunk-prefix-then-uncertain": {
+  "status": "gap",
+  "detail": "python-snap7 keeps no per-chunk acknowledged/uncertain write record"
+ },
+ "operations.json/write_progress_cases/duplicate-caller-ranges": {
+  "status": "gap",
+  "detail": "python-snap7 keeps no per-chunk acknowledged/uncertain write record"
+ },
+ "operations.json/write_progress_cases/replay-then-global-rejection": {
+  "status": "gap",
+  "detail": "python-snap7 keeps no per-chunk acknowledged/uncertain write record"
+ },
+ "operations.json/write_progress_cases/replay-then-success": {
+  "status": "gap",
+  "detail": "python-snap7 keeps no per-chunk acknowledged/uncertain write record"
+ },
+ "operations.json/write_progress_cases/scalar-global-rejection": {
+  "status": "gap",
+  "detail": "python-snap7 keeps no per-chunk acknowledged/uncertain write record"
+ },
+ "s7.json/address_cases/counter-next-chunk-478": {
+  "status": "disagree",
+  "detail": "differs at byte 22: python-snap7 320100000001000e00000401120a101c000200001c000ef0 corpus 320100000001000e00000401120a101c000200001c0001de"
+ },
+ "s7.json/address_cases/counter-start-16": {
+  "status": "disagree",
+  "detail": "differs at byte 23: python-snap7 320100000001000e00000401120a101c000200001c000080 corpus 320100000001000e00000401120a101c000200001c000010"
+ },
+ "s7.json/address_cases/db-byte-16": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/address_cases/timer-next-chunk-478": {
+  "status": "disagree",
+  "detail": "differs at byte 22: python-snap7 320100000001000e00000401120a101d000200001d000ef0 corpus 320100000001000e00000401120a101d000200001d0001de"
+ },
+ "s7.json/address_cases/timer-start-16": {
+  "status": "disagree",
+  "detail": "differs at byte 23: python-snap7 320100000001000e00000401120a101d000200001d000080 corpus 320100000001000e00000401120a101d000200001d000010"
+ },
  "s7.json/block_count_cases/complete-block-counts": {
   "status": "agree",
   "detail": ""
@@ -802,6 +1130,10 @@
  "s7.json/block_list_cases/truncated-block-list": {
   "status": "disagree",
   "detail": "corpus reject, python-snap7 accepted"
+ },
+ "s7.json/chunk_cases/word-read-pdu-480": {
+  "status": "disagree",
+  "detail": "python-snap7 rejected the negotiated PDU: 'Client' object has no attribute '_read_chunk_count'"
  },
  "s7.json/multi_item_cases/mixed-read-missing-padding": {
   "status": "gap",
@@ -987,9 +1319,129 @@
   "status": "gap",
   "detail": "this python-snap7 has no S7Protocol.check_userdata_response"
  },
+ "s7.json/userdata_conversation_cases/continuation-byte-overflow": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_conversation_cases/continuation-fragment-limit": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_conversation_cases/continuation-not-completed": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_conversation_cases/empty-middle-fragment": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
+ "s7.json/userdata_conversation_cases/fragment-after-completion": {
+  "status": "agree",
+  "detail": ""
+ },
+ "s7.json/userdata_conversation_cases/three-fragment-ordered": {
+  "status": "disagree",
+  "detail": "corpus accept, python-snap7 rejected"
+ },
  "s7.json/write_cases/two-word-multi-write": {
   "status": "agree",
   "detail": ""
+ },
+ "sessions.json/cases/exhaustion-seed-2026": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/exhaustion-seed-23063": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/exhaustion-seed-65535": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/exhaustion-seed-7": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/malformed-ack-seed-2026": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/malformed-ack-seed-23063": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/malformed-ack-seed-65535": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/malformed-ack-seed-7": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/read-retry-seed-2026": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/read-retry-seed-23063": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/read-retry-seed-65535": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/read-retry-seed-7": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/reconnect-before-resend-seed-2026": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/reconnect-before-resend-seed-23063": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/reconnect-before-resend-seed-65535": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/reconnect-before-resend-seed-7": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-no-opt-in-seed-2026": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-no-opt-in-seed-23063": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-no-opt-in-seed-65535": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-no-opt-in-seed-7": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-opt-in-seed-2026": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-opt-in-seed-23063": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-opt-in-seed-65535": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
+ },
+ "sessions.json/cases/write-opt-in-seed-7": {
+  "status": "gap",
+  "detail": "session-phase transitions are client state, no python-snap7 API"
  },
  "tpkt.json/decode_cases/declared-length-below-minimum": {
   "status": "agree",
