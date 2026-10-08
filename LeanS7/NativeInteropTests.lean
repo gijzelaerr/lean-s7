@@ -75,7 +75,7 @@ def runIntegration (host portString pduString : String) : IO Unit := do
         pure (none : Option IO.Error)
         catch error => pure (some error)
       require (refused.map classifyClientError == some .plcRejected && (← client.isConnected))
-        "native upload refusal is a recoverable PLC rejection"
+        s!"native upload refusal is a recoverable PLC rejection: {refused.map toString} connected={← client.isConnected}"
     require ((← client.dbRead 1 0 4) == initial 1 0 4) "reuse after upload refusal"
     let state ← client.getCpuState
     require (state == .running) "native CPU-state query"
