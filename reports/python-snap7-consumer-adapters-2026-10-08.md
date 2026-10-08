@@ -21,12 +21,16 @@ for them shows up as a baseline change.
 ## Leads (not filed; each needs independent evidence)
 
 1. **Follow-up request layout (8 cases).** Both sides send the same four-byte data
-   section (`0a 00 00 00`). The corpus parameter block is 12 bytes (length byte `08`:
-   `00 01 12 08 11 4x 0y <seq> 00 00 00 00`, header parameter length 12) while
-   python-snap7's `build_userdata_followup_request` sends 8 bytes (length byte `04`:
-   `00 01 12 04 11 4x 0y <seq>`, header parameter length 8). Which form real controllers
-   require is not established here; check against the real-capture continuation requests
-   before calling either side wrong.
+   section (`0a 00 00 00`). python-snap7's `build_userdata_followup_request` sends an
+   8-byte parameter block with method `0x11` (`00 01 12 04 11 4x 0y <seq>`); the real
+   engineering tool (public S7-300 captures) and the pinned native Snap7 send a 12-byte
+   block with method `0x12` (`00 01 12 08 12 4x 0y <seq> 00 00 00 00`). Building this
+   comparison also showed that lean-s7 itself sent `0x11` for non-SZL follow-ups; that is
+   fixed in corpus 1.1.0 (see `userdata-continuation-method-2026-10-08.md`). Until that
+   change is merged, the corpus bytes in this branch still carry `0x11` and the eight
+   cases differ from python-snap7 in the parameter length and in the method byte; once
+   merged only the length and the python-snap7 method byte remain. Whether a PLC
+   tolerates python-snap7's form was not tested.
 2. **Group/subfunction identity (4 cases, `fragments-*-identity`).** A fragment whose
    group or subfunction changes mid-conversation is not rejected by the loop python-snap7
    supports.
