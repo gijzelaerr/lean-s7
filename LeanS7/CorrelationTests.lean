@@ -22,6 +22,19 @@ def run : IO Unit := do
   -- Within one window all allocated references are distinct.
   let refs := (List.range 65536).map (Correlation.allocated 0x1234)
   require ((refs.toArray.qsort (· < ·)).toList.eraseDups.length == 65536) "window uniqueness"
+  -- Serialization gate: tickets run strictly in submission order, one at a time.
+  let g0 := Correlation.Gate.empty
+  let (g1, t0) := g0.submit
+  let (g2, t1) := g1.submit
+  let (g3, t2) := g2.submit
+  require (t0 == 0 && t1 == 1 && t2 == 2) "sequential tickets"
+  require (g3.mayStart 0 && !g3.mayStart 1 && !g3.mayStart 2) "only the oldest ticket runs"
+  require (!g3.mayStart 3) "unissued ticket never runs"
+  let g4 := g3.finish
+  require (g4.mayStart 1 && !g4.mayStart 0 && !g4.mayStart 2) "next ticket after finish"
+  require (g4.pending == 2 && g3.pending == 3) "pending count"
+  let g6 := g4.finish.finish
+  require (g6.pending == 0 && g6.finish == g6) "finish saturates"
   IO.println "correlation tests passed"
 
 end LeanS7.CorrelationTests

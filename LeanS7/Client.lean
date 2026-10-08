@@ -45,8 +45,9 @@ structure ClientConfig where
 
 structure Client where
   private connection : IO.Ref (Option Transport.Connection)
-  private requestTail : IO.Ref (Task (Option Unit))
-  private pendingOperations : IO.Ref Nat
+  /-- Promise-chain tail plus the pure ticket bookkeeping of `Correlation.Gate`;
+      both change in one atomic step so ticket order is chain order. -/
+  private requestTail : IO.Ref (Task (Option Unit) × Correlation.Gate)
   private state : IO.Ref Lifecycle.State
   private config : ClientConfig
   pduLength : UInt16
@@ -113,13 +114,12 @@ def Client.connect (config : ClientConfig) : IO Client := do
   Transport.validateTimeoutMs config.transferReceiveTimeoutMs
   let (session, setup) ← connectSession config
   let connection ← IO.mkRef (some session)
-  let requestTail ← IO.mkRef (Task.pure (some ()))
-  let pendingOperations ← IO.mkRef 0
+  let requestTail ← IO.mkRef (Task.pure (some ()), Correlation.Gate.empty)
   let state ← IO.mkRef Lifecycle.State.connected
   let currentPduLength ← IO.mkRef setup.pduLength
   let nextReference ← IO.mkRef config.initialRequestReference
   let writeProgress ← IO.mkRef ({} : WriteProgress.State)
-  return { connection, requestTail, pendingOperations, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
+  return { connection, requestTail, state, config, pduLength := setup.pduLength, currentPduLength, nextReference, writeProgress }
 
 private def Client.freshReference (client : Client) : IO UInt16 := do
   client.nextReference.modifyGet fun reference => (reference, Correlation.nextReference reference)
@@ -136,7 +136,7 @@ def Client.isConnected (client : Client) : IO Bool :=
 /-- Running and queued operations that have entered the serialization gate.
     This is a diagnostic snapshot, not a reservation or synchronization lock. -/
 def Client.pendingOperationCount (client : Client) : IO Nat :=
-  client.pendingOperations.get
+  return (← client.requestTail.get).2.pending
 
 def Client.negotiatedPduLength (client : Client) : IO UInt16 :=
   client.currentPduLength.get
@@ -234,13 +234,17 @@ private partial def Client.exchangeBytesWithRetries (client : Client) (reference
 
 private def Client.serialized (client : Client) (operation : IO α) : IO α := do
   let gate : IO.Promise Unit ← IO.Promise.new
-  let previous ← client.requestTail.modifyGet fun previous => (previous, gate.result?)
-  client.pendingOperations.modify (· + 1)
+  let (previous, ticket) ← client.requestTail.modifyGet fun (previous, state) =>
+    let (state, ticket) := state.submit
+    ((previous, ticket), (gate.result?, state))
   let task ← IO.bindTask previous fun _ =>
     IO.asTask do
-      try operation
+      try
+        unless (← client.requestTail.get).2.mayStart ticket do
+          throw <| ClientError.lifecycle s!"serialization gate ticket {ticket} started out of order"
+        operation
       finally
-        client.pendingOperations.modify (· - 1)
+        client.requestTail.modify fun (tail, state) => (tail, state.finish)
         gate.resolve ()
   match ← IO.wait task with
   | .ok value => return value

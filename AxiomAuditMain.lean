@@ -15,7 +15,12 @@ def explicitTheorems : List Name :=
    `LeanS7.Correlation.step_deliver_iff, `LeanS7.Correlation.scan_delivered,
    `LeanS7.Correlation.scan_tooManyStale, `LeanS7.Correlation.allocated_succ,
    `LeanS7.Correlation.allocated_injective_window,
-   `LeanS7.Correlation.earlier_reply_not_delivered]
+   `LeanS7.Correlation.earlier_reply_not_delivered,
+   `LeanS7.Correlation.Gate.submit_sequence, `LeanS7.Correlation.Gate.mayStart_unique,
+   `LeanS7.Correlation.Gate.mayStart_after_earlier, `LeanS7.Correlation.Gate.finish_next,
+   `LeanS7.Correlation.Gate.submit_not_next, `LeanS7.Correlation.Gate.submit_valid,
+   `LeanS7.Correlation.Gate.finish_valid, `LeanS7.Correlation.Gate.pending_submit,
+   `LeanS7.Correlation.Gate.pending_finish]
 
 /-- Documentation files whose backticked theorem names are checked. -/
 def docFiles : List String := ["README.md", "docs/COMPLETENESS.md", "docs/RELEASE.md"]
