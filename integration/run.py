@@ -1665,7 +1665,9 @@ def main() -> None:
                     "single-request write did not preserve source bytes at the destination"
                 )
             if any(areas[(area, 0)][416:]):
-                raise AssertionError("counter/timer write modified bytes beyond the payload")
+                raise AssertionError(
+                    "counter/timer write modified bytes beyond the payload"
+                )
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)
