@@ -663,6 +663,7 @@ private def Client.readAreaChecked (client : Client) (area : S7.Area) (dbNumber 
   if hmaximum : maxCount = 0 then
     throw <| ClientError.protocol s!"negotiated PDU length {pduLength} cannot hold a read item"
   else
+    inputOrThrow <| MultiValidation.readFits pduLength.toNat { area, dbNumber, start, count }
     let assembled ← client.readAreaChunks area dbNumber start 0
       (Chunking.counts count maxCount) (Chunking.ReadAssembly.empty area.elementSize) deadline retries
     return ⟨assembled.data, Chunking.ReadAssembly.complete_size count maxCount
@@ -721,6 +722,8 @@ private def Client.writeAreaChecked (client : Client) (area : S7.Area) (dbNumber
     if hmaximum : maxCount = 0 then
       throw <| ClientError.protocol s!"negotiated PDU length {pduLength} cannot hold a write item"
     else
+      inputOrThrow <| MultiValidation.writeFits pduLength.toNat
+        { area, dbNumber, start, count := payload.size / area.elementSize }
       client.writeAreaChunks area dbNumber start 0 payload
         (Chunking.counts (payload.size / area.elementSize) maxCount) (by
           simpa [Chunking.counts_sum _ _ hmaximum] using hsize) deadline retries
@@ -1031,6 +1034,9 @@ def Client.readMulti (client : Client) (ranges : Array S7.MemoryRange) : IO (Arr
   client.serialized do
     for range in ranges do
       inputOrThrow <| MultiValidation.range range
+    let pduLength ← client.negotiatedPduLength
+    for range in ranges do
+      inputOrThrow <| MultiValidation.readFits pduLength.toNat range
     let deadline ← Transport.receiveDeadline client.config.transferReceiveTimeoutMs
     try
       client.readMultiLoop ranges.toList #[] deadline client.config.reconnectRetries

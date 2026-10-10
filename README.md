@@ -283,7 +283,7 @@ or that a controller supplied the intended memory contents.
 
 The emulator fixture explicitly models Lean's direct counter/timer byte offsets;
 python-snap7 3.0.0's generic parser divides those addresses by eight. The
-multi-chunk counter/timer tests therefore validate assembly under that model,
+counter/timer tests therefore validate single-request transfers under that model,
 not independent agreement on controller addressing.
 
 Five additional generated address vectors pass offline dissection with Wireshark
@@ -381,7 +381,10 @@ def readBytes : IO ByteArray := do
 Large transfers are split automatically according to the negotiated PDU size.
 For DB, input, output, and marker operations, `start` and `size` are byte based.
 For timer and counter operations, `start` is a two-byte-aligned byte offset and
-`count` is the number of two-byte elements.
+`count` is the number of two-byte elements. A counter or timer transfer must fit one
+request (231 elements read and 226 written at PDU 480; 111 and 106 at PDU 240); longer ones
+are rejected as invalid input before any IO, because the address step between chunks for
+these areas is unresolved (gate H1; `MultiValidation.readFits_single_request`).
 
 Typed DB methods cover signed and unsigned 8-, 16-, 32-, and 64-bit integers,
 32-bit REAL, 64-bit LREAL, individual bits, S7 STRING, and S7 WSTRING. Bit
