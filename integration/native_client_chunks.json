@@ -1,0 +1,475 @@
+{
+ "scenarios": {
+  "pdu240-read-counters-500-from-16": {
+   "requests": [
+    {
+     "area": "counters",
+     "count": 111,
+     "db": 0,
+     "function": 4,
+     "wire_address": 16,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 111,
+     "db": 0,
+     "function": 4,
+     "wire_address": 238,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 111,
+     "db": 0,
+     "function": 4,
+     "wire_address": 460,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 111,
+     "db": 0,
+     "function": 4,
+     "wire_address": 682,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 56,
+     "db": 0,
+     "function": 4,
+     "wire_address": 904,
+     "word_length": 28
+    }
+   ],
+   "result": 0
+  },
+  "pdu240-read-db1-bytes-1000-from-10": {
+   "requests": [
+    {
+     "area": "data-blocks",
+     "count": 222,
+     "db": 1,
+     "function": 4,
+     "wire_address": 80,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 222,
+     "db": 1,
+     "function": 4,
+     "wire_address": 1856,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 222,
+     "db": 1,
+     "function": 4,
+     "wire_address": 3632,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 222,
+     "db": 1,
+     "function": 4,
+     "wire_address": 5408,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 112,
+     "db": 1,
+     "function": 4,
+     "wire_address": 7184,
+     "word_length": 2
+    }
+   ],
+   "result": 0
+  },
+  "pdu240-read-db1-words-500-from-10": {
+   "requests": [
+    {
+     "area": "data-blocks",
+     "count": 111,
+     "db": 1,
+     "function": 4,
+     "wire_address": 80,
+     "word_length": 4
+    },
+    {
+     "area": "data-blocks",
+     "count": 111,
+     "db": 1,
+     "function": 4,
+     "wire_address": 1856,
+     "word_length": 4
+    },
+    {
+     "area": "data-blocks",
+     "count": 111,
+     "db": 1,
+     "function": 4,
+     "wire_address": 3632,
+     "word_length": 4
+    },
+    {
+     "area": "data-blocks",
+     "count": 111,
+     "db": 1,
+     "function": 4,
+     "wire_address": 5408,
+     "word_length": 4
+    },
+    {
+     "area": "data-blocks",
+     "count": 56,
+     "db": 1,
+     "function": 4,
+     "wire_address": 7184,
+     "word_length": 4
+    }
+   ],
+   "result": 0
+  },
+  "pdu240-read-markers-bytes-1000-from-0": {
+   "requests": [
+    {
+     "area": "markers",
+     "count": 222,
+     "db": 0,
+     "function": 4,
+     "wire_address": 0,
+     "word_length": 2
+    },
+    {
+     "area": "markers",
+     "count": 222,
+     "db": 0,
+     "function": 4,
+     "wire_address": 1776,
+     "word_length": 2
+    },
+    {
+     "area": "markers",
+     "count": 222,
+     "db": 0,
+     "function": 4,
+     "wire_address": 3552,
+     "word_length": 2
+    },
+    {
+     "area": "markers",
+     "count": 222,
+     "db": 0,
+     "function": 4,
+     "wire_address": 5328,
+     "word_length": 2
+    },
+    {
+     "area": "markers",
+     "count": 112,
+     "db": 0,
+     "function": 4,
+     "wire_address": 7104,
+     "word_length": 2
+    }
+   ],
+   "result": 0
+  },
+  "pdu240-read-timers-300-from-3": {
+   "requests": [
+    {
+     "area": "timers",
+     "count": 111,
+     "db": 0,
+     "function": 4,
+     "wire_address": 3,
+     "word_length": 29
+    },
+    {
+     "area": "timers",
+     "count": 111,
+     "db": 0,
+     "function": 4,
+     "wire_address": 225,
+     "word_length": 29
+    },
+    {
+     "area": "timers",
+     "count": 78,
+     "db": 0,
+     "function": 4,
+     "wire_address": 447,
+     "word_length": 29
+    }
+   ],
+   "result": 0
+  },
+  "pdu240-write-counters-300-from-16": {
+   "requests": [
+    {
+     "area": "counters",
+     "count": 106,
+     "db": 0,
+     "function": 5,
+     "wire_address": 16,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 106,
+     "db": 0,
+     "function": 5,
+     "wire_address": 228,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 88,
+     "db": 0,
+     "function": 5,
+     "wire_address": 440,
+     "word_length": 28
+    }
+   ],
+   "result": 0
+  },
+  "pdu240-write-db1-bytes-1000-from-10": {
+   "requests": [
+    {
+     "area": "data-blocks",
+     "count": 212,
+     "db": 1,
+     "function": 5,
+     "wire_address": 80,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 212,
+     "db": 1,
+     "function": 5,
+     "wire_address": 1776,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 212,
+     "db": 1,
+     "function": 5,
+     "wire_address": 3472,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 212,
+     "db": 1,
+     "function": 5,
+     "wire_address": 5168,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 152,
+     "db": 1,
+     "function": 5,
+     "wire_address": 6864,
+     "word_length": 2
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-read-counters-500-from-16": {
+   "requests": [
+    {
+     "area": "counters",
+     "count": 231,
+     "db": 0,
+     "function": 4,
+     "wire_address": 16,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 231,
+     "db": 0,
+     "function": 4,
+     "wire_address": 478,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 38,
+     "db": 0,
+     "function": 4,
+     "wire_address": 940,
+     "word_length": 28
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-read-db1-bytes-1000-from-10": {
+   "requests": [
+    {
+     "area": "data-blocks",
+     "count": 462,
+     "db": 1,
+     "function": 4,
+     "wire_address": 80,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 462,
+     "db": 1,
+     "function": 4,
+     "wire_address": 3776,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 76,
+     "db": 1,
+     "function": 4,
+     "wire_address": 7472,
+     "word_length": 2
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-read-db1-words-500-from-10": {
+   "requests": [
+    {
+     "area": "data-blocks",
+     "count": 231,
+     "db": 1,
+     "function": 4,
+     "wire_address": 80,
+     "word_length": 4
+    },
+    {
+     "area": "data-blocks",
+     "count": 231,
+     "db": 1,
+     "function": 4,
+     "wire_address": 3776,
+     "word_length": 4
+    },
+    {
+     "area": "data-blocks",
+     "count": 38,
+     "db": 1,
+     "function": 4,
+     "wire_address": 7472,
+     "word_length": 4
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-read-markers-bytes-1000-from-0": {
+   "requests": [
+    {
+     "area": "markers",
+     "count": 462,
+     "db": 0,
+     "function": 4,
+     "wire_address": 0,
+     "word_length": 2
+    },
+    {
+     "area": "markers",
+     "count": 462,
+     "db": 0,
+     "function": 4,
+     "wire_address": 3696,
+     "word_length": 2
+    },
+    {
+     "area": "markers",
+     "count": 76,
+     "db": 0,
+     "function": 4,
+     "wire_address": 7392,
+     "word_length": 2
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-read-timers-300-from-3": {
+   "requests": [
+    {
+     "area": "timers",
+     "count": 231,
+     "db": 0,
+     "function": 4,
+     "wire_address": 3,
+     "word_length": 29
+    },
+    {
+     "area": "timers",
+     "count": 69,
+     "db": 0,
+     "function": 4,
+     "wire_address": 465,
+     "word_length": 29
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-write-counters-300-from-16": {
+   "requests": [
+    {
+     "area": "counters",
+     "count": 226,
+     "db": 0,
+     "function": 5,
+     "wire_address": 16,
+     "word_length": 28
+    },
+    {
+     "area": "counters",
+     "count": 74,
+     "db": 0,
+     "function": 5,
+     "wire_address": 468,
+     "word_length": 28
+    }
+   ],
+   "result": 0
+  },
+  "pdu480-write-db1-bytes-1000-from-10": {
+   "requests": [
+    {
+     "area": "data-blocks",
+     "count": 452,
+     "db": 1,
+     "function": 5,
+     "wire_address": 80,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 452,
+     "db": 1,
+     "function": 5,
+     "wire_address": 3696,
+     "word_length": 2
+    },
+    {
+     "area": "data-blocks",
+     "count": 96,
+     "db": 1,
+     "function": 5,
+     "wire_address": 7312,
+     "word_length": 2
+    }
+   ],
+   "result": 0
+  }
+ },
+ "source": "official native Snap7 client (pinned revision), chunked transfers"
+}

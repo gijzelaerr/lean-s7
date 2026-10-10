@@ -73,6 +73,7 @@ For changes affecting independent endpoint testing, also run:
 python integration/native_snap7_build.py
 python integration/native_snap7.py --library .lake/native-snap7/libsnap7.dylib
 python integration/native_client_requests.py --library .lake/native-snap7/libsnap7.dylib --check
+python integration/native_client_chunks.py --library .lake/native-snap7/libsnap7.dylib --check
 ```
 
 For wire-format changes, the optional `python integration/real_captures.py` replays public real S7-300 captures
