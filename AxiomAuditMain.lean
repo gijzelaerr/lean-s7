@@ -20,7 +20,9 @@ def explicitTheorems : List Name :=
    `LeanS7.Correlation.Gate.mayStart_after_earlier, `LeanS7.Correlation.Gate.finish_next,
    `LeanS7.Correlation.Gate.submit_not_next, `LeanS7.Correlation.Gate.submit_valid,
    `LeanS7.Correlation.Gate.finish_valid, `LeanS7.Correlation.Gate.pending_submit,
-   `LeanS7.Correlation.Gate.pending_finish]
+   `LeanS7.Correlation.Gate.pending_finish,
+   `LeanS7.Chunking.counts_single, `LeanS7.MultiValidation.readFits_single_request,
+   `LeanS7.MultiValidation.writeFits_single_request]
 
 /-- Documentation files whose backticked theorem names are checked. -/
 def docFiles : List String := ["README.md", "docs/COMPLETENESS.md", "docs/RELEASE.md"]

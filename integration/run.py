@@ -1656,14 +1656,16 @@ def main() -> None:
             cwd=root,
             check=True,
         )
-        expected_elements = bytes((index * 37 + 11) % 256 for index in range(1000))
+        # Counter/timer writes must fit one request: the 400-byte write lands, the
+        # rejected 1,000-byte write is refused before IO and changes nothing.
+        expected_elements = bytes((index * 37 + 11) % 256 for index in range(400))
         for area in (SrvArea.CT, SrvArea.TM):
-            if areas[(area, 0)][16:1016] != expected_elements:
+            if areas[(area, 0)][16:416] != expected_elements:
                 raise AssertionError(
-                    "chunked write did not preserve source bytes at the destination"
+                    "single-request write did not preserve source bytes at the destination"
                 )
-            if any(areas[(area, 0)][1016:]):
-                raise AssertionError("chunked write modified bytes beyond the payload")
+            if any(areas[(area, 0)][416:]):
+                raise AssertionError("counter/timer write modified bytes beyond the payload")
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)

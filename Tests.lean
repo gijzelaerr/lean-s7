@@ -618,6 +618,35 @@ def testS7AreaVectors : IO Unit := do
     } with | .error (.addressTooLarge _) => true | _ => false)
     "out-of-range byte address was accepted"
 
+def testCounterTimerSingleRequest : IO Unit := do
+  -- Counter and timer transfers must fit one request (gate H1, see
+  -- `MultiValidation.singleRequestOnly`); other areas are chunked as before.
+  let rangeOf (area : S7.Area) (count : Nat) : S7.MemoryRange :=
+    { area, dbNumber := if area == .dataBlocks then 1 else 0, start := 0, count }
+  let accepted (result : Except S7.EncodeError Unit) : Bool :=
+    match result with | .ok () => true | .error _ => false
+  for (pdu, readMax, writeMax) in [(480, 231, 226), (240, 111, 106), (240 + 8, 115, 110)] do
+    for area in [S7.Area.counters, .timers] do
+      check (accepted (MultiValidation.readFits pdu (rangeOf area readMax)))
+        "counter/timer read at the single-request maximum rejected"
+      check (match MultiValidation.readFits pdu (rangeOf area (readMax + 1)) with
+        | .error (.counterTimerSpansRequests count maximum) => count == readMax + 1 && maximum == readMax
+        | _ => false) "multi-request counter/timer read accepted"
+      check (accepted (MultiValidation.writeFits pdu (rangeOf area writeMax)))
+        "counter/timer write at the single-request maximum rejected"
+      check (match MultiValidation.writeFits pdu (rangeOf area (writeMax + 1)) with
+        | .error (.counterTimerSpansRequests count maximum) => count == writeMax + 1 && maximum == writeMax
+        | _ => false) "multi-request counter/timer write accepted"
+    for area in [S7.Area.dataBlocks, .markers, .processInputs, .processOutputs] do
+      check (accepted (MultiValidation.readFits pdu (rangeOf area 100000)))
+        "byte-addressed read wrongly limited to one request"
+      check (accepted (MultiValidation.writeFits pdu (rangeOf area 100000)))
+        "byte-addressed write wrongly limited to one request"
+  -- Batch write validation applies the same rule before any IO.
+  let counters : S7.WriteItem := { range := rangeOf .counters 227, payload := bytes (Array.replicate 454 0) }
+  check (match MultiValidation.writes 480 #[counters] with
+    | .error (.counterTimerSpansRequests ..) => true | _ => false) "oversize counter batch write accepted"
+
 def testValues : IO Unit := do
   let numeric := bytes #[
     0x80, 0x12, 0x34, 0x89, 0xab, 0xcd, 0xef,
@@ -959,6 +988,7 @@ def main : IO Unit := do
   testS7ResponseDecoding
   testS7DbVectors
   testS7AreaVectors
+  testCounterTimerSingleRequest
   testValues
   testS7MultiVectors
   testS7ManagementVectors

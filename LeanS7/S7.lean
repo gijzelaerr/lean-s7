@@ -27,6 +27,9 @@ inductive EncodeError where
   | invalidDbNumber (dbNumber : UInt16)
   | misalignedAddress (start alignment : Nat)
   | addressTooLarge (start : Nat)
+  /-- A counter or timer transfer needs more than one request (`count` elements, at most
+      `maximum` per request); see `MultiValidation.singleRequestOnly`. -/
+  | counterTimerSpansRequests (count maximum : Nat)
   deriving Repr, BEq
 
 structure Job where
