@@ -2,7 +2,7 @@ import LeanS7.Client
 
 /-! Regression vectors taken from public Wireshark captures of a real Siemens S7-300
 (`s7comm_reading_setting_plc_time`, `s7comm_reading_plc_status` and
-`s7comm_downloading_block_db1`) and from the CISA icsnpp-s7comm trace `snap7.pcap`; see `reports/real-s7-300-captures-2026-10-07.md` and
+`s7comm_downloading_block_db1`, `s7comm_program_blocklist_onlineview`) and from the CISA icsnpp-s7comm trace `snap7.pcap`; see `reports/real-s7-300-captures-2026-10-07.md` and
 `integration/real_captures.py`). Each string is the S7 PDU exactly as captured. They
 show what that PLC and engineering tool exchanged in those sessions; they do not
 qualify any controller family or firmware. -/
@@ -22,6 +22,9 @@ private def downloadJob : String := "320100000100001200001b00000000000000095f304
 private def fragmentReply : String := "320300000100000200e200001b0100de00fb70700101050a0001000001f400000000029147602bb5029147602bb5001c000000000190000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 private def downloadEnded : String := "3203000007000001000000001c"
 private def insertBlock : String := "320100000f00001a000028000000000000fd000a01003041303030303150055f494e5345"
+
+private def listSfcRequest : String := "320700000500000800060001120411430200ff0900023044"
+private def listSfcFollowUp : String := "320700000600000c00040001120812430201000000000a000000"
 
 private def startUploadRequest : String := "320100000800001200001d00000000000000095f3042303030303041"
 private def startUploadReply : String := "3203000008000010000000001d000100000000070730303030323136"
@@ -55,6 +58,13 @@ def run : IO Unit := do
     "request download"
   require (sameBytes (S7.encodeDownloadEndedResponse 0x0700) downloadEnded) "download ended reply"
   require (sameBytes (S7.encodeInsertBlock 0x0f00 .dataBlock 1) insertBlock) "insert block"
+  -- Block-list requests from the `s7comm_program_blocklist_onlineview` capture: the follow-up
+  -- of a list-blocks-of-type exchange (group 3) carries the response method 0x12 and a
+  -- twelve-byte parameter block, exactly like the SZL follow-ups.
+  require (sameBytes (S7.encodeListBlocksOfType 0x0500 .systemFunction) listSfcRequest)
+    "list blocks of type request"
+  require (sameBytes (S7.encodeUserDataContinuation 0x0600 S7.blocksInfoGroup
+    S7.listBlocksOfTypeSubfunction 1) listSfcFollowUp) "list blocks of type follow-up request"
   let fragment := hex fragmentReply
   -- ACK_DATA header (12) + two parameter bytes + length (2) + marker (2), then the payload.
   require (sameBytes (S7.encodeDownloadFragmentResponse 0x0100 false (fragment.extract 18 fragment.size))
