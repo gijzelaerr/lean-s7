@@ -67,6 +67,64 @@ def runIntegration (host portString pduString : String) : IO Unit := do
     let state ← client.getCpuState
     require (state == .running) "native CPU-state query"
     require ((← client.pendingOperationCount) == 0 && (← client.isConnected)) "final healthy lifecycle"
+    -- Management services the official native server implements. Each rejection
+    -- closes the session (as for any failed exchange), so rejections use a fresh client.
+    let fresh : IO Client := Client.connect {
+      endpoint := .hostname host, port := UInt16.ofNat port,
+      operationTimeoutMs := some 3000, transferReceiveTimeoutMs := some 10000 }
+    let rejected (action : Client → IO Unit) : IO (Option ClientErrorKind) := do
+      let c ← fresh
+      try
+        action c
+        return none
+      catch error =>
+        return some (classifyClientError error)
+      finally
+        try c.disconnect catch _ => pure ()
+    let szlShape (id : Nat) : IO (Nat × Nat × Nat) := do
+      let szl ← client.readSzl (UInt16.ofNat id) 0
+      return (szl.recordLength.toNat, szl.recordCount.toNat, szl.data.size)
+    require ((← szlShape 0x0011) == (28, 4, 112)) "native SZL 0x0011 shape"
+    require ((← szlShape 0x0012) == (2, 23, 46)) "native SZL 0x0012 shape"
+    require ((← szlShape 0x0424) == (20, 1, 20)) "native SZL 0x0424 shape"
+    -- The native server never fragments SZL: it truncates data to the negotiated PDU
+    -- while the header still announces the full length. The client rejects that
+    -- inconsistent response instead of returning a short table.
+    for (id, announced) in [(0x0000, 224), (0x001c, 340)] do
+      let outcome ← rejected fun c => discard <| c.readSzl (UInt16.ofNat id) 0
+      if pdu == 480 then
+        require outcome.isNone s!"native SZL 0x{String.ofList (Nat.toDigits 16 id)} at PDU 480"
+        require ((← szlShape id).2.2 == announced) "native SZL full table"
+      else
+        require (outcome == some .protocol) "native truncated SZL accepted at PDU 240"
+    for id in [0x0111, 0x0131, 0x0232] do
+      require ((← rejected fun c => discard <| c.readSzl (UInt16.ofNat id) 0) == some .plcRejected)
+        "native unavailable SZL is a PLC rejection"
+    require ((← rejected fun c => discard <| c.readSzl 0x0f00 0) == some .protocol)
+      "native malformed SZL 0x0f00 accepted"
+    let counts ← client.listBlocks
+    require (counts == { dataBlocks := 2 }) "native block counts"
+    let blocks ← client.listBlocksOfType .dataBlock
+    require (blocks.map (fun b => (b.number, b.flags, b.language)) == #[(1, 34, 5), (2, 34, 5)])
+      "native DB list"
+    for blockType in [S7.BlockType.organizationBlock, .function] do
+      require ((← rejected fun c => discard <| c.listBlocksOfType blockType) == some .plcRejected)
+        "native empty block-type list is a PLC rejection"
+    let now ← client.getPlcDateTime
+    require (now.year ≥ 2024 && now.year ≤ 2089 && now.month ≥ 1 && now.month ≤ 12 &&
+      now.day ≥ 1 && now.day ≤ 31 && now.hour < 24 && now.minute < 60 && now.second < 60)
+      "native clock fields"
+    -- The server acknowledges a set-clock with a null acknowledgement and keeps its own time.
+    client.setPlcDateTime { year := 2026, month := 10, day := 13, hour := 9, minute := 8, second := 7, weekday := 3 }
+    client.setSessionPassword "ABC"
+    client.clearSessionPassword
+    client.plcStop
+    require ((← client.getCpuState) == .stopped) "native stop"
+    client.plcHotStart
+    require ((← client.getCpuState) == .running) "native hot start"
+    client.plcStop
+    client.plcColdStart
+    require ((← client.getCpuState) == .running) "native cold start"
     -- The official native server implements neither upload nor download: it answers
     -- every start-upload with a "need password" header error. That is independent
     -- evidence for the refusal path only: the client reports a PLC rejection and,
