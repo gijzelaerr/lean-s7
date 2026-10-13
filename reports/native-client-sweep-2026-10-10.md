@@ -73,3 +73,15 @@ python-snap7 does not. Until a controller shows which is right:
 
 `docs/COMPLETENESS.md` already lists physical counter/timer indexing under H1; this report
 adds executed evidence for the native behavior and the chunk-advance consequence.
+
+## Resolution (owner decision, 2026-10-10)
+
+Counter and timer reads and writes that need more than one request are rejected as invalid
+input before any IO (`MultiValidation.readFits`/`writeFits`, called from `Client.readArea`,
+`writeArea`, `readMulti` and the batch-write validation). Transfers that fit one request
+(231 elements read and 226 written at PDU 480; 111 and 106 at PDU 240) behave as before.
+`Chunking.counts_single` and `MultiValidation.readFits_single_request`/`writeFits_single_request`
+prove that an accepted counter or timer transfer is planned as exactly one request, so the
+unresolved chunk-advance step is never used for these areas. The odd-number limitation
+remains an H1 item. Lifting the restriction needs a controller (or a capture of adjacent
+counters) that shows the correct step.

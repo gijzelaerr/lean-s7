@@ -103,11 +103,29 @@ def runIntegration (host portString : String) (testReconnect : Bool := false) : 
     client.timersWrite 0 timerValue
     unless (← client.timersRead 0 2) == timerValue do
       throw <| IO.userError "timer write/read-back mismatch"
-    let elements := large.extract 0 1000
+    -- Counters and timers are transferred in one request only (gate H1: the chunk
+    -- address step for these areas is unresolved); longer transfers are rejected
+    -- before any IO and leave the connection usable.
+    let elements := large.extract 0 400
     for area in [S7.Area.counters, S7.Area.timers] do
       client.writeArea area 0 16 elements
-      unless (← client.readArea area 0 16 500) == elements do
-        throw <| IO.userError "chunked two-byte-element write/read-back mismatch"
+      unless (← client.readArea area 0 16 200) == elements do
+        throw <| IO.userError "single-request two-byte-element write/read-back mismatch"
+      let tooLong := large.extract 0 1000
+      let rejectedWrite ← try
+        client.writeArea area 0 16 tooLong
+        pure false
+        catch error => pure (classifyClientError error == .invalidInput)
+      unless rejectedWrite do
+        throw <| IO.userError "multi-request counter/timer write was not rejected"
+      let rejectedRead ← try
+        discard <| client.readArea area 0 16 500
+        pure false
+        catch error => pure (classifyClientError error == .invalidInput)
+      unless rejectedRead do
+        throw <| IO.userError "multi-request counter/timer read was not rejected"
+      unless (← client.isConnected) && (← client.readArea area 0 16 200) == elements do
+        throw <| IO.userError "counter/timer rejection disturbed the connection"
     unless (← client.dbRead 1 512 0).isEmpty do
       throw <| IO.userError "empty read returned data"
     client.dbWriteUInt8 1 2000 0xa5

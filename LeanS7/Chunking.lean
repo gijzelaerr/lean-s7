@@ -23,6 +23,19 @@ theorem counts_sum (total maximum : Nat) (hmaximum : maximum ≠ 0) :
     simp
     simpa [Nat.mul_comm] using Nat.div_add_mod total maximum
 
+/-- A transfer that fits one request is planned as exactly one chunk. -/
+theorem counts_single (total maximum : Nat) (hpositive : 0 < total) (hfits : total ≤ maximum) :
+    counts total maximum = [total] := by
+  have hmaximum : maximum ≠ 0 := by omega
+  rw [counts, if_neg hmaximum]
+  by_cases heq : total = maximum
+  · subst heq
+    simp [Nat.div_self hpositive]
+  · have hlt : total < maximum := by omega
+    have hdiv : total / maximum = 0 := Nat.div_eq_of_lt hlt
+    have hmod : total % maximum = total := Nat.mod_eq_of_lt hlt
+    simp [hdiv, hmod, Nat.pos_iff_ne_zero.mp hpositive]
+
 /-- Every generated chunk is nonempty and no larger than the configured
     maximum. -/
 theorem counts_bounds (total maximum chunk : Nat) (hmaximum : maximum ≠ 0)
