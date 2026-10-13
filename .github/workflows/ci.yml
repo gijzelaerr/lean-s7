@@ -55,6 +55,9 @@ jobs:
       - run: python -m venv .venv-snap7-latest
       - run: ${{ matrix.venv-python }} -m pip install "python-snap7==3.2.1"
       - run: ${{ matrix.venv-python }} integration/python_snap7_consumer.py
+      - name: Expose lake to Windows Python as a native path
+        if: runner.os == 'Windows'
+        run: echo "LAKE=$(cygpath -w "$(command -v lake)")" >> "$GITHUB_ENV"
       - run: python integration/run.py
       - run: python integration/cli_smoke.py
       - run: python integration/native_snap7_build.py
