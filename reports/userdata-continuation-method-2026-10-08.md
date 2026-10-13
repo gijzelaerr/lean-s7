@@ -20,9 +20,17 @@ lean-s7 itself:
 The corpus bytes and the independent Python oracle (`integration/management_conformance.py`)
 had been written from the same `0x11` assumption, so the existing agreement checks could
 not detect it; `integration/userdata_assurance.py` had singled out SZL as the only `0x12`
-case for the same reason. Nothing here has been tested against a real controller for
-block-list follow-ups, so the effect on hardware is unknown; the evidence is two
-independent sources for `0x12` and none for `0x11`.
+case for the same reason. When this report was written nothing had been checked against a
+real controller for block-list follow-ups: the evidence was two independent sources for
+`0x12` and none for `0x11`.
+
+**Update 2026-10-13: real-controller evidence.** The public real S7-300 capture
+`s7comm_program_blocklist_onlineview` (already replayed by `integration/real_captures.py`)
+contains a group-3 list-blocks-of-type follow-up request (frame 98) with method `0x12` and the
+twelve-byte parameter block `00 01 12 08 12 43 02 01 00 00 00 00`. That confirms the fix
+beyond SZL on a real controller, and the request and the initial request that precedes it
+are pinned as offline vectors in `LeanS7/RealDeviceTests.lean`. Block-info (group 3,
+subfunction 3) follow-ups do not occur in the captures.
 
 ## Change
 
