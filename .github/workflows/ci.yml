@@ -35,14 +35,14 @@ jobs:
           build-args: lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli lean-s7-decode
       - run: lake exe lean-s7-tests
       - run: lake exe lean-s7-axioms
-      - run: lake exe lean-s7-conformance | tr -d '\r' | diff - conformance/v1/tpkt.json
-      - run: lake exe lean-s7-conformance cotp | tr -d '\r' | diff - conformance/v1/cotp-data.json
-      - run: lake exe lean-s7-conformance s7 | tr -d '\r' | diff - conformance/v1/s7.json
-      - run: lake exe lean-s7-conformance operations | tr -d '\r' | diff - conformance/v1/operations.json
-      - run: lake exe lean-s7-conformance values | tr -d '\r' | diff - conformance/v1/values.json
-      - run: lake exe lean-s7-conformance conversations | tr -d '\r' | diff - conformance/v1/conversations.json
-      - run: lake exe lean-s7-conformance sessions | tr -d '\r' | diff - conformance/v1/sessions.json
-      - run: lake exe lean-s7-conformance management | tr -d '\r' | diff - conformance/v1/management.json
+      - run: diff <(lake exe lean-s7-conformance | tr -d '\r') <(tr -d '\r' < conformance/v1/tpkt.json)
+      - run: diff <(lake exe lean-s7-conformance cotp | tr -d '\r') <(tr -d '\r' < conformance/v1/cotp-data.json)
+      - run: diff <(lake exe lean-s7-conformance s7 | tr -d '\r') <(tr -d '\r' < conformance/v1/s7.json)
+      - run: diff <(lake exe lean-s7-conformance operations | tr -d '\r') <(tr -d '\r' < conformance/v1/operations.json)
+      - run: diff <(lake exe lean-s7-conformance values | tr -d '\r') <(tr -d '\r' < conformance/v1/values.json)
+      - run: diff <(lake exe lean-s7-conformance conversations | tr -d '\r') <(tr -d '\r' < conformance/v1/conversations.json)
+      - run: diff <(lake exe lean-s7-conformance sessions | tr -d '\r') <(tr -d '\r' < conformance/v1/sessions.json)
+      - run: diff <(lake exe lean-s7-conformance management | tr -d '\r') <(tr -d '\r' < conformance/v1/management.json)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
