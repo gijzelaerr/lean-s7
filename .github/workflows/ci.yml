@@ -11,15 +11,23 @@ jobs:
   build-and-test:
     name: Build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             native-library: libsnap7.so
+            venv-python: .venv-snap7-latest/bin/python
           - os: macos-latest
             native-library: libsnap7.dylib
+            venv-python: .venv-snap7-latest/bin/python
+          - os: windows-latest
+            native-library: snap7.dll
+            venv-python: .venv-snap7-latest/Scripts/python
     steps:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
@@ -27,14 +35,14 @@ jobs:
           build-args: lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli lean-s7-decode
       - run: lake exe lean-s7-tests
       - run: lake exe lean-s7-axioms
-      - run: lake exe lean-s7-conformance | diff - conformance/v1/tpkt.json
-      - run: lake exe lean-s7-conformance cotp | diff - conformance/v1/cotp-data.json
-      - run: lake exe lean-s7-conformance s7 | diff - conformance/v1/s7.json
-      - run: lake exe lean-s7-conformance operations | diff - conformance/v1/operations.json
-      - run: lake exe lean-s7-conformance values | diff - conformance/v1/values.json
-      - run: lake exe lean-s7-conformance conversations | diff - conformance/v1/conversations.json
-      - run: lake exe lean-s7-conformance sessions | diff - conformance/v1/sessions.json
-      - run: lake exe lean-s7-conformance management | diff - conformance/v1/management.json
+      - run: lake exe lean-s7-conformance | tr -d '\r' | diff - conformance/v1/tpkt.json
+      - run: lake exe lean-s7-conformance cotp | tr -d '\r' | diff - conformance/v1/cotp-data.json
+      - run: lake exe lean-s7-conformance s7 | tr -d '\r' | diff - conformance/v1/s7.json
+      - run: lake exe lean-s7-conformance operations | tr -d '\r' | diff - conformance/v1/operations.json
+      - run: lake exe lean-s7-conformance values | tr -d '\r' | diff - conformance/v1/values.json
+      - run: lake exe lean-s7-conformance conversations | tr -d '\r' | diff - conformance/v1/conversations.json
+      - run: lake exe lean-s7-conformance sessions | tr -d '\r' | diff - conformance/v1/sessions.json
+      - run: lake exe lean-s7-conformance management | tr -d '\r' | diff - conformance/v1/management.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -45,8 +53,8 @@ jobs:
       - run: ruff format --check integration
       - run: python integration/python_snap7_consumer.py
       - run: python -m venv .venv-snap7-latest
-      - run: .venv-snap7-latest/bin/python -m pip install "python-snap7==3.2.1"
-      - run: .venv-snap7-latest/bin/python integration/python_snap7_consumer.py
+      - run: ${{ matrix.venv-python }} -m pip install "python-snap7==3.2.1"
+      - run: ${{ matrix.venv-python }} integration/python_snap7_consumer.py
       - run: python integration/run.py
       - run: python integration/cli_smoke.py
       - run: python integration/native_snap7_build.py
