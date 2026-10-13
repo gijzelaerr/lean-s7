@@ -19,7 +19,8 @@ API parity are not release requirements for this profile.
   or explicit TSAP. Connection negotiation must satisfy both S7 and COTP limits.
 - Validation: local macOS testing, pinned python-snap7 3.0.0 emulator, independent
   portable-vector oracles, scripted TCP peers and a pinned official native Snap7
-  endpoint. Linux and macOS are full CI targets; inspect
+  endpoint. Linux and macOS are full CI targets; Windows runs as an informational CI job
+  (an intermittent crash on the hosted runner is tracked in #58); inspect
   the results for the exact revision before claiming platform validation.
 - No real Siemens controller family or firmware is qualified yet. Counter/timer
   addressing and controller-specific management semantics need independent

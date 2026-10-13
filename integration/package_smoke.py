@@ -13,7 +13,14 @@ from pathlib import Path
 def run(root: Path) -> None:
     root = root.resolve()
     fixture = root / "integration" / "package_smoke"
-    lake = os.environ.get("LAKE", "lake")
+    # Resolve lake explicitly: a bare name is not found by every Windows runner, and
+    # shutil.which also applies PATHEXT (lake.exe).
+    lake = os.environ.get("LAKE") or shutil.which("lake")
+    if lake is None:
+        raise AssertionError(
+            "lake was not found on PATH; set LAKE to the lake executable: "
+            + os.environ.get("PATH", "")[:300]
+        )
     config = (
         (fixture / "lakefile.toml.in")
         .read_text(encoding="utf-8")
