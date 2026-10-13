@@ -83,3 +83,29 @@ then crashed in native destruction. That attempt was abandoned and contributes
 **no successful interoperability evidence**; neither its source nor its patch
 is part of the final test dependency. No causal claim about the crash follows
 from that observation, and no external repository was modified.
+
+## Update 2026-10-13: management services on the native server
+
+The native profile now also runs the services the official native server implements
+besides memory access: SZL reads, block counts and lists, the clock, session passwords and
+CPU control, on both PDU profiles. Everything is asserted in
+`LeanS7/NativeInteropTests.lean`; this is decoder-side evidence from an independent
+endpoint and not controller qualification.
+
+- SZL 0x0011, 0x0012 and 0x0424 decode with the shapes the server sends (28-byte records
+  x 4, 2-byte x 23, 20-byte x 1). SZL 0x0111, 0x0131 and 0x0232 are refused by the server
+  and surface as PLC rejections.
+- **The native server never fragments SZL** (its source says "this is the end, no more
+  packets"). At PDU 480 the SZL list (0x0000, 224 bytes) and 0x001c (340 bytes) fit and
+  decode completely. At PDU 240 the server truncates the data to the PDU while the header
+  still announces the full length, and SZL 0x0f00 comes back with an announced length and no
+  data. lean-s7 rejects all of these as protocol errors rather than returning a short table.
+- Block counts (two DBs) and the DB list (`{1, 34, 5}`, `{2, 34, 5}`) decode; lists for
+  block types the server does not hold are PLC rejections.
+- The clock decodes with valid fields. The server acknowledges a set-clock with a null
+  acknowledgement and keeps its own time. Its weekday looks wrong (2 on a Tuesday, where S7
+  numbers Tuesday 3), so the weekday is not asserted.
+- Session password set/clear succeed. CPU stop, hot start and cold start change the state the
+  client reads back (stopped, running, running).
+
+A failed exchange closes the session, so rejection checks use a fresh connection each.
