@@ -1,0 +1,88 @@
+name: Windows crash diagnostic
+
+# Diagnostic for issue #58: repeats the scenarios that intermittently died with
+# 0xC0000409 on the hosted Windows runner, with Windows Error Reporting set to
+# keep full crash dumps, and uploads the dumps and the executable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Repetitions of each scenario group
+        default: "40"
+  push:
+    branches:
+      - diag/windows-crash-58
+
+permissions:
+  contents: read
+
+jobs:
+  repro:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: lean-s7
+          test: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install "python-snap7==3.0.0"
+      - name: Keep full crash dumps
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\dumps" | Out-Null
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpFolder -Value "$env:RUNNER_TEMP\dumps" -PropertyType ExpandString -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpType -Value 2 -PropertyType DWord -Force | Out-Null
+          New-ItemProperty -Path $key -Name DumpCount -Value 20 -PropertyType DWord -Force | Out-Null
+      - name: Expose lake to Windows Python as a native path
+        run: echo "LAKE=$(cygpath -w "$(command -v lake)")" >> "$GITHUB_ENV"
+      - name: Repeat the crashing scenarios
+        env:
+          ITERATIONS: ${{ inputs.iterations || '40' }}
+        run: |
+          cat > "$RUNNER_TEMP/repro.py" <<'PY'
+          import os, sys, traceback
+          from pathlib import Path
+          root = Path.cwd()
+          sys.path.insert(0, str(root / "integration"))
+          import run
+          from transfer_deadlines import run_transfer_deadlines
+          from write_provenance import run_write_provenance
+          scenarios = [
+              ("write-provenance", run_write_provenance),
+              ("download-rejection", run.run_download_rejections),
+              ("transfer-deadlines", run_transfer_deadlines),
+          ]
+          failures = []
+          for i in range(int(os.environ["ITERATIONS"])):
+              for name, fn in scenarios:
+                  try:
+                      fn(root)
+                  except BaseException:
+                      failures.append((i, name))
+                      print(f"FAILURE iteration {i} {name}", flush=True)
+                      traceback.print_exc()
+          print(f"failures: {len(failures)}", failures)
+          sys.exit(1 if failures else 0)
+          PY
+          python "$RUNNER_TEMP/repro.py"
+      - name: List dumps
+        if: always()
+        run: ls -la "$RUNNER_TEMP/dumps" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crash-diagnostic
+          path: |
+            ${{ runner.temp }}/dumps
+            .lake/build/bin/lean-s7.exe
+          if-no-files-found: warn
