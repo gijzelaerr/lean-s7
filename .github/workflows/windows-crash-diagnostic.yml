@@ -9,7 +9,7 @@ on:
     inputs:
       iterations:
         description: Repetitions of each scenario group
-        default: "40"
+        default: "60"
   push:
     branches:
       - diag/windows-crash-58
@@ -19,8 +19,13 @@ permissions:
 
 jobs:
   repro:
+    name: repro (shard ${{ matrix.shard }})
     runs-on: windows-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     defaults:
       run:
         shell: bash
@@ -43,17 +48,32 @@ jobs:
           New-ItemProperty -Path $key -Name DumpFolder -Value "$env:RUNNER_TEMP\dumps" -PropertyType ExpandString -Force | Out-Null
           New-ItemProperty -Path $key -Name DumpType -Value 2 -PropertyType DWord -Force | Out-Null
           New-ItemProperty -Path $key -Name DumpCount -Value 20 -PropertyType DWord -Force | Out-Null
+      - name: Fetch ProcDump
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile "$env:RUNNER_TEMP\procdump.zip"
+          Expand-Archive "$env:RUNNER_TEMP\procdump.zip" -DestinationPath "$env:RUNNER_TEMP\procdump"
       - name: Expose lake to Windows Python as a native path
         run: echo "LAKE=$(cygpath -w "$(command -v lake)")" >> "$GITHUB_ENV"
       - name: Repeat the crashing scenarios
         env:
-          ITERATIONS: ${{ inputs.iterations || '40' }}
+          ITERATIONS: ${{ inputs.iterations || '60' }}
         run: |
           cat > "$RUNNER_TEMP/repro.py" <<'PY'
-          import os, sys, traceback
+          import os, subprocess, sys, traceback
           from pathlib import Path
           root = Path.cwd()
           sys.path.insert(0, str(root / "integration"))
+          temp = Path(os.environ["RUNNER_TEMP"])
+          procdump = str(temp / "procdump" / "procdump64.exe")
+          dumps = temp / "dumps"
+          _run = subprocess.run
+          def wrapped(args, *a, **kw):
+              # Run every lean-s7 child under ProcDump so an abort leaves a full dump.
+              if isinstance(args, list) and args and str(args[0]).endswith("lean-s7"):
+                  args = [procdump, "-accepteula", "-ma", "-e", "1", "-x", str(dumps), *args]
+              return _run(args, *a, **kw)
+          subprocess.run = wrapped
           import run
           from transfer_deadlines import run_transfer_deadlines
           from write_provenance import run_write_provenance
@@ -71,8 +91,9 @@ jobs:
                       failures.append((i, name))
                       print(f"FAILURE iteration {i} {name}", flush=True)
                       traceback.print_exc()
-          print(f"failures: {len(failures)}", failures)
-          sys.exit(1 if failures else 0)
+          found = sorted(p.name for p in dumps.glob("*.dmp"))
+          print(f"failures: {len(failures)}", failures, "dumps:", found)
+          sys.exit(1 if failures or found else 0)
           PY
           python "$RUNNER_TEMP/repro.py"
       - name: List dumps
@@ -81,7 +102,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: crash-diagnostic
+          name: crash-diagnostic-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/dumps
             .lake/build/bin/lean-s7.exe
