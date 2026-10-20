@@ -1,0 +1,6 @@
+name = "connect-repro"
+version = "0.1.0"
+
+[[lean_exe]]
+name = "connect-repro"
+root = "Repro"

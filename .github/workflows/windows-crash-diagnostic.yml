@@ -10,9 +10,6 @@ on:
       iterations:
         description: Repetitions of each scenario group
         default: "60"
-  push:
-    branches:
-      - diag/windows-crash-58
 
 permissions:
   contents: read

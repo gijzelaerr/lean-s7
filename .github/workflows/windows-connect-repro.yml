@@ -1,0 +1,83 @@
+name: Windows connect reproducer
+
+# Issue #58: does a standalone Lean program that only connects over
+# Std.Async.TCP hit the stack-cookie failure in uv__tcp_connect?
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - diag/windows-crash-58
+
+permissions:
+  contents: read
+
+jobs:
+  repro:
+    name: repro (shard ${{ matrix.shard }})
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: diagnostics/connect-repro
+          build-args: connect-repro
+          test: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Fetch ProcDump
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile "$env:RUNNER_TEMP\procdump.zip"
+          Expand-Archive "$env:RUNNER_TEMP\procdump.zip" -DestinationPath "$env:RUNNER_TEMP\procdump"
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\dumps" | Out-Null
+      - name: Connect in a loop
+        run: |
+          cat > "$RUNNER_TEMP/loop.py" <<'PY'
+          import os, subprocess, sys, time
+          from concurrent.futures import ThreadPoolExecutor
+          from pathlib import Path
+          temp = Path(os.environ["RUNNER_TEMP"])
+          exe = str(Path("diagnostics/connect-repro/.lake/build/bin/connect-repro.exe").resolve())
+          procdump = str(temp / "procdump" / "procdump64.exe")
+          dumps = temp / "dumps"
+          mode = "rst"
+          listener = subprocess.Popen(
+              [sys.executable, "-I", "diagnostics/connect-repro/listener.py", mode],
+              stdout=subprocess.PIPE, text=True)
+          port = listener.stdout.readline().strip()
+          def one(_):
+              subprocess.run([procdump, "-accepteula", "-ma", "-e", "1", "-x", str(dumps),
+                              exe, port, "200"], timeout=120,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          start = time.time()
+          n = 0
+          with ThreadPoolExecutor(8) as pool:
+              while time.time() - start < 25 * 60:
+                  list(pool.map(one, range(16)))
+                  n += 16
+                  if list(dumps.glob("*.dmp")):
+                      break
+          found = sorted(p.name for p in dumps.glob("*.dmp"))
+          print(f"processes: {n} (x200 connects each), dumps: {found}")
+          listener.kill()
+          sys.exit(1 if found else 0)
+          PY
+          python "$RUNNER_TEMP/loop.py"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connect-repro-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/dumps
+            diagnostics/connect-repro/.lake/build/bin/connect-repro.exe
+          if-no-files-found: warn
