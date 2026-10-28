@@ -32,7 +32,7 @@ jobs:
             experimental: true
             venv-python: .venv-snap7-latest/Scripts/python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: leanprover/lean-action@v1
         with:
           build-args: lean-s7 lean-s7-tests lean-s7-conformance lean-s7-fuzz lean-s7-axioms lean-s7-cli lean-s7-decode
@@ -46,7 +46,7 @@ jobs:
       - run: diff <(lake exe lean-s7-conformance conversations | tr -d '\r') <(tr -d '\r' < conformance/v1/conversations.json)
       - run: diff <(lake exe lean-s7-conformance sessions | tr -d '\r') <(tr -d '\r' < conformance/v1/sessions.json)
       - run: diff <(lake exe lean-s7-conformance management | tr -d '\r') <(tr -d '\r' < conformance/v1/management.json)
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: python -m pip install "python-snap7==3.0.0" "ruff==0.16.8"
