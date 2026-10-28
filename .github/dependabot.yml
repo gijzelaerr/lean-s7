@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Lake packages are not a Dependabot ecosystem; only the workflow actions are kept current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      all-actions:
+        patterns:
+          - "*"
