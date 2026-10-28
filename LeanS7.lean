@@ -18,3 +18,4 @@ import LeanS7.Client
 import LeanS7.Assurance
 import LeanS7.Correlation
 import LeanS7.ResponseDecoderAssurance
+import LeanS7.CanonicalResponseAssurance

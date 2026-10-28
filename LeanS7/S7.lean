@@ -299,6 +299,44 @@ def encodeAckData (reference : UInt16) (parameters data : ByteArray) :
     uint16BE (UInt16.ofNat parameters.size) ++ uint16BE (UInt16.ofNat data.size) ++
     bytes #[0, 0] ++ parameters ++ data
 
+/-- Encode any S7 ACK or ACK_DATA response, error class and code included. This
+    is the canonical form of the responses `decodeResponse` accepts;
+    `encodeAckData` is its successful ACK_DATA case
+    (`encodeAckData_eq_encodeResponse`). -/
+def encodeResponse (response : Response) : Except EncodeError ByteArray := do
+  if response.parameters.size > maxSectionSize then
+    throw (.parametersTooLarge response.parameters.size maxSectionSize)
+  if response.data.size > maxSectionSize then
+    throw (.dataTooLarge response.data.size maxSectionSize)
+  return bytes #[protocolId, response.pduType, 0, 0] ++ uint16BE response.reference ++
+    uint16BE (UInt16.ofNat response.parameters.size) ++
+    uint16BE (UInt16.ofNat response.data.size) ++
+    bytes #[response.errorClass, response.errorCode] ++ response.parameters ++ response.data
+
+/-- `encodeAckData` encodes the ACK_DATA response with a clear error class and code. -/
+theorem encodeAckData_eq_encodeResponse (reference : UInt16) (parameters data : ByteArray) :
+    encodeAckData reference parameters data = encodeResponse {
+      pduType := ackDataType, reference, parameters, data, errorClass := 0, errorCode := 0 } := by
+  rfl
+
+/-- A successful response encoding has exactly the response header and section
+    sizes expected by the decoder. -/
+theorem encodedResponse_size (response : Response) (packet : ByteArray)
+    (h : encodeResponse response = .ok packet) :
+    packet.size = responseHeaderSize + response.parameters.size + response.data.size := by
+  by_cases hp : response.parameters.size ≤ maxSectionSize
+  · by_cases hd : response.data.size ≤ maxSectionSize
+    · rw [encodeResponse, if_neg (Nat.not_lt.mpr hp),
+        if_neg (Nat.not_lt.mpr hd)] at h
+      injection h with hpacket
+      subst packet
+      simp [responseHeaderSize]
+    · rw [encodeResponse, if_neg (Nat.not_lt.mpr hp),
+        if_pos (Nat.lt_of_not_ge hd)] at h
+      contradiction
+  · rw [encodeResponse, if_pos (Nat.lt_of_not_ge hp)] at h
+    contradiction
+
 /-- A successful ACK_DATA encoding has exactly the response header and section
     sizes expected by the decoder. -/
 theorem encodedAckData_size (reference : UInt16) (parameters data packet : ByteArray)
@@ -493,6 +531,132 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
   rw [hfinish]
   rfl
 
+/-- Canonical decoding: re-encoding an accepted job reproduces the input with its
+    reserved word (offsets 2–3) cleared. That word is the only input `decodeJob`
+    ignores; the reference, both length fields and both sections are reproduced
+    exactly. -/
+theorem decodeJob_canonical (pdu : ByteArray) (job : Job) (h : decodeJob pdu = .ok job) :
+    encodeJob job = .ok (bytes #[protocolId, jobType, 0, 0] ++ pdu.extract 4 pdu.size) := by
+  simp only [decodeJob, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xa va ea hproto xb vb eb htype xc vc ec xd vd ed xe ve ee xf vf ef hlen xg vg eg xk vk ek xm vm em
+  obtain ⟨la, da, na⟩ := Cursor.readUInt8_value _ _ _ ea
+  rw [na] at eb
+  obtain ⟨lb, db, nb⟩ := Cursor.readUInt8_value _ _ _ eb
+  rw [nb] at ec
+  obtain ⟨lc, dc, nc⟩ := Cursor.readUInt16BE_value _ _ _ ec
+  rw [nc] at ed
+  obtain ⟨ld, dd, nd⟩ := Cursor.readUInt16BE_value _ _ _ ed
+  rw [nd] at ee
+  obtain ⟨le, de, ne⟩ := Cursor.readUInt16BE_value _ _ _ ee
+  rw [ne] at ef
+  obtain ⟨lf, df, nf⟩ := Cursor.readUInt16BE_value _ _ _ ef
+  rw [nf] at eg
+  obtain ⟨pg, ng⟩ := Cursor.readBytes_value _ _ _ _ eg
+  rw [ng] at ek
+  obtain ⟨pk, nk⟩ := Cursor.readBytes_value _ _ _ _ ek
+  rw [nk] at em
+  have hfin := Cursor.finish_ok _ em
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hlen
+  simp only [jobHeaderSize] at hlen
+  simp only at la lb lc ld le lf dd de df hfin pg pk
+  have hP := ve.fst.toNat_lt
+  have hD := vf.fst.toNat_lt
+  have hgsize : vg.fst.size = ve.fst.toNat := by
+    rw [pg, ByteArray.size_extract]; omega
+  have hksize : vk.fst.size = vf.fst.toNat := by
+    rw [pk, ByteArray.size_extract]; omega
+  have href : uint16BE vd.fst = pdu.extract 4 6 := by
+    rw [dd, ← ByteArray.extract_two_uint16BE pdu 4 (by omega)]
+  have hplen : uint16BE (UInt16.ofNat vg.fst.size) = pdu.extract 6 8 := by
+    rw [hgsize, UInt16.ofNat_toNat, de, ← ByteArray.extract_two_uint16BE pdu 6 (by omega)]
+  have hdlen : uint16BE (UInt16.ofNat vk.fst.size) = pdu.extract 8 10 := by
+    rw [hksize, UInt16.ofNat_toNat, df, ← ByteArray.extract_two_uint16BE pdu 8 (by omega)]
+  simp only [encodeJob]
+  rw [if_neg (by rw [hgsize, maxSectionSize]; omega), if_neg (by rw [hksize, maxSectionSize]; omega)]
+  simp only [pure, Except.pure]
+  rw [href, hplen, hdlen, pg, pk]
+  simp only [ByteArray.append_assoc]
+  rw [ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    show 0 + 1 + 1 + 2 + 2 + 2 + 2 + ve.fst.toNat + vf.fst.toNat = pdu.size by omega]
+
+/-- Canonical decoding: re-encoding an accepted ACK or ACK_DATA response
+    reproduces the input with its reserved word (offsets 2–3) cleared. That word
+    is the only input `decodeResponse` ignores; the PDU type, reference, length
+    fields, error class and code, and both sections are reproduced exactly. -/
+theorem decodeResponse_canonical (pdu : ByteArray) (response : Response)
+    (h : decodeResponse pdu = .ok response) :
+    encodeResponse response =
+      .ok (bytes #[protocolId, response.pduType, 0, 0] ++ pdu.extract 4 pdu.size) := by
+  simp only [decodeResponse, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xa va ea hproto xb vb eb htype xc vc ec xd vd ed xe ve ee xf vf ef xg vg eg xh vh eh hlen xi vi ei xk vk ek xm vm em
+  obtain ⟨la, da, na⟩ := Cursor.readUInt8_value _ _ _ ea
+  rw [na] at eb
+  obtain ⟨lb, db, nb⟩ := Cursor.readUInt8_value _ _ _ eb
+  rw [nb] at ec
+  obtain ⟨lc, dc, nc⟩ := Cursor.readUInt16BE_value _ _ _ ec
+  rw [nc] at ed
+  obtain ⟨ld, dd, nd⟩ := Cursor.readUInt16BE_value _ _ _ ed
+  rw [nd] at ee
+  obtain ⟨le, de, ne⟩ := Cursor.readUInt16BE_value _ _ _ ee
+  rw [ne] at ef
+  obtain ⟨lf, df, nf⟩ := Cursor.readUInt16BE_value _ _ _ ef
+  rw [nf] at eg
+  obtain ⟨lg, dg, ng⟩ := Cursor.readUInt8_value _ _ _ eg
+  rw [ng] at eh
+  obtain ⟨lh, dh, nh⟩ := Cursor.readUInt8_value _ _ _ eh
+  rw [nh] at ei
+  obtain ⟨pi, ni⟩ := Cursor.readBytes_value _ _ _ _ ei
+  rw [ni] at ek
+  obtain ⟨pk, nk⟩ := Cursor.readBytes_value _ _ _ _ ek
+  rw [nk] at em
+  have hfin := Cursor.finish_ok _ em
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hlen
+  simp only [responseHeaderSize] at hlen
+  simp only at la lb lc ld le lf lg lh dd de df dg dh hfin pi pk ⊢
+  have hP := ve.fst.toNat_lt
+  have hD := vf.fst.toNat_lt
+  have hisize : vi.fst.size = ve.fst.toNat := by
+    rw [pi, ByteArray.size_extract]; omega
+  have hksize : vk.fst.size = vf.fst.toNat := by
+    rw [pk, ByteArray.size_extract]; omega
+  have href : uint16BE vd.fst = pdu.extract 4 6 := by
+    rw [dd, ← ByteArray.extract_two_uint16BE pdu 4 (by omega)]
+  have hplen : uint16BE (UInt16.ofNat vi.fst.size) = pdu.extract 6 8 := by
+    rw [hisize, UInt16.ofNat_toNat, de, ← ByteArray.extract_two_uint16BE pdu 6 (by omega)]
+  have hdlen : uint16BE (UInt16.ofNat vk.fst.size) = pdu.extract 8 10 := by
+    rw [hksize, UInt16.ofNat_toNat, df, ← ByteArray.extract_two_uint16BE pdu 8 (by omega)]
+  have herror : bytes #[vg.fst, vh.fst] = pdu.extract 10 12 := by
+    rw [← dg, ← dh, ByteArray.extract_two pdu 10 (by omega)]
+    rfl
+  simp only [encodeResponse]
+  rw [if_neg (by rw [hisize, maxSectionSize]; omega), if_neg (by rw [hksize, maxSectionSize]; omega)]
+  simp only [pure, Except.pure]
+  rw [href, hplen, hdlen, herror, pi, pk]
+  simp only [ByteArray.append_assoc]
+  rw [ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le pdu (by omega) (by omega),
+    show 0 + 1 + 1 + 2 + 2 + 2 + 2 + 1 + 1 + ve.fst.toNat + vf.fst.toNat = pdu.size by omega]
+
 def validateResponse (response : Response) (reference : UInt16) (function : UInt8) : Except DecodeError Unit := do
   if response.reference != reference then
     throw (.invalidField 4 s!"expected PDU reference {reference}, got {response.reference}")
@@ -573,6 +737,17 @@ theorem validateResponse_function_eq (response : Response)
         rw [if_pos (by simpa using hfunction)] at hvalidate
         contradiction
 
+/-- A validated response answers the request's reference with a clear error class
+    and code, and its parameter section starts with the expected function code. -/
+theorem validateResponse_exact (response : Response) (reference : UInt16) (function : UInt8)
+    (h : validateResponse response reference function = .ok ()) :
+    response.reference = reference ∧ response.errorClass = 0 ∧ response.errorCode = 0 ∧
+      ∃ hp : 0 < response.parameters.size, response.parameters[0] = function := by
+  obtain ⟨herrorClass, herrorCode⟩ := validateResponse_error_free _ _ _ h
+  obtain ⟨cursor, hread⟩ := validateResponse_function_eq _ _ _ h
+  obtain ⟨hlt, hbyte, _⟩ := Cursor.readUInt8_value _ _ _ hread
+  exact ⟨validateResponse_reference_eq _ _ _ h, herrorClass, herrorCode, hlt, hbyte⟩
+
 /-- Check the protocol minimum needed by all supported S7 request and response
     headers before installing a negotiated PDU budget. -/
 def validateSetupPduLength (pduLength : UInt16) : Except DecodeError Unit := do
@@ -637,6 +812,10 @@ def Area.usesElementAddress : Area → Bool
 def Area.dataTransportSize : Area → UInt8
   | .counters | .timers => octetTransportSize
   | _ => byteTransportSize
+
+/-- The length field of a read item: bytes for the octet transport size, bits otherwise. -/
+def readItemLength (transportSize : UInt8) (size : Nat) : Nat :=
+  if transportSize == octetTransportSize then size else size * 8
 
 /-- A memory-area range. `start` is a byte offset; timers and counters require
     two-byte alignment, while `count` is the number of timer/counter elements. -/
@@ -1110,6 +1289,212 @@ private theorem decodeReadItems_wire_order (ranges : List MemoryRange)
         · simp_all
       · exact ih _ _ _ (by assumption)
 
+/-- The exact bytes of one item of a multi-item read response. A successful item is
+    the success code, its transport size (the area's own, or for counters and timers
+    also the byte transport size), its length field and its payload. A failed item
+    keeps its return code; its transport size, length word and payload bytes are not
+    interpreted. An item that is not the last and has an odd payload is followed by
+    one padding byte of any value. -/
+def ReadItemBytes (range : MemoryRange) (more : Bool) : ReadItemResult → ByteArray → Prop
+  | .success payload, item =>
+    ∃ (transport : UInt8) (padding : ByteArray),
+      (transport = range.area.dataTransportSize ∨
+        (range.area.usesElementAddress = true ∧ transport = byteTransportSize)) ∧
+      padding.size = (if more && payload.size % 2 != 0 then 1 else 0) ∧
+      item = bytes #[0xff, transport] ++
+        uint16BE (UInt16.ofNat (readItemLength transport payload.size)) ++ payload ++ padding
+  | .failure code, item =>
+    ∃ (transport : UInt8) (encodedLength : UInt16) (ignored padding : ByteArray),
+      code ≠ 0xff ∧
+      ignored.size = (if transport == octetTransportSize then encodedLength.toNat
+        else encodedLength.toNat / 8) ∧
+      (transport ≠ octetTransportSize → encodedLength.toNat % 8 = 0) ∧
+      padding.size = (if more && ignored.size % 2 != 0 then 1 else 0) ∧
+      item = bytes #[code, transport] ++ uint16BE encodedLength ++ ignored ++ padding
+
+/-- The data section of a multi-item read response, item by item in request order. -/
+inductive ReadItemsBytes : List MemoryRange → List ReadItemResult → ByteArray → Prop
+  | nil : ReadItemsBytes [] [] ByteArray.empty
+  | cons {range rest result results item data} :
+      ReadItemBytes range (!rest.isEmpty) result item →
+      ReadItemsBytes rest results data →
+      ReadItemsBytes (range :: rest) (result :: results) (item ++ data)
+
+/-- The bytes a read-item header and payload walk covers, up to any later stop. -/
+private theorem readItem_extract (cursor c₁ c₂ c₃ c₄ : Cursor) (code transport : UInt8)
+    (encodedLength : UInt16) (count : Nat) (payload : ByteArray) (stop : Nat)
+    (e₁ : cursor.readUInt8 = .ok (code, c₁)) (e₂ : c₁.readUInt8 = .ok (transport, c₂))
+    (e₃ : c₂.readUInt16BE = .ok (encodedLength, c₃))
+    (e₄ : c₃.readBytes count = .ok (payload, c₄))
+    (hstop : c₄.offset ≤ stop) :
+    c₄.data = cursor.data ∧ c₄.offset = cursor.offset + 4 + count ∧ payload.size = count ∧
+      cursor.data.extract cursor.offset stop =
+        bytes #[code, transport] ++ uint16BE encodedLength ++ payload ++
+          cursor.data.extract c₄.offset stop := by
+  obtain ⟨l₁, d₁, n₁⟩ := Cursor.readUInt8_value _ _ _ e₁
+  subst n₁
+  obtain ⟨l₂, d₂, n₂⟩ := Cursor.readUInt8_value _ _ _ e₂
+  subst n₂
+  obtain ⟨l₃, d₃, n₃⟩ := Cursor.readUInt16BE_value _ _ _ e₃
+  subst n₃
+  obtain ⟨p₄, n₄⟩ := Cursor.readBytes_value _ _ _ _ e₄
+  have hsize := Cursor.readBytes_size _ _ _ _ e₄
+  obtain ⟨_, _, hbound⟩ := Cursor.readBytes_next _ _ _ _ e₄
+  subst n₄
+  simp only [Cursor.remaining] at hbound
+  simp only at l₂ l₃ d₂ d₃ p₄ hstop
+  refine ⟨rfl, by simp only <;> omega, hsize, ?_⟩
+  simp only
+  rw [p₄, d₃, ← d₁, ← d₂, ← ByteArray.extract_two_uint16BE _ _ (by omega),
+    show bytes #[cursor.data[cursor.offset], cursor.data[cursor.offset + 1]] =
+      cursor.data.extract cursor.offset (cursor.offset + 2) from
+        (ByteArray.extract_two _ _ (by omega)).symm,
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega)]
+
+/-- One decoded read item followed by the rest of the walk is the item's canonical
+    bytes followed by the rest's. -/
+private theorem readItems_step (range : MemoryRange) (rest : List MemoryRange)
+    (cursor c₁ c₂ c₃ c₄ c₅ next : Cursor) (code transport : UInt8) (encodedLength : UInt16)
+    (count : Nat) (payload : ByteArray) (result : ReadItemResult)
+    (results : List ReadItemResult)
+    (e₁ : cursor.readUInt8 = .ok (code, c₁)) (e₂ : c₁.readUInt8 = .ok (transport, c₂))
+    (e₃ : c₂.readUInt16BE = .ok (encodedLength, c₃))
+    (e₄ : c₃.readBytes count = .ok (payload, c₄))
+    (hcount : count = (if transport == octetTransportSize then encodedLength.toNat
+      else encodedLength.toNat / 8))
+    (haligned : transport ≠ octetTransportSize → encodedLength.toNat % 8 = 0)
+    (hpad : c₅.data = c₄.data ∧
+      c₅.offset = c₄.offset + (if !rest.isEmpty && count % 2 != 0 then 1 else 0) ∧
+      c₅.offset ≤ c₄.data.size)
+    (hresult : (code = 0xff ∧ (transport = range.area.dataTransportSize ∨
+        (range.area.usesElementAddress = true ∧ transport = byteTransportSize)) ∧
+        result = .success payload) ∨ (code ≠ 0xff ∧ result = .failure code))
+    (hrest : next.data = c₅.data ∧ c₅.offset ≤ next.offset ∧
+      ReadItemsBytes rest results (c₅.data.extract c₅.offset next.offset)) :
+    next.data = cursor.data ∧ cursor.offset ≤ next.offset ∧
+      ReadItemsBytes (range :: rest) (result :: results)
+        (cursor.data.extract cursor.offset next.offset) := by
+  obtain ⟨hpd, hpo, hpb⟩ := hpad
+  obtain ⟨hnd, hle, hbytes⟩ := hrest
+  obtain ⟨hd₄, ho₄, hsize, hextract⟩ :=
+    readItem_extract cursor c₁ c₂ c₃ c₄ code transport encodedLength count payload
+      next.offset e₁ e₂ e₃ e₄ (by split at hpo <;> omega)
+  rw [hd₄] at hpb
+  have hpadSize : (cursor.data.extract c₄.offset c₅.offset).size =
+      (if !rest.isEmpty && count % 2 != 0 then 1 else 0) := by
+    rw [ByteArray.size_extract, Nat.min_eq_left hpb, hpo]
+    split <;> omega
+  refine ⟨by rw [hnd, hpd, hd₄], by split at hpo <;> omega, ?_⟩
+  rw [hextract, ← ByteArray.extract_append_extract_of_le cursor.data (j := c₅.offset)
+    (by split at hpo <;> omega) hle]
+  rw [hpd, hd₄] at hbytes
+  rw [← ByteArray.append_assoc (a := bytes #[code, transport] ++ uint16BE encodedLength ++ payload)]
+  refine .cons ?_ hbytes
+  rcases hresult with ⟨rfl, hts, rfl⟩ | ⟨hcode, rfl⟩
+  · refine ⟨transport, _, hts, by rw [hpadSize, hsize], ?_⟩
+    have hlength : UInt16.ofNat (readItemLength transport payload.size) = encodedLength := by
+      rw [hsize, hcount, readItemLength]
+      by_cases hoct : transport = octetTransportSize
+      · simp [hoct, UInt16.ofNat_toNat]
+      · have hne : (transport == octetTransportSize) = false := by simpa using hoct
+        rw [hne, if_neg (by simp), if_neg (by simp),
+          Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero (haligned hoct)), UInt16.ofNat_toNat]
+    rw [hlength]
+  · exact ⟨transport, encodedLength, payload, _, hcode, by rw [hsize, hcount], haligned,
+      by rw [hpadSize, hsize], rfl⟩
+
+private theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β}
+    (h : (x >>= f) = .ok b) : ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => simp [bind, Except.bind] at h
+  | ok a => exact ⟨a, rfl, h⟩
+
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1600000 in
+/-- The bytes a successful item walk consumed are exactly the canonical item bytes. -/
+private theorem decodeReadItems_bytes (ranges : List MemoryRange)
+    (cursor next : Cursor) (results : List ReadItemResult)
+    (h : decodeReadItems ranges cursor = .ok (results, next)) :
+    next.data = cursor.data ∧ cursor.offset ≤ next.offset ∧
+      ReadItemsBytes ranges results (cursor.data.extract cursor.offset next.offset) := by
+  induction ranges generalizing cursor next results with
+  | nil =>
+    simp [decodeReadItems, pure, Except.pure] at h
+    rcases h with ⟨rfl, rfl⟩
+    refine ⟨rfl, Nat.le_refl _, ?_⟩
+    rw [ByteArray.extract_eq_empty_iff.mpr (by omega)]
+    exact .nil
+  | cons range rest ih =>
+    rw [decodeReadItems] at h
+    try dsimp only at h
+    obtain ⟨⟨code, c₁⟩, e₁, h⟩ := bind_eq_ok h
+    try dsimp only at h
+    obtain ⟨⟨transport, c₂⟩, e₂, h⟩ := bind_eq_ok h
+    try dsimp only at h
+    obtain ⟨⟨encodedLength, c₃⟩, e₃, h⟩ := bind_eq_ok h
+    try dsimp only at h
+    obtain ⟨count, eN, h⟩ := bind_eq_ok h
+    try dsimp only at h
+    obtain ⟨⟨payload, c₄⟩, e₄, h⟩ := bind_eq_ok h
+    try dsimp only at h
+    have hp := responsePayloadSize_contract _ _ _ _ eN
+    obtain ⟨hd₃, ho₃, hl₃⟩ := Cursor.readUInt16BE_ok _ _ _ e₃
+    obtain ⟨hd₄, ho₄, hl₄⟩ := Cursor.readBytes_next _ _ _ _ e₄
+    have hbound : c₄.offset ≤ c₄.data.size := by
+      have hs₃ : c₃.data.size = c₂.data.size := by rw [hd₃]
+      have hs₄ : c₄.data.size = c₂.data.size := by rw [hd₄, hd₃]
+      simp only [Cursor.remaining] at hl₄
+      omega
+    -- The transport-size check of a successful item, as a disjunction.
+    have transport_ok : ¬(transport != range.area.dataTransportSize &&
+        !(range.area.usesElementAddress && transport == byteTransportSize)) = true →
+        (transport = range.area.dataTransportSize ∨
+          (range.area.usesElementAddress = true ∧ transport = byteTransportSize)) := by
+      intro hts
+      simp only [Bool.and_eq_true, bne_iff_ne, Bool.not_eq_true', Bool.and_eq_false_iff] at hts
+      by_cases hc : transport = range.area.dataTransportSize
+      · exact .inl hc
+      · right; simpa [hc] using hts
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+      MonadExceptOf.throw] at h
+    repeat' (first | contradiction | split at h)
+    · -- Padding byte, successful item.
+      rename_i hcond xp vp ep hcode hts hsz xr vr er
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨hpd, hpo, hpl⟩ := Cursor.readUInt8_ok _ _ _ ep
+      exact readItems_step range rest cursor c₁ c₂ c₃ c₄ vp.snd vr.snd code transport
+        encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
+        ⟨hpd, by rw [if_pos hcond, hpo], by omega⟩
+        (.inl ⟨by simpa using hcode, transport_ok hts, rfl⟩) (ih _ _ _ er)
+    · -- Padding byte, failed item.
+      rename_i hcond xp vp ep hcode xr vr er
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨hpd, hpo, hpl⟩ := Cursor.readUInt8_ok _ _ _ ep
+      exact readItems_step range rest cursor c₁ c₂ c₃ c₄ vp.snd vr.snd code transport
+        encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
+        ⟨hpd, by rw [if_pos hcond, hpo], by omega⟩
+        (.inr ⟨by simpa using hcode, rfl⟩) (ih _ _ _ er)
+    · -- No padding, successful item.
+      rename_i hcond hcode hts hsz xr vr er
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact readItems_step range rest cursor c₁ c₂ c₃ c₄ c₄ vr.snd code transport
+        encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
+        ⟨rfl, by rw [if_neg hcond]; rfl, hbound⟩
+        (.inl ⟨by simpa using hcode, transport_ok hts, rfl⟩) (ih _ _ _ er)
+    · -- No padding, failed item.
+      rename_i hcond hcode xr vr er
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact readItems_step range rest cursor c₁ c₂ c₃ c₄ c₄ vr.snd code transport
+        encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
+        ⟨rfl, by rw [if_neg hcond]; rfl, hbound⟩
+        (.inr ⟨by simpa using hcode, rfl⟩) (ih _ _ _ er)
+
 def decodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange)
     (response : Response) : Except DecodeError (Array ReadItemResult) := do
   if ranges.isEmpty || ranges.size > maxItemCount then
@@ -1263,6 +1648,96 @@ theorem decodeAreaWriteMany_contract (reference : UInt16) (expectedCount : Nat)
   intro i hi
   obtain ⟨hb, hitem⟩ := hitems i (by simpa using hi)
   exact ⟨by simpa using hb, by simpa using hitem⟩
+
+/-- The wire return code of a write result: the inverse of `WriteItemResult.ofReturnCode`. -/
+def WriteItemResult.returnCode : WriteItemResult → UInt8
+  | .success => 0xff
+  | .failure code => code
+
+theorem WriteItemResult.returnCode_ofReturnCode (code : UInt8) :
+    (WriteItemResult.ofReturnCode code).returnCode = code := by
+  unfold WriteItemResult.ofReturnCode
+  split <;> rename_i h
+  · simp only [beq_iff_eq] at h; simp [WriteItemResult.returnCode, h]
+  · rfl
+
+/-- A validated item-parameter section is the function code and the item count. -/
+private theorem validateItemParameters_exact (response : Response) (reference : UInt16)
+    (function : UInt8) (expectedCount : Nat)
+    (h : validateItemParameters response reference function expectedCount = .ok ()) :
+    response.reference = reference ∧ response.errorClass = 0 ∧ response.errorCode = 0 ∧
+      response.parameters = bytes #[function, UInt8.ofNat expectedCount] := by
+  simp only [validateItemParameters, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xv vv ev hpsize xc vc ec xf vf ef hcount
+  obtain ⟨href, hclass, hcode, _, hfun⟩ := validateResponse_exact _ _ _ ev
+  obtain ⟨_, hcountByte, _⟩ := Cursor.readUInt8_value _ _ _ ec
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hpsize hcount
+  refine ⟨href, hclass, hcode, ?_⟩
+  conv => lhs; rw [← ByteArray.extract_zero_size (b := response.parameters), hpsize]
+  rw [ByteArray.extract_two _ 0 (by omega)]
+  simp only at hcountByte
+  rw [hfun, hcountByte, ← hcount, UInt8.ofNat_toNat]
+  rfl
+
+set_option maxRecDepth 4096 in
+/-- Canonical form of a multi-item write acknowledgement: the parameter section is
+    the write function and the item count, and the data section is exactly one
+    return code per item, in request order. Nothing in an accepted response is
+    ignored except the header fields that `decodeResponse` itself ignores. -/
+theorem decodeAreaWriteMany_canonical (reference : UInt16) (expectedCount : Nat)
+    (response : Response) (results : Array WriteItemResult)
+    (h : decodeAreaWriteMany reference expectedCount response = .ok results) :
+    response.reference = reference ∧ response.errorClass = 0 ∧ response.errorCode = 0 ∧
+      response.parameters = bytes #[writeFunction, UInt8.ofNat expectedCount] ∧
+      response.data = ByteArray.mk (results.map WriteItemResult.returnCode) := by
+  obtain ⟨hsize, hdsize, hitems⟩ := decodeAreaWriteMany_contract _ _ _ _ h
+  have hparams : validateItemParameters response reference writeFunction expectedCount = .ok () := by
+    unfold decodeAreaWriteMany at h
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+      MonadExceptOf.throw] at h
+    repeat' (first | contradiction | split at h)
+    assumption
+  obtain ⟨href, hclass, hcode, hp⟩ := validateItemParameters_exact _ _ _ _ hparams
+  refine ⟨href, hclass, hcode, hp, ?_⟩
+  apply ByteArray.ext
+  apply Array.ext
+  · simp [hsize, hdsize]
+  · intro i hi _
+    obtain ⟨hb, hitem⟩ := hitems i (by simp at hi; omega)
+    simp only [Array.getElem_map, hitem, WriteItemResult.returnCode_ofReturnCode]
+    rfl
+
+set_option maxRecDepth 4096 in
+/-- Canonical form of a multi-item read response: the parameter section is the read
+    function and the item count, and the data section is exactly the items'
+    `ReadItemBytes` in request order. Successful items are fully determined up to the
+    transport-size choice for counters and timers; a failed item fixes only its
+    return code, and padding bytes after odd payloads may hold any value. -/
+theorem decodeAreaReadMany_canonical (reference : UInt16) (ranges : Array MemoryRange)
+    (response : Response) (results : Array ReadItemResult)
+    (h : decodeAreaReadMany reference ranges response = .ok results) :
+    response.reference = reference ∧ response.errorClass = 0 ∧ response.errorCode = 0 ∧
+      response.parameters = bytes #[readFunction, UInt8.ofNat ranges.size] ∧
+      ReadItemsBytes ranges.toList results.toList response.data := by
+  unfold decodeAreaReadMany at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  rename_i xv vv ev xr vr er xf vf ef
+  obtain ⟨href, hclass, hcode, hp⟩ := validateItemParameters_exact _ _ _ _ ev
+  obtain ⟨hnd, _, hbytes⟩ := decodeReadItems_bytes _ _ _ _ er
+  have hfin := Cursor.finish_ok _ (by cases vf; exact ef)
+  simp only [Except.ok.injEq] at h
+  subst h
+  refine ⟨href, hclass, hcode, hp, ?_⟩
+  rw [hnd] at hfin
+  simp only at hbytes hfin
+  rwa [hfin, ByteArray.extract_zero_size] at hbytes
 
 theorem decodeAreaWriteMany_size (reference : UInt16) (expectedCount : Nat)
     (response : Response) (results : Array WriteItemResult)

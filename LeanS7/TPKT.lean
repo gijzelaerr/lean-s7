@@ -204,4 +204,58 @@ theorem decode_encode (frame : Frame) (packet : ByteArray)
   cases frame
   rfl
 
+/-- Where an accepted frame sits in its input: the payload is everything after the
+    four-byte header, the length field encodes the input size, and that size is
+    within the TPKT bounds. -/
+theorem decode_layout (data : ByteArray) (frame : Frame)
+    (h : decode data = .ok frame) :
+    frame.payload = data.extract headerSize data.size ∧
+      data.extract 2 4 = uint16BE (UInt16.ofNat data.size) ∧
+      minFrameSize ≤ data.size ∧ data.size ≤ maxFrameSize := by
+  simp only [decode, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i x5 v5 e5 hver x4 v4 e4 x3 v3 e3 hmin hlen x2 v2 e2 x1 v1 e1
+  obtain ⟨l5, d5, n5⟩ := Cursor.readUInt8_value _ _ _ e5
+  rw [n5] at e4
+  obtain ⟨l4, d4, n4⟩ := Cursor.readUInt8_value _ _ _ e4
+  rw [n4] at e3
+  obtain ⟨l3, d3, n3⟩ := Cursor.readUInt16BE_value _ _ _ e3
+  rw [n3] at e2
+  obtain ⟨p2, n2⟩ := Cursor.readBytes_value _ _ _ _ e2
+  rw [n2] at e1
+  have hfin := Cursor.finish_ok _ e1
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hver hlen
+  simp only at l5 l4 l3 d5 d4 d3 hfin p2
+  have hbound := v3.fst.toNat_lt
+  simp only [minFrameSize, headerSize] at hmin hfin p2
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · show v2.fst = data.extract 4 data.size
+    rw [p2]; congr 1 <;> omega
+  · rw [← hlen, UInt16.ofNat_toNat, d3, ByteArray.extract_two_uint16BE data 2 (by omega)]
+  · rw [minFrameSize]; omega
+  · rw [maxFrameSize]; omega
+
+/-- Canonical decoding: re-encoding an accepted frame reproduces the input with
+    its reserved byte (offset 1) cleared. That byte is the only input `decode`
+    ignores; every other byte, the length field included, is reproduced exactly. -/
+theorem decode_canonical (data : ByteArray) (frame : Frame)
+    (h : decode data = .ok frame) :
+    encode frame = .ok (bytes #[version, 0] ++ data.extract 2 data.size) := by
+  obtain ⟨hpayload, hword, hmin, hmax⟩ := decode_layout data frame h
+  have hlength : headerSize + frame.payload.size = data.size := by
+    rw [hpayload, ByteArray.size_extract]
+    simp only [headerSize, minFrameSize, Nat.min_self] at hmin ⊢
+    omega
+  simp only [encode]
+  rw [if_pos (by rw [hlength]; exact hmin), if_pos (by rw [hlength]; exact hmax),
+    hlength, ← hword, hpayload, ByteArray.append_assoc, headerSize,
+    ByteArray.extract_append_extract_of_le data (by omega)
+      (by simp only [minFrameSize] at hmin; omega)]
+
 end LeanS7.TPKT

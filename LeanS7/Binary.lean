@@ -222,7 +222,62 @@ theorem readUInt64BE_of_available (cursor : Cursor)
   rw [readUInt32BE_of_available _ (by simp; omega)]
   rfl
 
+/-- A successful byte read returns the input byte at the cursor and advances one byte. -/
+theorem readUInt8_value (cursor next : Cursor) (value : UInt8)
+    (h : cursor.readUInt8 = .ok (value, next)) :
+    ∃ hlt : cursor.offset < cursor.data.size,
+      cursor.data[cursor.offset] = value ∧ next = { cursor with offset := cursor.offset + 1 } := by
+  unfold readUInt8 at h
+  split at h
+  · rename_i hlt
+    injection h with h
+    injection h with hv hn
+    exact ⟨hlt, hv, hn.symm⟩
+  · contradiction
+
+/-- A successful big-endian word read returns the two input bytes at the cursor
+    and advances two bytes. -/
+theorem readUInt16BE_value (cursor next : Cursor) (value : UInt16)
+    (h : cursor.readUInt16BE = .ok (value, next)) :
+    ∃ hl : cursor.offset + 2 ≤ cursor.data.size,
+      value = UInt16.ofNat (cursor.data[cursor.offset].toNat * 256 +
+        cursor.data[cursor.offset + 1].toNat) ∧
+      next = { cursor with offset := cursor.offset + 2 } := by
+  obtain ⟨_, _, hl⟩ := readUInt16BE_ok _ _ _ h
+  rw [readUInt16BE_of_available cursor hl] at h
+  injection h with h
+  injection h with hv hn
+  exact ⟨hl, hv.symm, hn.symm⟩
+
+/-- A successful bounded read returns exactly the input bytes it covered. -/
+theorem readBytes_value (cursor next : Cursor) (count : Nat) (payload : ByteArray)
+    (h : cursor.readBytes count = .ok (payload, next)) :
+    payload = cursor.data.extract cursor.offset (cursor.offset + count) ∧
+      next = { cursor with offset := cursor.offset + count } := by
+  unfold readBytes at h
+  split at h
+  · injection h with h
+    injection h with hp hn
+    exact ⟨hp.symm, hn.symm⟩
+  · contradiction
+
+/-- A successful finish means the cursor consumed the whole input. -/
+theorem finish_ok (cursor : Cursor) (h : cursor.finish = .ok ()) :
+    cursor.offset = cursor.data.size := by
+  unfold finish at h
+  split at h
+  · assumption
+  · contradiction
+
 end Cursor
+
+/-- An input splits at any position into the bytes before it and the bytes after it. -/
+theorem ByteArray.eq_extract_append_extract (data : ByteArray) (position : Nat)
+    (h : position ≤ data.size) :
+    data = data.extract 0 position ++ data.extract position data.size := by
+  rw [ByteArray.extract_append_extract]
+  simp only [Nat.zero_le, Nat.min_eq_left, Nat.max_eq_right h]
+  exact ByteArray.extract_zero_size.symm
 
 def uint16BE (value : UInt16) : ByteArray :=
   let n := value.toNat
@@ -230,6 +285,66 @@ def uint16BE (value : UInt16) : ByteArray :=
 
 @[simp] theorem uint16BE_size (value : UInt16) : (uint16BE value).size = 2 := by
   rfl
+
+/-- The word a big-endian read builds from two bytes encodes back to those bytes. -/
+theorem uint16BE_ofBytes (high low : UInt8) :
+    uint16BE (UInt16.ofNat (high.toNat * 256 + low.toNat)) = ByteArray.mk #[high, low] := by
+  have hh := high.toNat_lt
+  have hl := low.toNat_lt
+  have hn : (UInt16.ofNat (high.toNat * 256 + low.toNat)).toNat = high.toNat * 256 + low.toNat := by
+    rw [UInt16.toNat_ofNat']
+    omega
+  have hhigh : UInt8.ofNat ((high.toNat * 256 + low.toNat) / 256) = high := by
+    apply UInt8.toNat_inj.mp
+    rw [UInt8.toNat_ofNat']
+    omega
+  have hlow : UInt8.ofNat (high.toNat * 256 + low.toNat) = low := by
+    apply UInt8.toNat_inj.mp
+    rw [UInt8.toNat_ofNat']
+    omega
+  simp only [uint16BE, hn, hhigh, hlow]
+
+/-- Adjacent ranges of one input join into the range that spans both. -/
+theorem ByteArray.extract_append_extract_of_le (data : ByteArray) {i j k : Nat}
+    (hij : i ≤ j) (hjk : j ≤ k) :
+    data.extract i j ++ data.extract j k = data.extract i k := by
+  rw [ByteArray.extract_append_extract, Nat.min_eq_left hij, Nat.max_eq_right hjk]
+
+/-- The single input byte at a position, as a one-byte range. -/
+theorem ByteArray.extract_one (data : ByteArray) (position : Nat)
+    (h : position < data.size) :
+    data.extract position (position + 1) = ByteArray.mk #[data[position]] := by
+  apply ByteArray.ext
+  simp only [ByteArray.data_extract]
+  apply Array.ext
+  · simp; omega
+  · intro i _ hi
+    simp only [List.size_toArray, List.length_cons, List.length_nil] at hi
+    obtain rfl : i = 0 := by omega
+    simp only [Array.getElem_extract, Nat.add_zero]
+    rfl
+
+/-- The two input bytes at a position, as a two-byte range. -/
+theorem ByteArray.extract_two (data : ByteArray) (position : Nat)
+    (h : position + 2 ≤ data.size) :
+    data.extract position (position + 2) =
+      ByteArray.mk #[data[position], data[position + 1]] := by
+  apply ByteArray.ext
+  simp only [ByteArray.data_extract]
+  apply Array.ext
+  · simp; omega
+  · intro i _ hi
+    simp only [List.size_toArray, List.length_cons, List.length_nil] at hi
+    simp only [Array.getElem_extract]
+    rcases (by omega : i = 0 ∨ i = 1) with rfl | rfl <;> rfl
+
+/-- Two input bytes at a position are the big-endian encoding of the word a
+    `Cursor.readUInt16BE` there returns. -/
+theorem ByteArray.extract_two_uint16BE (data : ByteArray) (position : Nat)
+    (h : position + 2 ≤ data.size) :
+    data.extract position (position + 2) =
+      uint16BE (UInt16.ofNat (data[position].toNat * 256 + data[position + 1].toNat)) := by
+  rw [uint16BE_ofBytes, ByteArray.extract_two data position h]
 
 /-- Encoding then reading a big-endian word returns the original value. -/
 theorem readUInt16BE_uint16BE (value : UInt16) :
