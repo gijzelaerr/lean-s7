@@ -10,6 +10,7 @@
  * stale stack slot would hit different frames.
  *
  * usage: connect_repro PORT COUNT
+ *        connect_repro --version
  */
 #include <uv.h>
 
@@ -115,6 +116,10 @@ static __attribute__((noinline)) void connect_at_depth(const struct sockaddr_in*
 }
 
 int main(int argc, char** argv) {
+  if (argc == 2 && strcmp(argv[1], "--version") == 0) {
+    printf("libuv %s\n", uv_version_string());
+    return 0;
+  }
   if (argc != 3) {
     fprintf(stderr, "usage: connect_repro PORT COUNT\n");
     return 2;
