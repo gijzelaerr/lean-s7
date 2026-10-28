@@ -29,6 +29,18 @@ def encodeAckData (reference : UInt16) (parameters data : ByteArray) :
   let s7 ← (S7.encodeAckData reference parameters data).mapError .s7
   (TPKT.encode { payload := COTP.encodeData { payload := s7 } }).mapError .tpkt
 
+/-- Encode a complete RFC 1006 / COTP / S7 ACK or ACK_DATA packet, error class and
+    code included: the canonical form of the packets `decodeResponse` accepts. -/
+def encodeResponse (response : S7.Response) : Except EncodeError ByteArray := do
+  let s7 ← (S7.encodeResponse response).mapError .s7
+  (TPKT.encode { payload := COTP.encodeData { payload := s7 } }).mapError .tpkt
+
+/-- `encodeAckData` encodes the ACK_DATA packet with a clear error class and code. -/
+theorem encodeAckData_eq_encodeResponse (reference : UInt16) (parameters data : ByteArray) :
+    encodeAckData reference parameters data = encodeResponse {
+      pduType := S7.ackDataType, reference, parameters, data, errorClass := 0, errorCode := 0 } := by
+  simp only [encodeAckData, encodeResponse, S7.encodeAckData_eq_encodeResponse]
+
 /-- Decode exactly one complete RFC 1006 / COTP / S7 response packet. -/
 def decodeResponse (packet : ByteArray) : Except DecodeError S7.Response := do
   let frame ← TPKT.decode packet
@@ -167,5 +179,111 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
   rw [Except.bind]
   simp [cotp, S7.decodeResponse_encodeAckData reference parameters data s7
     hparameters hdata hs7]
+
+/-- The TPKT payload of an accepted complete packet is the three-byte COTP data
+    header with EOT set, followed by the S7 PDU. -/
+private theorem decode_layers (packet : ByteArray) (frame : TPKT.Frame) (cotp : COTP.Data)
+    (hframe : TPKT.decode packet = .ok frame) (hcotp : COTP.decodeData frame.payload = .ok cotp)
+    (heot : cotp.endOfTransmission = true) :
+    packet.size = 7 + cotp.payload.size ∧
+      packet.extract 2 4 = uint16BE (UInt16.ofNat packet.size) ∧
+      packet.extract 4 7 = bytes #[2, COTP.dataCode, 0x80] ∧
+      packet.extract 11 packet.size = cotp.payload.extract 4 cotp.payload.size ∧
+      TPKT.minFrameSize ≤ packet.size ∧ packet.size ≤ TPKT.maxFrameSize := by
+  obtain ⟨hpay, hword, hmin, hmax⟩ := TPKT.decode_layout _ _ hframe
+  have hcanon := COTP.decodeData_canonical _ _ hcotp
+  have hpayload : packet.extract 4 packet.size =
+      bytes #[2, COTP.dataCode, 0x80] ++ cotp.payload := by
+    rw [← TPKT.headerSize, ← hpay, ← hcanon, COTP.encodeData, heot]
+    rfl
+  have hhead : (bytes #[2, COTP.dataCode, 0x80]).size = 3 := rfl
+  have hpsize : packet.size = 7 + cotp.payload.size := by
+    have := congrArg ByteArray.size hpayload
+    rw [ByteArray.size_append, hhead, ByteArray.size_extract] at this
+    simp only [TPKT.minFrameSize] at hmin
+    omega
+  refine ⟨hpsize, hword, ?_, ?_, hmin, hmax⟩
+  · have := congrArg (fun b => b.extract 0 3) hpayload
+    simp only [ByteArray.extract_extract] at this
+    rw [ByteArray.extract_append_eq_left hhead.symm, Nat.min_eq_left (by omega)] at this
+    exact this
+  · have hr : (bytes #[2, COTP.dataCode, 0x80] ++ cotp.payload).extract 7
+        (3 + cotp.payload.size) = cotp.payload.extract 4 cotp.payload.size :=
+      ByteArray.extract_append_size_add (a := bytes #[2, COTP.dataCode, 0x80])
+        (b := cotp.payload) (i := 4) (j := cotp.payload.size)
+    have := congrArg (fun b => b.extract 7 (3 + cotp.payload.size)) hpayload
+    simp only [ByteArray.extract_extract] at this
+    rw [hr] at this
+    rw [← this]
+    congr 1 <;> omega
+
+/-- Re-framing an S7 PDU whose size matches the accepted packet's reproduces the
+    packet's TPKT and COTP headers. -/
+private theorem reframe (packet s7 : ByteArray)
+    (hsize : packet.size = 7 + s7.size)
+    (hword : packet.extract 2 4 = uint16BE (UInt16.ofNat packet.size))
+    (hcotpHeader : packet.extract 4 7 = bytes #[2, COTP.dataCode, 0x80])
+    (hmin : TPKT.minFrameSize ≤ packet.size) (hmax : packet.size ≤ TPKT.maxFrameSize) :
+    TPKT.encode { payload := COTP.encodeData { payload := s7 } } =
+      .ok (bytes #[TPKT.version, 0] ++ packet.extract 2 7 ++ s7) := by
+  have hlen : TPKT.headerSize + (COTP.encodeData { payload := s7 }).size = packet.size := by
+    rw [COTP.encodedData_size]; show 4 + (3 + s7.size) = packet.size; omega
+  simp only [TPKT.encode]
+  rw [if_pos (by rw [hlen]; exact hmin), if_pos (by rw [hlen]; exact hmax), hlen, ← hword,
+    ← ByteArray.extract_append_extract_of_le packet (i := 2) (j := 4) (k := 7) (by omega) (by omega),
+    hcotpHeader]
+  simp only [COTP.encodeData, ite_true, ByteArray.append_assoc]
+
+/-- Canonical decoding of a complete job packet: re-encoding an accepted packet
+    reproduces it with byte 1 (the TPKT reserved byte) and bytes 9–10 (the S7
+    reserved word) cleared. Every other byte — TPKT length, COTP header, S7
+    protocol and PDU type, reference, lengths and sections — is reproduced exactly. -/
+theorem decodeJob_canonical (packet : ByteArray) (job : S7.Job)
+    (h : decodeJob packet = .ok job) :
+    encodeJob job = .ok (bytes #[TPKT.version, 0] ++ packet.extract 2 7 ++
+      bytes #[S7.protocolId, S7.jobType, 0, 0] ++ packet.extract 11 packet.size) := by
+  simp only [decodeJob, bind, Except.bind] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xf frame ef xc cotp ec heot
+  obtain ⟨hpsize, hword, hcotpHeader, hs7tail, hmin, hmax⟩ :=
+    decode_layers packet frame cotp ef ec (by simpa using heot)
+  have hs7 := S7.decodeJob_canonical _ _ h
+  have hs7size := S7.encodedJob_size _ _ hs7
+  have hbytes4 : (bytes #[S7.protocolId, S7.jobType, 0, 0]).size = 4 := rfl
+  simp only [S7.jobHeaderSize, ByteArray.size_append, hbytes4, ByteArray.size_extract] at hs7size
+  simp only [encodeJob, hs7, Except.mapError, bind, Except.bind]
+  rw [reframe packet _ (by rw [ByteArray.size_append, hbytes4, ByteArray.size_extract]; omega)
+    hword hcotpHeader hmin hmax, hs7tail, ByteArray.append_assoc]
+  simp only [ByteArray.append_assoc]
+
+/-- Canonical decoding of a complete response packet: re-encoding an accepted
+    ACK or ACK_DATA packet reproduces it with byte 1 (the TPKT reserved byte) and
+    bytes 9–10 (the S7 reserved word) cleared. Every other byte, the error class
+    and code included, is reproduced exactly. -/
+theorem decodeResponse_canonical (packet : ByteArray) (response : S7.Response)
+    (h : decodeResponse packet = .ok response) :
+    encodeResponse response = .ok (bytes #[TPKT.version, 0] ++ packet.extract 2 7 ++
+      bytes #[S7.protocolId, response.pduType, 0, 0] ++ packet.extract 11 packet.size) := by
+  simp only [decodeResponse, bind, Except.bind] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xf frame ef xc cotp ec heot
+  obtain ⟨hpsize, hword, hcotpHeader, hs7tail, hmin, hmax⟩ :=
+    decode_layers packet frame cotp ef ec (by simpa using heot)
+  have hs7 := S7.decodeResponse_canonical _ _ h
+  have hs7size := S7.encodedResponse_size _ _ hs7
+  have hbytes4 : (bytes #[S7.protocolId, response.pduType, 0, 0]).size = 4 := rfl
+  simp only [S7.responseHeaderSize, ByteArray.size_append, hbytes4, ByteArray.size_extract] at hs7size
+  simp only [encodeResponse, hs7, Except.mapError, bind, Except.bind]
+  rw [reframe packet _ (by rw [ByteArray.size_append, hbytes4, ByteArray.size_extract]; omega)
+    hword hcotpHeader hmin hmax, hs7tail, ByteArray.append_assoc]
+  simp only [ByteArray.append_assoc]
 
 end LeanS7.Protocol

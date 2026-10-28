@@ -114,6 +114,75 @@ theorem decodeParameters_extent (data : ByteArray) (parameters : List Parameter)
   have := decodeParametersWithFuel_extent data.size { data } parameters (by simp) h
   simpa [Cursor.remaining] using this
 
+/-- The canonical bytes of a COTP variable part: each parameter's code, its value
+    length and its value, in list order. The one-byte length only fits values of at
+    most 255 bytes, which is all `decodeParameters` can return. -/
+def encodeParameters : List Parameter → ByteArray
+  | [] => ByteArray.empty
+  | parameter :: rest =>
+    bytes #[parameter.code, UInt8.ofNat parameter.value.size] ++ parameter.value ++
+      encodeParameters rest
+
+/-- The fuel-bounded TLV walk returns exactly the parameters whose canonical bytes
+    are the remaining input. -/
+private theorem decodeParametersWithFuel_canonical (fuel : Nat) (cursor : Cursor)
+    (parameters : List Parameter) (hbound : cursor.offset ≤ cursor.data.size)
+    (h : decodeParametersWithFuel fuel cursor = .ok parameters) :
+    encodeParameters parameters = cursor.data.extract cursor.offset cursor.data.size := by
+  induction fuel generalizing cursor parameters with
+  | zero =>
+    simp only [decodeParametersWithFuel] at h
+    split at h
+    · injection h with h
+      subst h
+      rename_i hr
+      simp only [Cursor.remaining] at hr
+      rw [encodeParameters, ByteArray.extract_eq_empty_iff.mpr (by omega)]
+    · contradiction
+  | succ fuel ih =>
+    simp only [decodeParametersWithFuel, bind, Except.bind, pure, Except.pure] at h
+    by_cases hr : cursor.remaining = 0
+    · simp [hr] at h
+      subst h
+      simp only [Cursor.remaining] at hr
+      rw [encodeParameters, ByteArray.extract_eq_empty_iff.mpr (by omega)]
+    · simp only [hr, if_false] at h
+      repeat' (split at h)
+      all_goals first | (simp at h; done) | skip
+      rename_i xc vc ec xl vl el xv vv ev xr vr er
+      obtain ⟨lc, dc, nc⟩ := Cursor.readUInt8_value _ _ _ ec
+      rw [nc] at el
+      obtain ⟨ll, dl, nl⟩ := Cursor.readUInt8_value _ _ _ el
+      rw [nl] at ev
+      obtain ⟨pv, nv⟩ := Cursor.readBytes_value _ _ _ _ ev
+      have hvsize := Cursor.readBytes_size _ _ _ _ ev
+      have hvnext := (Cursor.readBytes_next _ _ _ _ ev).2.2
+      rw [nv] at er
+      simp only [Cursor.remaining] at hvnext
+      simp only at ll dl pv hvnext
+      have hrest := ih _ _ (by simp only; omega) er
+      simp only at hrest
+      injection h with h
+      subst h
+      have hlength : UInt8.ofNat vv.fst.size = vl.fst := by
+        rw [hvsize, UInt8.ofNat_toNat]
+      have hlen : vl.fst.toNat ≤ cursor.data.size - (cursor.offset + 1 + 1) := hvnext
+      rw [encodeParameters, hrest, hlength, pv, ByteArray.append_assoc,
+        ByteArray.extract_append_extract_of_le cursor.data (by omega) (by omega), ← dc, ← dl,
+        show bytes #[cursor.data[cursor.offset], cursor.data[cursor.offset + 1]] =
+          cursor.data.extract cursor.offset (cursor.offset + 2) from
+            (ByteArray.extract_two cursor.data cursor.offset (by omega)).symm,
+        ByteArray.extract_append_extract_of_le cursor.data (by omega) (by omega)]
+
+/-- Canonical decoding: every variable part `decodeParameters` accepts is exactly the
+    canonical encoding of the decoded parameter list, in wire order and with
+    duplicates kept. Duplicate resolution happens later, in `findLastParameter`. -/
+theorem decodeParameters_canonical (data : ByteArray) (parameters : List Parameter)
+    (h : decodeParameters data = .ok parameters) :
+    encodeParameters parameters = data := by
+  have := decodeParametersWithFuel_canonical data.size { data } parameters (by simp) h
+  simpa [ByteArray.extract_zero_size] using this
+
 /-- Locate the last occurrence of a parameter code, as required by ISO 8073
     duplicate-parameter semantics. -/
 def findLastParameter (parameters : List Parameter) (code : UInt8) : Option ByteArray :=
@@ -303,6 +372,68 @@ theorem decodeConnectionConfirm_extent (data : ByteArray) (confirmation : Connec
   · simp only
     omega
   · exact hA
+
+/-- The canonical bytes of a connection confirmation: the length indicator, the
+    confirmation code, both references, the class option and the variable part.
+    The one-byte length indicator only fits a variable part of at most 248 bytes,
+    which is all `decodeConnectionConfirm` can accept. -/
+def encodeConnectionConfirm (confirmation : ConnectionConfirm) : ByteArray :=
+  bytes #[UInt8.ofNat (6 + confirmation.parameters.size), connectionConfirmCode] ++
+    uint16BE confirmation.destinationReference ++ uint16BE confirmation.sourceReference ++
+    bytes #[confirmation.classOption] ++ confirmation.parameters
+
+/-- Canonical decoding: every connection confirmation the decoder accepts is exactly
+    the encoding of the decoded value, so the decoder ignores no input byte. -/
+theorem decodeConnectionConfirm_canonical (data : ByteArray) (confirmation : ConnectionConfirm)
+    (h : decodeConnectionConfirm data = .ok confirmation) :
+    encodeConnectionConfirm confirmation = data := by
+  simp only [decodeConnectionConfirm, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xa va ea hlen xb vb eb hcode xc vc ec xd vd ed xe ve ee xf vf ef xg vg eg
+  obtain ⟨la, da, na⟩ := Cursor.readUInt8_value _ _ _ ea
+  rw [na] at eb
+  obtain ⟨lb, db, nb⟩ := Cursor.readUInt8_value _ _ _ eb
+  rw [nb] at ec
+  obtain ⟨lc, dc, nc⟩ := Cursor.readUInt16BE_value _ _ _ ec
+  rw [nc] at ed
+  obtain ⟨ld, dd, nd⟩ := Cursor.readUInt16BE_value _ _ _ ed
+  rw [nd] at ee
+  obtain ⟨le, de, ne⟩ := Cursor.readUInt8_value _ _ _ ee
+  rw [ne] at ef
+  obtain ⟨pf, nf⟩ := Cursor.readBytes_value _ _ _ _ ef
+  rw [nf] at eg
+  have hfin := Cursor.finish_ok _ eg
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hlen hcode
+  simp only at la lb lc ld le da db dc dd de hfin pf
+  simp only [Cursor.remaining] at hfin pf
+  have hpsize : vf.fst.size = data.size - 7 := by
+    rw [pf, ByteArray.size_extract]; omega
+  have hheader : UInt8.ofNat (6 + vf.fst.size) = va.fst := by
+    apply UInt8.toNat_inj.mp
+    rw [UInt8.toNat_ofNat', hpsize]
+    have := va.fst.toNat_lt
+    omega
+  simp only [encodeConnectionConfirm]
+  rw [hheader, ← da, hcode.symm.trans db.symm, dc, dd, ← de,
+    ← ByteArray.extract_two_uint16BE _ (0 + 1 + 1) (by omega),
+    ← ByteArray.extract_two_uint16BE _ (0 + 1 + 1 + 2) (by omega),
+    show bytes #[data[0], data[0 + 1]] = data.extract 0 2 from
+      (ByteArray.extract_two data 0 (by omega)).symm,
+    show bytes #[data[0 + 1 + 1 + 2 + 2]] = data.extract 6 7 from
+      (ByteArray.extract_one data 6 (by omega)).symm,
+    pf]
+  rw [ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    show 0 + 1 + 1 + 2 + 2 + 1 + (data.size - (0 + 1 + 1 + 2 + 2 + 1)) = data.size by omega,
+    ByteArray.extract_zero_size]
 
 /-- Validate the ISO 8073 power-of-two TPDU size codes supported by RFC 1006. -/
 def validateTpduSizeExponent (exponent : UInt8) (offset : Nat) :
@@ -588,5 +719,59 @@ theorem decodeData_encodeData (pdu : Data) :
       <$> Cursor.finish ({ data, offset := 3 + payload.size } : Cursor) = _
     rw [hfinish]
     rfl
+
+/-- A flags byte whose TPDU-number bits are zero is exactly the encoding of its EOT bit. -/
+theorem dataFlags_canonical (flags : UInt8) (h : flags &&& 0x7f = 0) :
+    (if (flags &&& 0x80 != 0) = true then (0x80 : UInt8) else 0x00) = flags := by
+  have hn : flags.toNat % 128 = 0 := by
+    have := congrArg UInt8.toNat h
+    rw [UInt8.toNat_and] at this
+    simpa [Nat.and_two_pow_sub_one_eq_mod _ 7] using this
+  have hcases : flags.toNat = 0 ∨ flags.toNat = 128 := by have := flags.toNat_lt; omega
+  rcases hcases with h0 | h128
+  · obtain rfl : flags = 0 := UInt8.toNat_inj.mp (by simpa using h0)
+    decide
+  · obtain rfl : flags = 128 := UInt8.toNat_inj.mp (by simpa using h128)
+    decide
+
+/-- Canonical decoding: every input the data-TPDU decoder accepts is exactly the
+    encoding of the decoded value, so the decoder ignores no input byte. -/
+theorem decodeData_canonical (data : ByteArray) (pdu : Data)
+    (h : decodeData data = .ok pdu) : encodeData pdu = data := by
+  simp only [decodeData, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i x5 v5 e5 hlen x4 v4 e4 hcode x3 v3 e3 hflags x2 v2 e2 x1 v1 e1
+  obtain ⟨l5, d5, n5⟩ := Cursor.readUInt8_value _ _ _ e5
+  rw [n5] at e4
+  obtain ⟨l4, d4, n4⟩ := Cursor.readUInt8_value _ _ _ e4
+  rw [n4] at e3
+  obtain ⟨l3, d3, n3⟩ := Cursor.readUInt8_value _ _ _ e3
+  rw [n3] at e2
+  obtain ⟨p2, n2⟩ := Cursor.readBytes_value _ _ _ _ e2
+  rw [n2] at e1
+  have hfin := Cursor.finish_ok _ e1
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hlen hcode hflags
+  simp only at l5 l4 l3 d5 d4 d3 hfin p2
+  simp only [Cursor.remaining] at hfin p2
+  rw [encodeData, dataFlags_canonical _ hflags, p2, hlen.symm.trans d5.symm,
+    hcode.symm.trans d4.symm, ← d3]
+  have hend : 0 + 1 + 1 + 1 + (data.size - (0 + 1 + 1 + 1)) = data.size := by omega
+  rw [hend]
+  conv => rhs; rw [ByteArray.eq_extract_append_extract data 3 (by omega)]
+  congr 1
+  apply ByteArray.ext
+  simp only [bytes, ByteArray.data_extract]
+  apply Array.ext
+  · simp; omega
+  · intro i hi _
+    simp only [List.size_toArray, List.length_cons, List.length_nil] at hi
+    simp only [Array.getElem_extract, Nat.zero_add]
+    rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2) with rfl | rfl | rfl <;> rfl
 
 end LeanS7.COTP
