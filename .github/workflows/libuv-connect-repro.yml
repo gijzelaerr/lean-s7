@@ -1,0 +1,120 @@
+name: libuv ConnectEx reproducer
+
+# Issue #58 / leanprover/lean4#15807: is the stack-cookie failure in
+# uv__tcp_connect reproducible with libuv alone, and does passing NULL instead of
+# a stack-local byte counter to ConnectEx remove it?
+#
+# Arms, all driven identically (diagnostics/libuv-connect-repro/drive.py):
+#   lean       the Lean connect-only reproducer (positive control)
+#   c-lean     the C reproducer against the libuv.a shipped in the Lean 4.33.1 release
+#   c-msys2    the C reproducer against MSYS2's current prebuilt libuv
+#   c-src      the C reproducer against libuv 1.52.1 built with MSYS2's hardening flags
+#   c-patched  as c-src, with the one-line ConnectEx change
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - diag/libuv-connectex
+
+permissions:
+  contents: read
+
+jobs:
+  repro:
+    name: ${{ matrix.arm }} (shard ${{ matrix.shard }})
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [lean, c-lean, c-msys2, c-src, c-patched]
+        shard: [1, 2]
+    env:
+      LIBUV_VERSION: "1.52.1"
+      HARDENING: "-O2 -Wp,-D_FORTIFY_SOURCE=2 -fstack-protector-strong"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - if: matrix.arm == 'lean'
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: diagnostics/connect-repro
+          build-args: connect-repro
+          test: false
+      - if: matrix.arm == 'lean'
+        run: echo "REPRO_EXE=$(cygpath -w "$PWD/diagnostics/connect-repro/.lake/build/bin/connect-repro.exe")" >> "$GITHUB_ENV"
+
+      - if: matrix.arm != 'lean'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+            mingw-w64-clang-x86_64-pkgconf
+            mingw-w64-clang-x86_64-libuv
+      - name: Fetch the libuv.a and headers Lean 4.33.1 links
+        if: matrix.arm == 'c-lean'
+        run: |
+          curl -fsSL -o lean.zip https://github.com/leanprover/lean4/releases/download/v4.33.1/lean-4.33.1-windows.zip
+          unzip -q -j lean.zip '*/lib/libuv.a' -d uv-lean
+          curl -fsSL "https://github.com/libuv/libuv/archive/refs/tags/v${LIBUV_VERSION}.tar.gz" | tar xz
+          mkdir -p uv/lib && cp uv-lean/libuv.a uv/lib/ && cp -r "libuv-${LIBUV_VERSION}/include" uv/
+      - name: Fetch libuv source
+        if: matrix.arm == 'c-src' || matrix.arm == 'c-patched'
+        run: |
+          curl -fsSL "https://github.com/libuv/libuv/archive/refs/tags/v${LIBUV_VERSION}.tar.gz" | tar xz
+          if [ "${{ matrix.arm }}" = c-patched ]; then
+            python diagnostics/libuv-connect-repro/patch_connectex.py "libuv-${LIBUV_VERSION}"
+          fi
+          grep -n -A8 'func_connectex(handle->socket' "libuv-${LIBUV_VERSION}/src/win/tcp.c"
+      - name: Build libuv from source
+        if: matrix.arm == 'c-src' || matrix.arm == 'c-patched'
+        shell: msys2 {0}
+        run: |
+          cmake -S "libuv-${LIBUV_VERSION}" -B uv-build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS="${HARDENING}" \
+            -DLIBUV_BUILD_SHARED=OFF -DLIBUV_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$PWD/uv"
+          cmake --build uv-build
+          cmake --install uv-build
+          ls uv/lib
+      - name: Build the C reproducer
+        if: matrix.arm != 'lean'
+        shell: msys2 {0}
+        run: |
+          pacman -Q mingw-w64-clang-x86_64-libuv mingw-w64-clang-x86_64-clang
+          if [ "${{ matrix.arm }}" = c-msys2 ]; then
+            uv_flags="$(pkg-config --cflags --static --libs libuv)"
+          else
+            uv_lib="$(find uv/lib -name 'libuv*.a' | head -1)"
+            uv_flags="-Iuv/include ${uv_lib} -lws2_32 -liphlpapi -luserenv -ldbghelp -lole32 -lshell32 -luser32 -ladvapi32 -lpsapi"
+          fi
+          clang ${HARDENING} -g diagnostics/libuv-connect-repro/connect_repro.c ${uv_flags} -static -o connect_repro.exe
+          echo "REPRO_EXE=$(cygpath -w "$PWD/connect_repro.exe")" >> "$GITHUB_ENV"
+
+      - name: Fetch ProcDump
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile "$env:RUNNER_TEMP\procdump.zip"
+          Expand-Archive "$env:RUNNER_TEMP\procdump.zip" -DestinationPath "$env:RUNNER_TEMP\procdump"
+      - name: Connect in a loop
+        run: |
+          python diagnostics/libuv-connect-repro/drive.py "${{ matrix.arm }}" "$REPRO_EXE" \
+            "$RUNNER_TEMP/dumps" "$RUNNER_TEMP/procdump/procdump64.exe" 15
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libuv-connect-${{ matrix.arm }}-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/dumps
+            ${{ env.REPRO_EXE }}
+          if-no-files-found: warn
