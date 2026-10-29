@@ -150,4 +150,105 @@ theorem parseCpuState_extent (szl : Szl) (result : CpuState)
   · exact he
   · simp [parseCpuState, validateSzlData, he, bind, Except.bind, throw] at h
 
+/-- What one eight-byte force-table entry at `start` pins down: bytes 0–4 are exactly the
+    area code, byte offset and bit index, and byte 5 is zero exactly when the entry's
+    value is false. Bytes 6–7 are not read. -/
+def ForceEntryBytes (data : ByteArray) (start : Nat) (entry : ForceEntry) : Prop :=
+  start + 8 ≤ data.size ∧
+    data.extract start (start + 5) =
+      uint16BE entry.areaCode ++ uint16BE entry.byteOffset ++ bytes #[entry.bit] ∧
+    ∃ valueByte : UInt8, data.extract (start + 5) (start + 6) = bytes #[valueByte] ∧
+      entry.value = (valueByte != 0)
+
+/-- Canonical form of the force table: the SZL data holds exactly one eight-byte entry
+    per decoded entry, in order, and each decoded entry is what its entry bytes say. -/
+theorem decodeForceTable_canonical (szl : Szl) (entries : Array ForceEntry)
+    (h : decodeForceTable szl = .ok entries) :
+    szl.data.size = 8 * entries.size ∧
+      ∀ i (hi : i < entries.size), ForceEntryBytes szl.data (8 * i) entries[i] := by
+  unfold decodeForceTable at h
+  simp only [validateSzlData, bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw, Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  repeat' (first | contradiction | split at h)
+  rename_i x0 v0 e0 hid halign x1 v1 hloop x2 v2 hfin
+  injection h with h
+  subst h
+  generalize hl : List.range' _ _ _ = l at hloop
+  generalize hc0 : ({ data := szl.data } : Cursor) = c0 at hloop
+  generalize hr0 : (#[] : Array ForceEntry) = r0 at hloop
+  -- The loop invariant: each iteration consumes eight bytes and appends their entry.
+  have inv : v1.fst.data = c0.data ∧ v1.fst.offset = c0.offset + 8 * l.length ∧
+      ∃ added : Array ForceEntry, v1.snd = r0 ++ added ∧ added.size = l.length ∧
+        ∀ j (hj : j < added.size), ForceEntryBytes c0.data (c0.offset + 8 * j) added[j] := by
+    clear hc0 hr0 hl hfin
+    induction l generalizing c0 r0 with
+    | nil =>
+      simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at hloop
+      subst hloop
+      exact ⟨rfl, by simp, #[], by simp, rfl, by simp⟩
+    | cons index rest ih =>
+      simp only [List.forIn_cons, bind, Except.bind] at hloop
+      repeat' (first | contradiction | split at hloop)
+      all_goals
+        rename_i step result hbody
+        repeat' (first | contradiction | split at hbody)
+      all_goals first
+        | (simp at hbody; done)
+        | skip
+      rename_i xa va ea xb vb eb xc vc ec hbit xd vd ed xf vf ef
+      injection hbody with hb
+      injection hb with hb
+      subst hb
+      obtain ⟨la, da, na⟩ := Cursor.readUInt16BE_value _ _ _ ea
+      rw [na] at eb
+      obtain ⟨lb, db, nb⟩ := Cursor.readUInt16BE_value _ _ _ eb
+      rw [nb] at ec
+      obtain ⟨lc, dc, nc⟩ := Cursor.readUInt8_value _ _ _ ec
+      rw [nc] at ed
+      obtain ⟨ld, dd, nd⟩ := Cursor.readUInt8_value _ _ _ ed
+      rw [nd] at ef
+      obtain ⟨lf, -, nf⟩ := Cursor.readUInt16BE_value _ _ _ ef
+      rw [nf] at hloop
+      obtain ⟨ihd, iho, added, hadd, hsize, hentries⟩ := ih _ _ hloop
+      simp only at la lb lc ld lf da db dc dd ihd iho hentries
+      refine ⟨ihd, by simp only [List.length_cons]; omega,
+        #[{ areaCode := va.fst, byteOffset := vb.fst, bit := vc.fst, value := vd.fst != 0 }] ++ added,
+        ?_, ?_, ?_⟩
+      · rw [hadd, Array.push_eq_append, Array.append_assoc]
+      · simp only [Array.size_append, List.size_toArray, List.length_cons, List.length_nil, hsize]
+        omega
+      · intro j hj
+        cases j with
+        | zero =>
+          simp only [Nat.mul_zero, Nat.add_zero]
+          rw [Array.getElem_append_left (by simp)]
+          simp only [List.getElem_toArray, List.getElem_cons_zero]
+          refine ⟨by omega, ?_, vd.fst, ?_, rfl⟩
+          · rw [da, db, ← dc, ← ByteArray.extract_two_uint16BE _ _ (by omega),
+              ← ByteArray.extract_two_uint16BE _ _ (by omega),
+              show bytes #[c0.data[c0.offset + 2 + 2]] = c0.data.extract (c0.offset + 4) (c0.offset + 5)
+                from (ByteArray.extract_one c0.data (c0.offset + 4) (by omega)).symm,
+              ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+              ByteArray.extract_append_extract_of_le _ (by omega) (by omega)]
+          · rw [← dd]
+            exact ByteArray.extract_one c0.data (c0.offset + 5) (by omega)
+        | succ j =>
+          have hj' : j < added.size := by simp at hj; omega
+          have hentry := hentries j hj'
+          rw [Array.getElem_append_right (by simp)]
+          simp only [List.size_toArray, List.length_cons, List.length_nil, Nat.add_sub_cancel]
+          rw [show c0.offset + 8 * (j + 1) = c0.offset + 1 + 1 + 1 + 1 + 2 + 2 + 8 * j by omega]
+          simpa using hentry
+  obtain ⟨hd, ho, added, hadd, hsize, hentries⟩ := inv
+  subst hc0 hr0
+  have hfin' := Cursor.finish_ok _ hfin
+  have hlen : l.length = szl.data.size / 8 := by
+    rw [← hl, List.length_range']
+    simp [Std.Legacy.Range.size]
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at halign
+  simp only at ho hentries
+  rw [hadd, Array.empty_append]
+  refine ⟨by omega, fun i hi => ?_⟩
+  simpa using hentries i hi
+
 end LeanS7.S7

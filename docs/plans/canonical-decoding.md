@@ -1,7 +1,33 @@
 # Plan: canonical decoding proofs
 
-Status: phases 0–6 done on 2026-10-28, phases 7 and 8 on 2026-10-29. The open
-decisions below await owner review.
+Status: phases 0–6 done on 2026-10-28, phases 7–9 on 2026-10-29. Every decoder
+in the classification table now has a canonical-form theorem. The open decisions
+below await owner review.
+
+## Phase 9 results
+
+Phase 9 covers `Advanced.decodeForceTable`, the last decoder in the table. It is
+lossy in two ways, so the theorem is a per-entry characterisation rather than a
+re-encoding:
+
+- each entry's value byte decodes to `value != 0`, so only its zero-ness is
+  recovered;
+- the last word of each entry is read and discarded.
+
+**`S7.decodeForceTable_canonical`**: an accepted force table holds exactly one
+eight-byte entry per decoded entry, in order (`szl.data.size = 8 * entries.size`),
+and each decoded entry satisfies `ForceEntryBytes`. That predicate says:
+
+- bytes 0–4 are exactly the area code, byte offset and bit index;
+- byte 5 is zero exactly when the value is false;
+- bytes 6–7 are not read.
+
+The decoder is a `for … in [0:n]` loop over a mutable cursor and result array.
+The proof rewrites it to a `forIn` over `List.range'` and proves a loop
+invariant by induction over that list: each iteration consumes eight bytes and
+appends their entry. The loop body isn't restated anywhere. The invariant is
+proved with the loop hypothesis reverted into the goal, so the decoder is
+unchanged.
 
 ## Phase 8 results
 
@@ -59,8 +85,7 @@ four theorems and changes no decoder:
   theorem states that an accepted PDU is the protocol ID, bytes 1–3 unread, the
   returned reference and everything after offset 6 unread.
 
-Still open are `Advanced.decodeForceTable` and the string decoders; see open
-decision 4.
+Phases 8 and 9 cover the remaining string and force-table decoders.
 
 ## Phase 6 results
 
@@ -241,7 +266,7 @@ covers the decoders reachable from the inventory in `docs/COMPLETENESS.md`.
 | `Management.decodeUserDataResponse` | lenient, **proved** (phase 7) | `Management.lean:162`: the reserved word. Re-encoded through the new `encodeUserDataResponse` |
 | `Management.decodePduReference` | prefix reader, **characterised** (phase 7) | `Management.lean:255–256`: the PDU kind and the reserved word. It never calls `finish`, so everything after offset 6 is unread too |
 | `Management.decodePlcDateTime` | lenient, **proved** (phase 7) | `Management.lean:611–612`: bytes 0–1 |
-| `Advanced.decodeForceTable` | lenient | `Advanced.lean:214`: a word per entry |
+| `Advanced.decodeForceTable` | lossy, **characterised** (phase 9) | `Advanced.lean:214`: a word per entry; the value byte only up to zero/non-zero |
 | `Value.decodeWString` | lenient, **proved** (phase 8) | `Value.lean:261`: the unused capacity bytes after the string |
 | `Value.decodeString` | lenient, **proved** (phase 8) | `Value.lean:200`: the unused capacity bytes after the string |
 | `S7.decodeAreaRead`, `decodeAreaWriteMany`, `decodeDbRead/Write`, `decodeSetupCommunication` | **proved** (phase 5) | characterised directly; see phase 5 results |
@@ -325,13 +350,9 @@ out to be strict; see phase 6 results.
    route instead and added no encoders: it characterises the accepted sections
    directly. Phase 7 took the first route for `decodeUserDataResponse`, adding
    `encodeUserDataResponse`. The remaining decoders could follow either route.
-4. **Remaining decoders.** Phases 6–8 are done. Still open:
-   `Advanced.decodeForceTable`, which loops over a mutable cursor
-   (`for … in [0:n]`), so its proof needs a loop invariant. It is also lossy: any
-   non-zero value byte decodes to `true`, and the last word of each entry is
-   unread. The natural statement is a per-entry characterisation: bytes 0–4 of
-   each entry are exactly the area code, byte offset and bit; byte 5 is
-   determined only up to zero/non-zero.
+4. **Remaining decoders.** Done: phases 6–9 cover every decoder in the
+   classification table. Decoders added later should get a classification row
+   and a theorem in the same PR.
 
 ## Alternatives considered
 
