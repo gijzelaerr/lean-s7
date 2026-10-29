@@ -1,7 +1,36 @@
 # Plan: canonical decoding proofs
 
-Status: phases 0–6 done on 2026-10-28, phase 7 on 2026-10-29. The open decisions
-below await owner review.
+Status: phases 0–6 done on 2026-10-28, phases 7 and 8 on 2026-10-29. The open
+decisions below await owner review.
+
+## Phase 8 results
+
+Phase 8 covers the two string decoders. Neither can be stated as plain
+canonicity, because both ignore the unused capacity after the active characters
+and the encoder writes zeros there. Both decoders are otherwise injective, which
+was checked before stating the theorems:
+
+- STRING maps each byte to a character through `Char.ofNat`. Code points 0–255
+  are all valid characters, so `toNat_ofNat_byte` recovers the byte, and Latin-1
+  encoding inverts the mapping (`encodeLatin1_bytes`).
+- WSTRING accepts a non-surrogate BMP unit or a high/low surrogate pair, and
+  rejects everything else. UTF-16 encoding of the decoded characters gives back
+  exactly the accepted units (`encodeUtf16_decodeUtf16Units`, by functional
+  induction over `decodeUtf16Units`).
+
+The theorems:
+
+- **`Value.decodeString_canonical`**: re-encoding a decoded STRING with the
+  capacity from its header reproduces the header and the active characters
+  exactly, followed by zeros for the unused capacity.
+- **`Value.decodeWString_canonical`**: the same for WSTRING, with UTF-16 units.
+  `readUtf16Units_extract` shows the units read are exactly the big-endian words
+  at the cursor.
+
+Both decoders read a field inside a larger buffer and don't call `finish`, so
+the theorems are about the field's bytes `offset … offset + 2 + current` (STRING)
+or `offset … offset + 4 + 2 * current` (WSTRING). They also show that the whole
+declared capacity is inside the buffer.
 
 ## Phase 7 results
 
@@ -213,8 +242,8 @@ covers the decoders reachable from the inventory in `docs/COMPLETENESS.md`.
 | `Management.decodePduReference` | prefix reader, **characterised** (phase 7) | `Management.lean:255–256`: the PDU kind and the reserved word. It never calls `finish`, so everything after offset 6 is unread too |
 | `Management.decodePlcDateTime` | lenient, **proved** (phase 7) | `Management.lean:611–612`: bytes 0–1 |
 | `Advanced.decodeForceTable` | lenient | `Advanced.lean:214`: a word per entry |
-| `Value.decodeWString` | lenient | `Value.lean:261`: the unused capacity bytes after the string |
-| `Value.decodeString` | to check | the same capacity question as `decodeWString` |
+| `Value.decodeWString` | lenient, **proved** (phase 8) | `Value.lean:261`: the unused capacity bytes after the string |
+| `Value.decodeString` | lenient, **proved** (phase 8) | `Value.lean:200`: the unused capacity bytes after the string |
 | `S7.decodeAreaRead`, `decodeAreaWriteMany`, `decodeDbRead/Write`, `decodeSetupCommunication` | **proved** (phase 5) | characterised directly; see phase 5 results |
 | the SZL, block, upload, download and CPU-control decoders | no encoder | the client only decodes these responses; see open question 3 |
 
@@ -296,14 +325,13 @@ out to be strict; see phase 6 results.
    route instead and added no encoders: it characterises the accepted sections
    directly. Phase 7 took the first route for `decodeUserDataResponse`, adding
    `encodeUserDataResponse`. The remaining decoders could follow either route.
-4. **Remaining decoders.** Phases 6 and 7 are done. Still open:
-   - `Advanced.decodeForceTable` loops over a mutable cursor (`for … in [0:n]`),
-     so its proof needs a loop invariant. It is also lossy: any non-zero value
-     byte decodes to `true`.
-   - `Value.decodeString` and `Value.decodeWString` decode to a `String`. Before
-     stating canonicity, check whether two accepted inputs can decode to the same
-     string, for example through `Char.ofNat` or UTF-16 surrogates. If they can,
-     the theorem has to be stated modulo that.
+4. **Remaining decoders.** Phases 6–8 are done. Still open:
+   `Advanced.decodeForceTable`, which loops over a mutable cursor
+   (`for … in [0:n]`), so its proof needs a loop invariant. It is also lossy: any
+   non-zero value byte decodes to `true`, and the last word of each entry is
+   unread. The natural statement is a per-entry characterisation: bytes 0–4 of
+   each entry are exactly the area code, byte offset and bit; byte 5 is
+   determined only up to zero/non-zero.
 
 ## Alternatives considered
 

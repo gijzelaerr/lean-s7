@@ -515,6 +515,78 @@ theorem decodeString_encodeString_surrounded (pre suffix : ByteArray) (maximum :
     exact List.toList_data_toByteArray
   rw [hl, latin1_characters _ hvalid, String.ofList_toList]
 
+/-- Every byte names a valid character: code points 0–255 are below the surrogates. -/
+private theorem toNat_ofNat_byte (byte : UInt8) : (Char.ofNat byte.toNat).toNat = byte.toNat := by
+  have hb := byte.toNat_lt
+  have hvalid : byte.toNat.isValidChar := Or.inl (by omega)
+  simp only [Char.ofNat, hvalid, dite_true, Char.ofNatAux, Char.toNat]
+  rfl
+
+private theorem fromDecode_ok {result : Except DecodeError α} {value : α} :
+    fromDecode result = .ok value ↔ result = .ok value := by
+  cases result <;> simp [fromDecode, Except.mapError]
+
+/-- Latin-1 encoding inverts the byte-to-character mapping of `decodeString`. -/
+private theorem encodeLatin1_bytes (content : List UInt8) :
+    encodeLatin1 (content.map fun byte => Char.ofNat byte.toNat) = .ok content := by
+  induction content with
+  | nil => rfl
+  | cons byte rest ih =>
+    have hc := toNat_ofNat_byte byte
+    have hb := byte.toNat_lt
+    simp only [List.map_cons, encodeLatin1, hc, show ¬ byte.toNat > 255 by omega, if_false, ih,
+      bind, Except.bind, pure, Except.pure, UInt8.ofNat_toNat]
+
+private theorem toList_toByteArray (data : ByteArray) : data.toList.toByteArray = data := by
+  apply ByteArray.ext
+  rw [List.data_toByteArray, byteArray_toList_data, Array.toArray_toList]
+
+/-- Canonical decoding of a STRING: re-encoding a decoded value with the capacity
+    from its header reproduces the header and the active characters exactly. The
+    unused capacity after them is the only input the decoder ignores; the encoder
+    writes zeros there. -/
+theorem decodeString_canonical (data : ByteArray) (offset : Nat) (value : String)
+    (h : decodeString data offset = .ok value) :
+    ∃ maximum current : Nat, current ≤ maximum ∧ offset + 2 + maximum ≤ data.size ∧
+      encodeString maximum value = .ok (data.extract offset (offset + 2 + current) ++
+        ByteArray.mk (Array.replicate (maximum - current) 0)) := by
+  unfold decodeString at h
+  simp only [cursorAt, bind, Except.bind, pure, Except.pure,
+    throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  all_goals first
+    | (simp [fromDecode, Except.mapError] at ‹fromDecode _ = Except.ok _›; done)
+    | skip
+  rename_i x0 v0 e0 x1 v1 e1 hmax hcur x2 v2 e2
+  rw [fromDecode_ok] at e0 e1 e2
+  obtain ⟨l0, d0, n0⟩ := Cursor.readUInt8_value _ _ _ e0
+  rw [n0] at e1
+  obtain ⟨l1, d1, n1⟩ := Cursor.readUInt8_value _ _ _ e1
+  rw [n1] at e2
+  have s2 := Cursor.readBytes_size _ _ _ _ e2
+  obtain ⟨p2, _⟩ := Cursor.readBytes_value _ _ _ _ e2
+  simp only at l0 l1 d0 d1 p2
+  have hext := s2
+  rw [p2, ByteArray.size_extract] at hext
+  simp only [UInt8.lt_iff_toNat_lt, Nat.not_lt] at hcur
+  injection h with h
+  subst h
+  have hcontent : (v2.fst.extract 0 v1.fst.toNat) = data.extract (offset + 2) (offset + 2 + v1.fst.toNat) := by
+    rw [p2, ByteArray.extract_extract]
+    congr 1 <;> omega
+  refine ⟨v0.fst.toNat, v1.fst.toNat, hcur, by omega, ?_⟩
+  unfold encodeString
+  rw [if_neg hmax]
+  simp only [String.toList_ofList, encodeLatin1_bytes, bind, Except.bind, pure, Except.pure,
+    toList_toByteArray, hcontent]
+  have hsize : (data.extract (offset + 2) (offset + 2 + v1.fst.toNat)).size = v1.fst.toNat := by
+    rw [ByteArray.size_extract]; omega
+  rw [hsize, if_neg (by omega), UInt8.ofNat_toNat, UInt8.ofNat_toNat, ← d0, ← d1,
+    show bytes #[data[offset], data[offset + 1]] = data.extract offset (offset + 2) from
+      (ByteArray.extract_two data offset (by omega)).symm,
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega)]
+  rfl
+
 private theorem decodeUtf16Units_encodeUtf16 (characters : List Char) (offset : Nat) :
     decodeUtf16Units (encodeUtf16 characters) offset = .ok characters := by
   induction characters generalizing offset with
@@ -558,6 +630,79 @@ private theorem decodeUtf16Units_encodeUtf16 (characters : List Char) (offset : 
       simp [hhigh, hlow, hpoint, ih, Char.ofNat_toNat,
         bind, Except.bind, pure, Except.pure]
 
+private theorem toNat_ofNat_valid (n : Nat) (h : n.isValidChar) : (Char.ofNat n).toNat = n := by
+  simp only [Char.ofNat, h, dite_true, Char.ofNatAux, Char.toNat]
+  rfl
+
+/-- UTF-16 encoding inverts `decodeUtf16Units`: the decoder accepts only well-formed
+    units, and every accepted unit sequence is the encoding of what it decodes to. -/
+private theorem encodeUtf16_decodeUtf16Units (units : List UInt16) (offset : Nat)
+    (characters : List Char) (h : decodeUtf16Units units offset = .ok characters) :
+    encodeUtf16 characters = units := by
+  induction units, offset using decodeUtf16Units.induct generalizing characters
+  case case1 =>
+    simp only [decodeUtf16Units, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rfl
+  case case2 | case4 =>
+    rw [decodeUtf16Units.eq_def] at h
+    simp_all +zetaDelta [throw, throwThe, MonadExceptOf.throw, bind, Except.bind]
+  case case5 =>
+    rename_i unit rest offset value hhigh hlow
+    rw [decodeUtf16Units.eq_def] at h
+    simp only [value] at hhigh hlow
+    simp only [hhigh, hlow, Bool.false_eq_true, if_false, if_true, throw, throwThe,
+      MonadExceptOf.throw, reduceCtorEq] at h
+  case case3 =>
+    rename_i unit offset value hhigh low tail lowValue hlow ih
+    rw [decodeUtf16Units.eq_def] at h
+    simp only [value, lowValue] at hhigh hlow
+    simp only [hhigh, if_true, hlow, if_false, bind, Except.bind, pure, Except.pure,
+      Bool.false_eq_true] at h
+    split at h
+    · contradiction
+    · rename_i rest hrest
+      simp only [Except.ok.injEq] at h
+      subst h
+      simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, not_or, Nat.not_lt]
+        at hhigh hlow
+      have hu := unit.toNat_lt
+      have hl := low.toNat_lt
+      have hvalid : (0x10000 + (unit.toNat - 0xd800) * 0x400 + (low.toNat - 0xdc00)).isValidChar :=
+        Or.inr ⟨by omega, by omega⟩
+      have hc := toNat_ofNat_valid _ hvalid
+      simp only [encodeUtf16, encodeUtf16Char, hc, ih rest hrest]
+      rw [if_neg (by omega)]
+      simp only [List.cons_append, List.nil_append, List.cons.injEq, and_true]
+      constructor
+      · apply UInt16.toNat_inj.mp
+        rw [UInt16.toNat_ofNat']
+        omega
+      · apply UInt16.toNat_inj.mp
+        rw [UInt16.toNat_ofNat']
+        omega
+  case case6 =>
+    rename_i unit rest offset value hhigh hlow ih
+    rw [decodeUtf16Units.eq_def] at h
+    simp only [value] at hhigh hlow
+    simp only [hhigh, hlow, if_false, bind, Except.bind, pure, Except.pure,
+      Bool.false_eq_true] at h
+    split at h
+    · contradiction
+    · rename_i decoded hrest
+      simp only [Except.ok.injEq] at h
+      subst h
+      simp only [Bool.and_eq_true, decide_eq_true_eq, not_and, Nat.not_le] at hhigh hlow
+      have hu := unit.toNat_lt
+      have hvalid : unit.toNat.isValidChar := by
+        unfold Nat.isValidChar
+        by_cases hs : unit.toNat < 0xd800
+        · exact Or.inl hs
+        · exact Or.inr ⟨by omega, by omega⟩
+      have hc := toNat_ofNat_valid _ hvalid
+      simp only [encodeUtf16, encodeUtf16Char, hc, ih decoded hrest, if_pos hu,
+        UInt16.ofNat_toNat, List.singleton_append]
+
 private theorem readUtf16Units_encodeUtf16Units (units : List UInt16) (pre suffix : ByteArray) :
     readUtf16Units units.length {
       data := pre ++ (encodeUtf16Units units ++ suffix), offset := pre.size } = .ok units := by
@@ -571,6 +716,83 @@ private theorem readUtf16Units_encodeUtf16Units (units : List UInt16) (pre suffi
     simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hrest
     rw [hrest]
     rfl
+
+/-- The units `readUtf16Units` returns are exactly the big-endian words it read. -/
+private theorem readUtf16Units_extract (count : Nat) (cursor : Cursor) (units : List UInt16)
+    (h : readUtf16Units count cursor = .ok units) :
+    units.length = count ∧
+      encodeUtf16Units units = cursor.data.extract cursor.offset (cursor.offset + 2 * count) := by
+  induction count generalizing cursor units with
+  | zero =>
+    simp only [readUtf16Units, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨rfl, by simp [encodeUtf16Units]⟩
+  | succ count ih =>
+    simp only [readUtf16Units, bind, Except.bind, pure, Except.pure] at h
+    split at h
+    · contradiction
+    · rename_i x0 v0 e0
+      split at h
+      · contradiction
+      · rename_i x1 rest e1
+        simp only [Except.ok.injEq] at h
+        subst h
+        rw [fromDecode_ok] at e0
+        obtain ⟨l0, d0, n0⟩ := Cursor.readUInt16BE_value _ _ _ e0
+        rw [n0] at e1
+        obtain ⟨hlen, henc⟩ := ih _ _ e1
+        simp only at henc
+        refine ⟨by simp [hlen], ?_⟩
+        simp only [encodeUtf16Units, henc, d0]
+        rw [← ByteArray.extract_two_uint16BE _ _ (by omega),
+          ByteArray.extract_append_extract_of_le _ (by omega) (by omega)]
+        congr 1
+        omega
+
+/-- Canonical decoding of a WSTRING: re-encoding a decoded value with the capacity
+    from its header reproduces the header and the active UTF-16 units exactly. The
+    unused capacity after them is the only input the decoder ignores; the encoder
+    writes zeros there. -/
+theorem decodeWString_canonical (data : ByteArray) (offset : Nat) (value : String)
+    (h : decodeWString data offset = .ok value) :
+    ∃ maximum current : Nat, current ≤ maximum ∧ offset + 4 + 2 * maximum ≤ data.size ∧
+      encodeWString maximum value = .ok (data.extract offset (offset + 4 + 2 * current) ++
+        ByteArray.mk (Array.replicate ((maximum - current) * 2) 0)) := by
+  unfold decodeWString at h
+  simp only [cursorAt, bind, Except.bind, pure, Except.pure,
+    throw, throwThe, MonadExceptOf.throw] at h
+  repeat' (first | contradiction | split at h)
+  all_goals first
+    | (simp [fromDecode, Except.mapError] at ‹fromDecode _ = Except.ok _›; done)
+    | skip
+  rename_i x0 v0 e0 x1 v1 e1 hmax hcur x2 v2 e2 x3 v3 e3 x4 v4 e4
+  rw [fromDecode_ok] at e0 e1 e3
+  obtain ⟨l0, d0, n0⟩ := Cursor.readUInt16BE_value _ _ _ e0
+  rw [n0] at e1
+  obtain ⟨l1, d1, n1⟩ := Cursor.readUInt16BE_value _ _ _ e1
+  rw [n1] at e2 e3
+  obtain ⟨hlen, henc⟩ := readUtf16Units_extract _ _ _ e2
+  have s3 := Cursor.readBytes_size _ _ _ _ e3
+  obtain ⟨p3, _⟩ := Cursor.readBytes_value _ _ _ _ e3
+  simp only at l0 l1 d0 d1 henc p3
+  have hext := s3
+  rw [p3, ByteArray.size_extract] at hext
+  simp only [UInt16.lt_iff_toNat_lt, Nat.not_lt] at hcur
+  have hunits := encodeUtf16_decodeUtf16Units _ _ _ e4
+  injection h with h
+  subst h
+  refine ⟨v0.fst.toNat, v1.fst.toNat, hcur, by omega, ?_⟩
+  unfold encodeWString
+  rw [if_neg hmax]
+  simp only [String.toList_ofList, hunits, hlen]
+  rw [if_neg (by omega)]
+  simp only [pure, Except.pure, Except.ok.injEq]
+  rw [UInt16.ofNat_toNat, UInt16.ofNat_toNat, henc, d0, d1,
+    ← ByteArray.extract_two_uint16BE _ offset (by omega),
+    ← ByteArray.extract_two_uint16BE _ (offset + 2) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega)]
+  simp only [zeros]
 
 /-- WSTRING capacity counts UTF-16 code units: supplementary characters use two. -/
 def utf16Length (value : String) : Nat := (encodeUtf16 value.toList).length
