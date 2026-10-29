@@ -231,6 +231,22 @@ def decodeUserDataResponse (expectedReference : UInt16) (expectedGroup expectedS
     payload := payload
   }
 
+/-- The canonical bytes of a USER_DATA response: the S7 header with a zero reserved
+    word, the 12-byte response parameters and the data item. The type/function-group
+    byte is the response type with the group in its low nibble, and the continuation
+    flag is 1 exactly when more data follows. The two-byte length fields are exact for
+    payloads of up to 65531 bytes, which covers everything `decodeUserDataResponse`
+    accepts. -/
+def encodeUserDataResponse (response : UserDataResponse) : ByteArray :=
+  bytes #[protocolId, userDataType, 0, 0] ++ uint16BE response.reference ++
+    uint16BE 12 ++ uint16BE (UInt16.ofNat (4 + response.payload.size)) ++
+    bytes #[0, 1, 0x12, 8, userDataResponseMethod,
+      UInt8.lor userDataResponseType response.group, response.subfunction,
+      response.sequence, response.dataUnitReference,
+      if response.hasMoreData then 1 else 0] ++
+    uint16BE response.error ++ bytes #[response.returnCode, response.transportSize] ++
+    uint16BE (UInt16.ofNat response.payload.size) ++ response.payload
+
 def decodePduReference (pdu : ByteArray) : Except DecodeError UInt16 := do
   let cursor : Cursor := { data := pdu }
   let (actualProtocolId, cursor) ← cursor.readUInt8
@@ -344,6 +360,38 @@ theorem decodePduReference_encodeAckData (reference : UInt16)
   simpa [ByteArray.append_assoc] using decodePduReference_header ackDataType reference
     (uint16BE (UInt16.ofNat parameters.size) ++
       uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data)
+
+/-- What the correlation decoder reads: an accepted PDU starts with the protocol ID and
+    carries the returned reference at offsets 4–5. Bytes 1–3 (the PDU kind and the
+    reserved word) and everything after offset 6 are passed through unread. -/
+theorem decodePduReference_canonical (pdu : ByteArray) (reference : UInt16)
+    (h : decodePduReference pdu = .ok reference) :
+    pdu = bytes #[protocolId] ++ pdu.extract 1 4 ++ uint16BE reference ++
+      pdu.extract 6 pdu.size := by
+  simp only [decodePduReference, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xa va ea hid xb vb eb xc vc ec xd vd ed
+  obtain ⟨la, da, na⟩ := Cursor.readUInt8_value _ _ _ ea
+  rw [na] at eb
+  obtain ⟨lb, db, nb⟩ := Cursor.readUInt8_value _ _ _ eb
+  rw [nb] at ec
+  obtain ⟨lc, dc, nc⟩ := Cursor.readUInt16BE_value _ _ _ ec
+  rw [nc] at ed
+  obtain ⟨ld, dd, nd⟩ := Cursor.readUInt16BE_value _ _ _ ed
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hid
+  simp only at la lb lc ld da dd
+  rw [dd, ← ByteArray.extract_two_uint16BE _ (0 + 1 + 1 + 2) (by omega), ← hid, ← da,
+    show bytes #[pdu[0]] = pdu.extract 0 1 from (ByteArray.extract_one pdu 0 (by omega)).symm]
+  rw [ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_zero_size]
 
 inductive CpuState where
   | unknown
@@ -633,6 +681,99 @@ theorem decodePlcDateTime_encode (value : PlcDateTime)
     bcdDecode_encode 4 _ dayBound, bcdDecode_encode 5 _ hourBound,
     bcdDecode_encode 6 _ minuteBound, bcdDecode_encode 7 _ secondBound,
     bcdDecode_encode 8 _ milliBound, yearIdentity, milliIdentity, valid]
+
+/-- A byte `bcdDecode` accepts is the BCD encoding of the decoded value. -/
+private theorem bcdDecode_canonical {offset : Nat} {value : UInt8} {n : Nat}
+    (h : bcdDecode offset value = .ok n) : bcdEncode n = value ∧ n < 100 := by
+  simp only [bcdDecode] at h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw, Functor.map, Except.map] at h
+  · rename_i hdigits
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_lt] at hdigits
+    have hv := value.toNat_lt
+    refine ⟨?_, by omega⟩
+    apply UInt8.toNat_inj.mp
+    rw [bcdEncode_toNat _ (by omega)]
+    omega
+
+/-- Canonical decoding of the clock payload: every payload the decoder accepts is the
+    encoding of the decoded value, except bytes 0–1. The decoder ignores those two
+    bytes and the encoder writes `00 19` there. -/
+theorem decodePlcDateTime_canonical (payload : ByteArray) (value : PlcDateTime)
+    (h : decodePlcDateTime payload = .ok value) :
+    encodePlcDateTime value = .ok (bytes #[0, 0x19] ++ payload.extract 2 10) := by
+  simp only [decodePlcDateTime, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  all_goals
+    rename_i hs x0 v0 e0 x1 v1 e1 x2 v2 e2 x3 v3 e3 x4 v4 e4 x5 v5 e5 x6 v6 e6 x7 v7 e7
+      x8 v8 e8 x9 v9 e9 xf vf ef hms xy vy ey xm vm em xd vd ed xh vh eh xn vn en xs vs es
+      xl vl el xv vv ev hyear
+    obtain ⟨l0, d0, n0⟩ := Cursor.readUInt8_value _ _ _ e0
+    rw [n0] at e1
+    obtain ⟨l1, d1, n1⟩ := Cursor.readUInt8_value _ _ _ e1
+    rw [n1] at e2
+    obtain ⟨l2, d2, n2⟩ := Cursor.readUInt8_value _ _ _ e2
+    rw [n2] at e3
+    obtain ⟨l3, d3, n3⟩ := Cursor.readUInt8_value _ _ _ e3
+    rw [n3] at e4
+    obtain ⟨l4, d4, n4⟩ := Cursor.readUInt8_value _ _ _ e4
+    rw [n4] at e5
+    obtain ⟨l5, d5, n5⟩ := Cursor.readUInt8_value _ _ _ e5
+    rw [n5] at e6
+    obtain ⟨l6, d6, n6⟩ := Cursor.readUInt8_value _ _ _ e6
+    rw [n6] at e7
+    obtain ⟨l7, d7, n7⟩ := Cursor.readUInt8_value _ _ _ e7
+    rw [n7] at e8
+    obtain ⟨l8, d8, n8⟩ := Cursor.readUInt8_value _ _ _ e8
+    rw [n8] at e9
+    obtain ⟨l9, d9, n9⟩ := Cursor.readUInt8_value _ _ _ e9
+    rw [n9] at ef
+    have hfin := Cursor.finish_ok _ ef
+    simp only at l0 l1 l2 l3 l4 l5 l6 l7 l8 l9 d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 hfin
+    obtain ⟨cy, by'⟩ := bcdDecode_canonical ey
+    obtain ⟨cm, bm⟩ := bcdDecode_canonical em
+    obtain ⟨cd, bd⟩ := bcdDecode_canonical ed
+    obtain ⟨ch, bh⟩ := bcdDecode_canonical eh
+    obtain ⟨cn, bn⟩ := bcdDecode_canonical en
+    obtain ⟨cs, bs⟩ := bcdDecode_canonical es
+    obtain ⟨cl, bl⟩ := bcdDecode_canonical el
+    injection h with h
+    subst h
+    have hvalid := ev
+    first
+      | rw [if_pos hyear] at hvalid
+      | rw [if_neg hyear] at hvalid
+    cases vv
+    simp only [encodePlcDateTime, hvalid, bind, Except.bind, pure, Except.pure, Except.ok.injEq]
+    have hlow := v9.fst.toNat_lt
+    first
+      | (have hyearLow' : (2000 + vy) % 100 = vy := by omega
+         rw [hyearLow'])
+      | (have hyearLow' : (1900 + vy) % 100 = vy := by omega
+         rw [hyearLow'])
+    have hms10 : (vl * 10 + v9.fst.toNat / 16) / 10 = vl := by omega
+    have hms1 : (vl * 10 + v9.fst.toNat / 16) % 10 = v9.fst.toNat / 16 := by omega
+    have htail : UInt8.ofNat (v9.fst.toNat / 16 * 16 + v9.fst.toNat % 16) = v9.fst := by
+      apply UInt8.toNat_inj.mp
+      rw [UInt8.toNat_ofNat']
+      omega
+    rw [hms10, hms1, htail, cy, cm, cd, ch, cn, cs, cl, ← d2, ← d3, ← d4, ← d5, ← d6, ← d7, ← d8,
+      ← d9]
+    apply ByteArray.ext
+    simp only [bytes, ByteArray.data_append, ByteArray.data_extract]
+    apply Array.ext
+    · simp; omega
+    · intro i hi _
+      simp only [List.size_toArray, List.length_cons, List.length_nil] at hi
+      rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 ∨
+          i = 8 ∨ i = 9) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        simp [Array.getElem_extract, ByteArray.getElem_eq_getElem_data]
 
 def encodePassword (password : String) : Except DecodeError ByteArray := do
   let chars := password.toList

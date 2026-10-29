@@ -309,6 +309,46 @@ theorem decodeDisconnectRequest_encodeDisconnectRequest
   cases request
   rfl
 
+/-- Canonical decoding: every disconnect request the decoder accepts is exactly the
+    encoding of the decoded value, so the decoder ignores no input byte. -/
+theorem decodeDisconnectRequest_canonical (data : ByteArray) (request : DisconnectRequest)
+    (h : decodeDisconnectRequest data = .ok request) :
+    encodeDisconnectRequest request = data := by
+  simp only [decodeDisconnectRequest, bind, Except.bind, pure, Except.pure] at h
+  repeat' (split at h)
+  all_goals first
+    | (exfalso; simp [throw, throwThe, MonadExceptOf.throw] at ‹throw _ = _›; done)
+    | (simp at h; done)
+    | skip
+  rename_i xa va ea hlen xb vb eb hcode xc vc ec xd vd ed xe ve ee xf vf ef
+  obtain ⟨la, da, na⟩ := Cursor.readUInt8_value _ _ _ ea
+  rw [na] at eb
+  obtain ⟨lb, db, nb⟩ := Cursor.readUInt8_value _ _ _ eb
+  rw [nb] at ec
+  obtain ⟨lc, dc, nc⟩ := Cursor.readUInt16BE_value _ _ _ ec
+  rw [nc] at ed
+  obtain ⟨ld, dd, nd⟩ := Cursor.readUInt16BE_value _ _ _ ed
+  rw [nd] at ee
+  obtain ⟨le, de, ne⟩ := Cursor.readUInt8_value _ _ _ ee
+  rw [ne] at ef
+  have hfin := Cursor.finish_ok _ ef
+  injection h with h
+  subst h
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hlen hcode
+  simp only at la lb lc ld le da db dc dd de hfin
+  simp only [encodeDisconnectRequest]
+  rw [hlen.symm.trans da.symm, hcode.symm.trans db.symm, dc, dd, ← de,
+    ← ByteArray.extract_two_uint16BE _ (0 + 1 + 1) (by omega),
+    ← ByteArray.extract_two_uint16BE _ (0 + 1 + 1 + 2) (by omega),
+    show bytes #[data[0], data[0 + 1]] = data.extract 0 2 from
+      (ByteArray.extract_two data 0 (by omega)).symm,
+    show bytes #[data[0 + 1 + 1 + 2 + 2]] = data.extract 6 7 from
+      (ByteArray.extract_one data 6 (by omega)).symm]
+  rw [ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    ByteArray.extract_append_extract_of_le _ (by omega) (by omega),
+    show 7 = data.size by omega, ByteArray.extract_zero_size]
+
 /-- Decode a COTP connection confirmation while retaining negotiation parameters. -/
 def decodeConnectionConfirm (data : ByteArray) : Except DecodeError ConnectionConfirm := do
   let cursor : Cursor := { data }

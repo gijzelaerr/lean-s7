@@ -1,7 +1,37 @@
 # Plan: canonical decoding proofs
 
-Status: phases 0–6 done on 2026-10-28. The open decisions below await owner
-review.
+Status: phases 0–6 done on 2026-10-28, phase 7 on 2026-10-29. The open decisions
+below await owner review.
+
+## Phase 7 results
+
+Phase 7 covers the management decoders and the COTP disconnect request. It adds
+four theorems and changes no decoder:
+
+- **`COTP.decodeDisconnectRequest_canonical`**: strict. Every accepted disconnect
+  request is exactly `encodeDisconnectRequest` of the decoded value.
+- **`S7.decodeUserDataResponse_canonical`**: lenient. Re-encoding an accepted
+  USER_DATA response reproduces the input with only the reserved word
+  (offsets 2–3) cleared. The response has no encoder in the client, so this adds
+  the spec function `encodeUserDataResponse`, as phase 3 did with
+  `S7.encodeResponse` (open decision 3). Every other byte is determined by the
+  decoded value: the decoder's checks fix the parameter head, the parameter
+  length 8, the method, the zero error code and the type nibble. The
+  type/function-group byte is rebuilt by `userDataTypeGroup`, a check over all 256
+  byte values (`decide +kernel`, standard axioms only). The continuation flag is 0
+  or 1, so it equals `if hasMoreData then 1 else 0`. Both data dialects (octet
+  payload and null acknowledgement) are covered.
+- **`S7.decodePlcDateTime_canonical`**: lenient. Re-encoding an accepted clock
+  payload reproduces it with bytes 0–1 replaced by the `00 19` that
+  `encodePlcDateTime` writes. The decoder ignores those two bytes.
+- **`S7.decodePduReference_canonical`**: a characterisation, not a re-encoding.
+  `decodePduReference` is a prefix reader for correlation: it never calls `finish`,
+  checks only the protocol ID and returns the reference at offsets 4–5. The
+  theorem states that an accepted PDU is the protocol ID, bytes 1–3 unread, the
+  returned reference and everything after offset 6 unread.
+
+Still open are `Advanced.decodeForceTable` and the string decoders; see open
+decision 4.
 
 ## Phase 6 results
 
@@ -172,16 +202,16 @@ covers the decoders reachable from the inventory in `docs/COMPLETENESS.md`.
 | Decoder | Class | Ignored or ambiguous input |
 | --- | --- | --- |
 | `COTP.decodeData` | strict, **proved** | none: header length, code and TPDU-number bits are checked, and EOT is encoded |
-| `COTP.decodeDisconnectRequest` | strict, not yet proved | none: every field is read into the result or checked |
+| `COTP.decodeDisconnectRequest` | strict, **proved** (phase 7) | none: every field is read into the result or checked |
 | `TPKT.decode` | lenient, **proved** | `TPKT.lean`, offset 1: the reserved byte. `encode` writes 0 and `testTPKTIgnoresReservedInput` asserts it is ignored |
 | `S7.decodeJob` | lenient, **proved** | `S7.lean:63`: the reserved word at offsets 2–3 |
-| `S7.decodeResponse` | lenient, **proved** | `S7.lean:328`: the reserved word. Re-encoded through the new `S7.encodeResponse` |
+| `S7.decodeResponse` | lenient, **proved** | `S7.lean:366`: the reserved word. Re-encoded through the new `S7.encodeResponse` |
 | `Protocol.decodeJob` / `decodeResponse` | composed, **proved** | union of the TPKT, COTP data and S7 header leniencies |
 | `COTP.decodeConnectionConfirm`, `decodeParameters` | strict, **proved** (phase 6) | none at decode time. The last-duplicate rule belongs to the lookup `findLastParameter`, not the decoders |
 | `S7.decodeAreaReadMany` | lenient, **proved** | the fill byte after an odd-length item, and the transport size, length word and payload of failed items |
-| `Management.decodeUserDataResponse` | lenient | `Management.lean:162`: the reserved word |
-| `Management.decodePduReference` | lenient | `Management.lean:239–240`: a byte and a word |
-| `Management.decodePlcDateTime` | lenient | `Management.lean:563–564`: two bytes |
+| `Management.decodeUserDataResponse` | lenient, **proved** (phase 7) | `Management.lean:162`: the reserved word. Re-encoded through the new `encodeUserDataResponse` |
+| `Management.decodePduReference` | prefix reader, **characterised** (phase 7) | `Management.lean:255–256`: the PDU kind and the reserved word. It never calls `finish`, so everything after offset 6 is unread too |
+| `Management.decodePlcDateTime` | lenient, **proved** (phase 7) | `Management.lean:611–612`: bytes 0–1 |
 | `Advanced.decodeForceTable` | lenient | `Advanced.lean:214`: a word per entry |
 | `Value.decodeWString` | lenient | `Value.lean:261`: the unused capacity bytes after the string |
 | `Value.decodeString` | to check | the same capacity question as `decodeWString` |
@@ -264,8 +294,16 @@ out to be strict; see phase 6 results.
    adding `S7.encodeResponse` and pinning it to `encodeAckData`. That's a small
    pure function in the library, not test-only code. Phase 5 took the second
    route instead and added no encoders: it characterises the accepted sections
-   directly. The remaining decoders could follow either route.
-4. **Phase 6.** Done (strict canonicity). Still open: the remaining management, block and value decoders, and `COTP.decodeDisconnectRequest`, which is strict but not yet proved.
+   directly. Phase 7 took the first route for `decodeUserDataResponse`, adding
+   `encodeUserDataResponse`. The remaining decoders could follow either route.
+4. **Remaining decoders.** Phases 6 and 7 are done. Still open:
+   - `Advanced.decodeForceTable` loops over a mutable cursor (`for … in [0:n]`),
+     so its proof needs a loop invariant. It is also lossy: any non-zero value
+     byte decodes to `true`.
+   - `Value.decodeString` and `Value.decodeWString` decode to a `String`. Before
+     stating canonicity, check whether two accepted inputs can decode to the same
+     string, for example through `Char.ofNat` or UTF-16 surrogates. If they can,
+     the theorem has to be stated modulo that.
 
 ## Alternatives considered
 
