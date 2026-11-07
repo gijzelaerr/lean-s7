@@ -56,7 +56,7 @@ jobs:
       - run: ruff format --check integration
       - run: python integration/python_snap7_consumer.py
       - run: python -m venv .venv-snap7-latest
-      - run: ${{ matrix.venv-python }} -m pip install "python-snap7==3.2.1"
+      - run: ${{ matrix.venv-python }} -m pip install "python-snap7==3.3.1"
       - run: ${{ matrix.venv-python }} integration/python_snap7_consumer.py
       - name: Expose lake to Windows Python as a native path
         if: runner.os == 'Windows'
