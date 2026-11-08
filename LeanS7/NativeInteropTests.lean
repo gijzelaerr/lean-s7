@@ -110,10 +110,27 @@ def runIntegration (host portString pduString : String) : IO Unit := do
     for blockType in [S7.BlockType.organizationBlock, .function] do
       require ((← rejected fun c => discard <| c.listBlocksOfType blockType) == some .plcRejected)
         "native empty block-type list is a PLC rejection"
-    let now ← client.getPlcDateTime
-    require (now.year ≥ 2024 && now.year ≤ 2089 && now.month ≥ 1 && now.month ≤ 12 &&
-      now.day ≥ 1 && now.day ≤ 31 && now.hour < 24 && now.minute < 60 && now.second < 60)
-      "native clock fields"
+    -- Native Snap7 encodes the weekday as C's tm_wday (Sunday = 0), where S7 numbers
+    -- Sunday 1 (reports/native-interop-2026-09-24.md). On a Sunday the reply carries
+    -- weekday 0, which the client refuses, so only that refusal is accepted then. The
+    -- read uses its own connection, so a refusal cannot affect the checks after it.
+    let clockRead ← do
+      let c ← fresh
+      try
+        pure (Except.ok (← c.getPlcDateTime))
+      catch error =>
+        pure (Except.error error)
+      finally
+        try c.disconnect catch _ => pure ()
+    match clockRead with
+    | .ok now =>
+      require (now.year ≥ 2024 && now.year ≤ 2089 && now.month ≥ 1 && now.month ≤ 12 &&
+        now.day ≥ 1 && now.day ≤ 31 && now.hour < 24 && now.minute < 60 && now.second < 60)
+        "native clock fields"
+    | .error error =>
+      require (classifyClientError error == .protocol &&
+          ((toString error).splitOn "weekday must be between 1 and 7").length > 1)
+        s!"native clock read failed for a reason other than its Sunday weekday 0: {error}"
     -- The server acknowledges a set-clock with a null acknowledgement and keeps its own time.
     client.setPlcDateTime { year := 2026, month := 10, day := 13, hour := 9, minute := 8, second := 7, weekday := 3 }
     client.setSessionPassword "ABC"
