@@ -172,8 +172,8 @@
   "detail": ""
  },
  "management.json/continuation_cases/fragments-3-0-reference": {
-  "status": "agree",
-  "detail": ""
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
  },
  "management.json/continuation_cases/fragments-3-0-transport": {
   "status": "agree",
@@ -188,8 +188,8 @@
   "detail": ""
  },
  "management.json/continuation_cases/fragments-3-81-reference": {
-  "status": "agree",
-  "detail": ""
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
  },
  "management.json/continuation_cases/fragments-3-81-transport": {
   "status": "agree",
@@ -204,8 +204,8 @@
   "detail": ""
  },
  "management.json/continuation_cases/fragments-4-0-reference": {
-  "status": "agree",
-  "detail": ""
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
  },
  "management.json/continuation_cases/fragments-4-0-transport": {
   "status": "agree",
@@ -220,8 +220,8 @@
   "detail": ""
  },
  "management.json/continuation_cases/fragments-4-81-reference": {
-  "status": "agree",
-  "detail": ""
+  "status": "disagree",
+  "detail": "corpus reject, python-snap7 accepted"
  },
  "management.json/continuation_cases/fragments-4-81-transport": {
   "status": "agree",
@@ -1837,11 +1837,11 @@
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-12": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-13": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-invalid-decoded-2": {
   "status": "agree",
@@ -1932,28 +1932,28 @@
   "detail": ""
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-10": {
-  "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "status": "disagree",
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-11": {
-  "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "status": "disagree",
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-12": {
-  "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "status": "disagree",
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-13": {
-  "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "status": "disagree",
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-14": {
-  "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "status": "disagree",
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-millisecond-low-bcd-15": {
-  "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "status": "disagree",
+  "detail": "ten-byte clock payload with invalid BCD digits accepted"
  },
  "values.json/clock_codec_cases/clock-roundtrip-0": {
   "status": "agree",
@@ -2029,39 +2029,39 @@
  },
  "values.json/clock_codec_cases/clock-weekday-0": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-10": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-11": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-12": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-13": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-14": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-15": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-8": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/clock_codec_cases/clock-weekday-9": {
   "status": "ambiguity",
-  "detail": "python-snap7 decodes no weekday or milliseconds, the only invalid fields"
+  "detail": "python-snap7 decodes no weekday, the only invalid field"
  },
  "values.json/integer_cases/int16-maximum": {
   "status": "agree",
