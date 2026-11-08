@@ -447,6 +447,23 @@ def s7_weekday(fields: dict[str, int]) -> int:
     return datetime_of(fields).isoweekday() % 7 + 1
 
 
+def decodes_clock_milliseconds() -> bool:
+    """Whether the installed python-snap7 decodes the clock reply's milliseconds.
+
+    3.0.0 returns the current time instead of decoding the reply; 3.3.1 and
+    later decode it, milliseconds included. Probed with 2026-09-23 12:34:56.123.
+    """
+    wire = bytes([0, 0x20, 0x26, 0x09, 0x23, 0x12, 0x34, 0x56, 0x12, 0x34])
+    protocol = S7Protocol()
+    try:
+        decoded = protocol.parse_get_clock_response(
+            protocol.parse_response(userdata_response(7, 1, wire))
+        )
+    except Exception:
+        return False
+    return (decoded.second, decoded.microsecond) == (56, 123000)
+
+
 def clock_case(case: dict[str, Any]) -> Outcome:
     expected = case["expected"]
     wire = expand(case["data"])
@@ -486,13 +503,22 @@ def clock_case(case: dict[str, Any]) -> Outcome:
             return differ("; ".join(issues))
         return agree()
     if expected["status"] != "accept":
-        visible_digits_valid = all(
-            (byte >> 4) <= 9 and (byte & 0x0F) <= 9 for byte in wire[2:8]
+        # Year to second are bytes 2-7. A python-snap7 that decodes milliseconds
+        # also reads the first two digits (byte 8) and the last one (high nibble
+        # of byte 9); the low nibble is the weekday, which it never decodes.
+        with_ms = decodes_clock_milliseconds()
+        decoded_bytes = wire[2:9] if with_ms else wire[2:8]
+        digits_valid = all(
+            (byte >> 4) <= 9 and (byte & 0x0F) <= 9 for byte in decoded_bytes
         )
-        if visible_digits_valid:
+        if with_ms and len(wire) >= 10:
+            digits_valid = digits_valid and (wire[9] >> 4) <= 9
+        if digits_valid:
             return Outcome(
                 AMBIGUITY,
-                "python-snap7 decodes no weekday or milliseconds, the only invalid fields",
+                "python-snap7 decodes no weekday, the only invalid field"
+                if with_ms
+                else "python-snap7 decodes no weekday or milliseconds, the only invalid fields",
             )
         return differ("ten-byte clock payload with invalid BCD digits accepted")
     want = expected["value"]
@@ -677,17 +703,18 @@ def assemble(
     sub: int,
     references: list[int],
 ) -> tuple[bool, list[int], int | None]:
-    """Parse, validate and concatenate a USER_DATA fragment sequence.
+    """Parse, check and concatenate a USER_DATA fragment sequence.
 
     python-snap7 has no assembler, so this follows the loop its clients would
-    run: validate each reply and stop at the one without the continuation flag.
+    run: check each reply and stop at the one without the continuation flag.
+    It does not correlate PDU references: that is python-snap7's job, which
+    ``client_loop_rejection`` tests on the library's own loops.
     Returns (completed, payload, index of the rejected or last fragment)."""
+    del references  # correlation is left to python-snap7 (lean-s7#67)
     payload: list[int] = []
-    for index, (pdu, reference) in enumerate(zip(responses, references, strict=True)):
+    for index, pdu in enumerate(responses):
         try:
             parsed = protocol.parse_response(pdu)
-            protocol.sequence = reference
-            protocol.validate_pdu_reference(parsed["sequence"])
             protocol.check_userdata_response(parsed, group, sub)
         except Exception:
             return False, payload, index
@@ -695,6 +722,66 @@ def assemble(
         if not (parsed.get("parameters") or {}).get("last_data_unit"):
             return True, payload, index
     return False, payload, None
+
+
+class _ScriptedConnection:
+    """Answers a python-snap7 client's requests with the corpus replies, in order."""
+
+    connected = True
+
+    def __init__(self, replies: list[bytes]) -> None:
+        self.replies = list(replies)
+        self.sent = 0
+
+    def check_connection(self) -> bool:
+        return True
+
+    def disconnect(self) -> None:
+        pass
+
+    def send_data(self, data: bytes) -> None:
+        self.sent += 1
+
+    def receive_data(self) -> bytes:
+        if not self.replies:
+            raise ConnectionError("the corpus has no further reply")
+        return self.replies.pop(0)
+
+
+def client_loop_rejection(
+    group: int, sub: int, steps: list[dict[str, Any]]
+) -> int | None:
+    """The step at which python-snap7's own follow-up loop refuses a reply's PDU reference.
+
+    Runs ``Client.read_szl`` (group 4) or ``Client.list_blocks_of_type`` (group 3)
+    against the corpus replies, numbered from the first step's reference. Returns
+    the index of the refused reply, or ``None`` when the loop did not refuse one
+    over its reference (it may still stop for another reason, which the corpus
+    comparison judges separately). Other services have no python-snap7 loop.
+    """
+    from snap7.client import Client
+    from snap7.error import S7PacketLostError, S7ProtocolError, S7StalePacketError
+    from snap7.type import Block
+
+    if (group, sub) not in ((4, 1), (3, 2)):
+        return None
+    client = Client()
+    connection = _ScriptedConnection([bytes(step["response_pdu"]) for step in steps])
+    client.connection = connection  # type: ignore[assignment]
+    client.connected = True
+    client.protocol.sequence = (steps[0]["reference"] - 1) & 0xFFFF
+    try:
+        if group == 4:
+            client.read_szl(0, 0)
+        else:
+            client.list_blocks_of_type(Block.OB, 0xFFFF)
+    except (S7PacketLostError, S7StalePacketError):
+        return connection.sent - 1
+    except S7ProtocolError as error:
+        return connection.sent - 1 if "stale" in str(error).lower() else None
+    except Exception:
+        return None
+    return None
 
 
 def userdata_conversation(case: dict[str, Any]) -> Outcome:
@@ -734,6 +821,9 @@ def management_continuation(case: dict[str, Any]) -> Outcome:
         sub,
         [step["reference"] for step in steps],
     )
+    refused = client_loop_rejection(group, sub, steps)
+    if refused is not None and (done or stop is None or refused < stop):
+        done, stop = False, refused
     if expected["status"] != "accept":
         result = verdict(expected, done, False, "")
         if result.status == AGREE and stop != expected["failed_step"]:

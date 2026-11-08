@@ -58,7 +58,7 @@ python -m pip install "python-snap7==3.0.0"
 python integration/run.py
 python integration/cli_smoke.py
 python integration/python_snap7_consumer.py
-# also, in a separate virtualenv with python-snap7==3.3.1 (CI does this)
+# also, in a separate virtualenv with python-snap7==3.4.0 (CI does this)
 python integration/python_snap7_consumer.py
 python integration/corpus_package.py --check
 python integration/corpus_package.py --verify-package
@@ -80,7 +80,7 @@ For wire-format changes, the optional `python integration/real_captures.py` repl
 (needs network once and `lake build lean-s7-decode`); all lean-s7 checks must stay green.
 
 For decoder changes, the optional differential fuzzer `python integration/python_snap7_fuzz.py`
-(needs `lake build lean-s7-decode` and python-snap7 3.3.1) should keep reporting no accepted-but-different values.
+(needs `lake build lean-s7-decode` and python-snap7 3.4.0) should keep reporting no accepted-but-different values.
 
 For changes affecting the conformance corpus or wire formats, also run the optional
 `python integration/wireshark_corpus.py` (needs `tshark` 4.6.x) and review any baseline change.
