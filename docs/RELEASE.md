@@ -7,8 +7,8 @@ not a production-qualified driver. Version 0.1.0 was the initial experimental
 release; 0.1.1 repairs the compound deadline test fixture and strengthens its
 negative controls. Version 0.2.0 adds the proved correlation
 core, decoder contracts, a read-only-by-default CLI, differential and real-capture
-evidence and Windows test support; see [its notes](releases/0.2.0.md). A 0.3.0
-candidate (not yet tagged) completes the canonical-decoding proofs, sends method `0x12`
+evidence and Windows test support; see [its notes](releases/0.2.0.md). Version
+0.3.0 completes the canonical-decoding proofs, sends method `0x12`
 in every USER_DATA follow-up and rejects multi-request counter/timer transfers; see
 [its notes](releases/0.3.0.md). None of these is a compatibility certification. See
 [the completion matrix](COMPLETENESS.md) for the bounded feature scope and open

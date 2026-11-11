@@ -1,10 +1,10 @@
-# Classic S7 0.3.0 candidate readiness — 2026-11-11
+# Classic S7 0.3.0 readiness — 2026-11-11
 
-Version 0.3.0 is prepared as a candidate. `docs/RELEASE.md` requires the repository
-owner to approve the version, tag and publication. The owner asked on 2026-11-11 for
-the 0.3.0 release to be cut, which approves the version and the `v0.3.0` tag. The tag
-goes on the merge commit of this change once its CI passes. Versions 0.1.0, 0.1.1 and
-0.2.0 and their tags are untouched.
+Version 0.3.0 was prepared, tagged and **published on 2026-11-11**. `docs/RELEASE.md`
+requires the repository owner to approve the version, tag and publication. The owner
+asked on 2026-11-11 for the 0.3.0 release to be cut, which approved version 0.3.0 and the
+`v0.3.0` tag on commit `efe0553`. Versions 0.1.0, 0.1.1 and 0.2.0 and their tags are
+untouched.
 
 ## What changed since 0.2.0
 
@@ -49,10 +49,23 @@ provenance edits in this change):
 ## CI evidence
 
 Every change merged since 0.2.0 (#45–#71) passed CI on its own branch before merging.
-That is not evidence for the tagged revision. The exact-revision evidence (CI on the
-merge commit of `main`, CI on the tag, and the resource soak on the tag, Linux and
-macOS) is recorded when the release is published, in the release attachment
-`validation-0.3.0.json`.
+That is not evidence for the tagged revision.
+
+Exact-revision evidence for tag `v0.3.0` (commit `efe0553`), all green on Linux and macOS:
+
+- [CI on the merge commit of `main`](https://github.com/gijzelaerr/lean-s7/actions/runs/43025174391);
+- [CI on the tag](https://github.com/gijzelaerr/lean-s7/actions/runs/43025302208);
+- [resource soak on the tag](https://github.com/gijzelaerr/lean-s7/actions/runs/43025302199), 32 rounds.
+
+The informational Windows job passed on `main` and failed on the tag with the known
+hosted-runner `0xC0000409` stack-smashing crash tracked in #58. On the candidate branch
+one run hit a connection reset in the reconnect-fault harness and the other passed; that
+job also fails intermittently on `main`.
+
+The release attachment `validation-0.3.0.json` records these runs and the local checks.
+The release is at <https://github.com/gijzelaerr/lean-s7/releases/tag/v0.3.0>; corpus
+1.1.1 (identical JSON files, new provenance) is
+[`corpus-v1-1.1.1`](https://github.com/gijzelaerr/lean-s7/releases/tag/corpus-v1-1.1.1).
 
 ## Not covered
 
