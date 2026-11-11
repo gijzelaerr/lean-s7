@@ -13,6 +13,8 @@ race. The owner approved a fix-forward 0.1.1 release; see
 [the patch validation record](../reports/release-readiness-0.1.1-2026-09-24.md).
 Version 0.2.0 was published on 2026-10-07 after its exact-revision CI and resource soak
 passed on Linux and macOS; see [the 0.2.0 notes](releases/0.2.0.md).
+A 0.3.0 candidate is prepared and not yet tagged; see [its notes](releases/0.3.0.md) and
+[its readiness record](../reports/release-readiness-0.3.0-2026-11-11.md).
 Full Linux/macOS CI and [official native endpoint cross-tests](../reports/native-interop-2026-09-24.md)
 remain required evidence, not hardware qualification.
 
