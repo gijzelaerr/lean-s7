@@ -8,6 +8,7 @@ import subprocess
 import threading
 from pathlib import Path
 
+from _compat import exit_note
 from concurrency import _handshake
 from multi_batching import _receive, _request, _send
 
@@ -106,7 +107,7 @@ def run_clock_assurance(root: Path) -> None:
                 raise RuntimeError(f"clock assurance peer hung: packed digit {digit}")
             if errors:
                 raise RuntimeError(
-                    f"clock assurance peer failed: packed digit {digit}"
+                    f"clock assurance peer failed: packed digit {digit}{exit_note(outcome)}"
                 ) from errors[0]
             if outcome.returncode:
                 raise RuntimeError(

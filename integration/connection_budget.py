@@ -8,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 
+from _compat import exit_note
 from multi_batching import _ack, _receive, _request, _send
 
 
@@ -159,7 +160,7 @@ def run_connection_budget(root: Path) -> None:
                 raise RuntimeError(f"connection budget peer hung: {mode}")
             if errors:
                 raise RuntimeError(
-                    f"connection budget peer failed: {mode}"
+                    f"connection budget peer failed: {mode}{exit_note(outcome)}"
                 ) from errors[0]
             if outcome.returncode:
                 raise RuntimeError(outcome.stdout + outcome.stderr)

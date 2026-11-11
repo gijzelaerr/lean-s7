@@ -11,6 +11,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from _compat import exit_note
 from boundary_operations import _closed, _handshake
 from multi_batching import _ack, _request, _send
 
@@ -223,8 +224,9 @@ def run(
                         worker.join(timeout=5)
                     if worker.is_alive() or errors or outcome.returncode:
                         detail = (
-                            errors
-                            or f"{outcome.stdout[-4096:]}{outcome.stderr[-4096:]}"
+                            f"{errors}{exit_note(outcome)}"
+                            if errors
+                            else f"{outcome.stdout[-4096:]}{outcome.stderr[-4096:]}"
                         )
                         raise RuntimeError(
                             f"live correlation failed; replay: {replay}; {detail}"

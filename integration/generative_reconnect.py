@@ -11,6 +11,7 @@ import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from _compat import peer_error
 from reconnect_faults import Case, _cases, _serve
 
 SEED = 0x573743
@@ -183,7 +184,7 @@ def _run_case(root: Path, case: Case) -> str:
         if worker.is_alive():
             raise RuntimeError("generative reconnect peer did not terminate")
         if errors:
-            raise errors[0]
+            raise peer_error(errors[0], outcome)
         if outcome.returncode:
             raise RuntimeError(
                 f"native reconnect failed: {outcome.stdout[-4096:]}{outcome.stderr[-4096:]}"

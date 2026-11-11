@@ -15,7 +15,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from _compat import stdout_ready
+from _compat import exit_note, stdout_ready
 from multi_batching import _ack, _receive, _request, _send
 
 
@@ -353,10 +353,10 @@ def run_queued_batches(root: Path) -> None:
                             if process.poll() is not None:
                                 stdout, stderr = process.communicate()
                                 raise RuntimeError(
-                                    f"queued batches exited before first request: {stdout}{stderr}"
+                                    f"queued batches exited before first request{exit_note(process)}: {stdout}{stderr}"
                                 )
                             raise RuntimeError(
-                                f"queued batches seed={seed} failed before first barrier: {errors}"
+                                f"queued batches seed={seed} failed before first barrier: {errors}{exit_note(process)}"
                             )
                         assert process.stdin is not None and process.stdout is not None
                         process.stdin.write("launch\n")
