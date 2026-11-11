@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from _compat import exit_note
 from boundary_operations import _closed, _handshake
 from mixed_operations import minimize
 from multi_batching import _ack, _request, _send
@@ -250,7 +251,7 @@ def _case(root: Path, pdu: int, operations: tuple[Operation, ...]) -> str | None
             outcome = None
         thread.join(5)
         if errors:
-            return "peer: " + errors[0]
+            return "peer: " + errors[0] + exit_note(outcome)
         if outcome is None:
             return "native: timeout"
         if outcome.returncode:

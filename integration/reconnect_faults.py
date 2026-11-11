@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from _compat import peer_error
 from boundary_operations import _closed, _handshake
 from multi_batching import _ack, _receive, _request, _send
 
@@ -236,7 +237,7 @@ def run_reconnect_faults(root: Path) -> None:
             if worker.is_alive():
                 raise RuntimeError("reconnect fault peer did not terminate")
             if errors:
-                raise errors[0]
+                raise peer_error(errors[0], outcome)
             if outcome.returncode:
                 raise RuntimeError(
                     f"native reconnect fault failed: {outcome.stdout}{outcome.stderr}"
