@@ -366,7 +366,7 @@ theorem decodeString_surrounded_content (pre content suffix : ByteArray) (maximu
     omega
   have hsingle : (#[maximum] : Array UInt8).size = 1 := rfl
   simp only [hsingle]
-  simp only [hcapacity, hactive, if_false]
+  simp only [hcapacity, hactive, ite_false]
   have hread := Cursor.readBytes_append ((pre ++ bytes #[maximum]) ++ bytes #[current]) content suffix
   simp only [ByteArray.size_append, bytes_size] at hread
   change Cursor.readBytes {
@@ -481,10 +481,10 @@ theorem decodeString_encodeString_surrounded (pre suffix : ByteArray) (maximum :
   have hencoded : encodeString maximum value = .ok
       (putUInt8 (UInt8.ofNat maximum) ++ (putUInt8 (UInt8.ofNat content.size) ++
         (content ++ zeros (maximum - content.size)))) := by
-    simp only [encodeString, hcapacity, if_false, encodeLatin1_valid _ hvalid,
+    simp only [encodeString, hcapacity, ite_false, encodeLatin1_valid _ hvalid,
       bind, Except.bind]
     change (if content.size > maximum then _ else _) = _
-    rw [if_neg hlength]
+    rw [ite_eq_right hlength]
     simp only [pure, Except.pure, putUInt8, bytes]
     congr 1
   have hm : (UInt8.ofNat maximum).toNat = maximum := by
@@ -534,7 +534,7 @@ private theorem encodeLatin1_bytes (content : List UInt8) :
   | cons byte rest ih =>
     have hc := toNat_ofNat_byte byte
     have hb := byte.toNat_lt
-    simp only [List.map_cons, encodeLatin1, hc, show ¬ byte.toNat > 255 by omega, if_false, ih,
+    simp only [List.map_cons, encodeLatin1, hc, show ¬ byte.toNat > 255 by omega, ite_false, ih,
       bind, Except.bind, pure, Except.pure, UInt8.ofNat_toNat]
 
 private theorem toList_toByteArray (data : ByteArray) : data.toList.toByteArray = data := by
@@ -576,12 +576,12 @@ theorem decodeString_canonical (data : ByteArray) (offset : Nat) (value : String
     congr 1 <;> omega
   refine ⟨v0.fst.toNat, v1.fst.toNat, hcur, by omega, ?_⟩
   unfold encodeString
-  rw [if_neg hmax]
+  rw [ite_eq_right hmax]
   simp only [String.toList_ofList, encodeLatin1_bytes, bind, Except.bind, pure, Except.pure,
     toList_toByteArray, hcontent]
   have hsize : (data.extract (offset + 2) (offset + 2 + v1.fst.toNat)).size = v1.fst.toNat := by
     rw [ByteArray.size_extract]; omega
-  rw [hsize, if_neg (by omega), UInt8.ofNat_toNat, UInt8.ofNat_toNat, ← d0, ← d1,
+  rw [hsize, ite_eq_right (by omega), UInt8.ofNat_toNat, UInt8.ofNat_toNat, ← d0, ← d1,
     show bytes #[data[offset], data[offset + 1]] = data.extract offset (offset + 2) from
       (ByteArray.extract_two data offset (by omega)).symm,
     ByteArray.extract_append_extract_of_le _ (by omega) (by omega)]
@@ -651,13 +651,13 @@ private theorem encodeUtf16_decodeUtf16Units (units : List UInt16) (offset : Nat
     rename_i unit rest offset value hhigh hlow
     rw [decodeUtf16Units.eq_def] at h
     simp only [value] at hhigh hlow
-    simp only [hhigh, hlow, Bool.false_eq_true, if_false, if_true, throw, throwThe,
+    simp only [hhigh, hlow, Bool.false_eq_true, ite_false, ite_true, throw, throwThe,
       MonadExceptOf.throw, reduceCtorEq] at h
   case case3 =>
     rename_i unit offset value hhigh low tail lowValue hlow ih
     rw [decodeUtf16Units.eq_def] at h
     simp only [value, lowValue] at hhigh hlow
-    simp only [hhigh, if_true, hlow, if_false, bind, Except.bind, pure, Except.pure,
+    simp only [hhigh, ite_true, hlow, ite_false, bind, Except.bind, pure, Except.pure,
       Bool.false_eq_true] at h
     split at h
     · contradiction
@@ -672,7 +672,7 @@ private theorem encodeUtf16_decodeUtf16Units (units : List UInt16) (offset : Nat
         Or.inr ⟨by omega, by omega⟩
       have hc := toNat_ofNat_valid _ hvalid
       simp only [encodeUtf16, encodeUtf16Char, hc, ih rest hrest]
-      rw [if_neg (by omega)]
+      rw [ite_eq_right (by omega)]
       simp only [List.cons_append, List.nil_append, List.cons.injEq, and_true]
       constructor
       · apply UInt16.toNat_inj.mp
@@ -685,7 +685,7 @@ private theorem encodeUtf16_decodeUtf16Units (units : List UInt16) (offset : Nat
     rename_i unit rest offset value hhigh hlow ih
     rw [decodeUtf16Units.eq_def] at h
     simp only [value] at hhigh hlow
-    simp only [hhigh, hlow, if_false, bind, Except.bind, pure, Except.pure,
+    simp only [hhigh, hlow, ite_false, bind, Except.bind, pure, Except.pure,
       Bool.false_eq_true] at h
     split at h
     · contradiction
@@ -700,7 +700,7 @@ private theorem encodeUtf16_decodeUtf16Units (units : List UInt16) (offset : Nat
         · exact Or.inl hs
         · exact Or.inr ⟨by omega, by omega⟩
       have hc := toNat_ofNat_valid _ hvalid
-      simp only [encodeUtf16, encodeUtf16Char, hc, ih decoded hrest, if_pos hu,
+      simp only [encodeUtf16, encodeUtf16Char, hc, ih decoded hrest, ite_eq_left hu,
         UInt16.ofNat_toNat, List.singleton_append]
 
 private theorem readUtf16Units_encodeUtf16Units (units : List UInt16) (pre suffix : ByteArray) :
@@ -783,9 +783,9 @@ theorem decodeWString_canonical (data : ByteArray) (offset : Nat) (value : Strin
   subst h
   refine ⟨v0.fst.toNat, v1.fst.toNat, hcur, by omega, ?_⟩
   unfold encodeWString
-  rw [if_neg hmax]
+  rw [ite_eq_right hmax]
   simp only [String.toList_ofList, hunits, hlen]
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   simp only [pure, Except.pure, Except.ok.injEq]
   rw [UInt16.ofNat_toNat, UInt16.ofNat_toNat, henc, d0, d1,
     ← ByteArray.extract_two_uint16BE _ offset (by omega),
@@ -822,9 +822,9 @@ theorem decodeWString_encodeWString_surrounded (pre suffix : ByteArray) (maximum
   have hencoded : encodeWString maximum value = .ok
       (uint16BE (UInt16.ofNat maximum) ++ (uint16BE (UInt16.ofNat units.length) ++
         (encodeUtf16Units units ++ zeros ((maximum - units.length) * 2)))) := by
-    simp only [encodeWString, hcapacity, if_false]
+    simp only [encodeWString, hcapacity, ite_false]
     change (if units.length > maximum then _ else _) = _
-    rw [if_neg hlength]
+    rw [ite_eq_right hlength]
     simp only [pure, Except.pure, ByteArray.append_assoc]
     rfl
   rw [hencoded]
@@ -842,7 +842,7 @@ theorem decodeWString_encodeWString_surrounded (pre suffix : ByteArray) (maximum
   have hactive : ¬ UInt16.ofNat units.length > UInt16.ofNat maximum := by
     simp only [UInt16.lt_iff_toNat_lt, hc, hm]
     omega
-  simp only [hm, hcapacity, hactive, if_false, hc]
+  simp only [hm, hcapacity, hactive, ite_false, hc]
   have hread := readUtf16Units_encodeUtf16Units units
     ((pre ++ uint16BE (UInt16.ofNat maximum)) ++ uint16BE (UInt16.ofNat units.length))
     (zeros ((maximum - units.length) * 2) ++ suffix)
@@ -856,7 +856,7 @@ theorem decodeWString_encodeWString_surrounded (pre suffix : ByteArray) (maximum
           (pre.size + 2 + 2) := by
     simp only [ByteArray.size_append, uint16BE_size, encodeUtf16Units_size, hz]
     omega
-  simp only [Cursor.readBytes, Cursor.remaining, havailable, if_true]
+  simp only [Cursor.readBytes, Cursor.remaining, havailable, ite_true]
   rw [decodeUtf16Units_encodeUtf16]
   simp only [pure, Except.pure, String.ofList_toList]
 
@@ -884,7 +884,7 @@ private theorem decodeWString_arbitrary_units (pre padding suffix : ByteArray)
   have hactive : ¬ UInt16.ofNat units.length > maximum := by
     simp only [UInt16.lt_iff_toNat_lt, hc]
     omega
-  simp only [hcapacity, hactive, if_false, hc]
+  simp only [hcapacity, hactive, ite_false, hc]
   have hread := readUtf16Units_encodeUtf16Units units
     ((pre ++ uint16BE maximum) ++ uint16BE (UInt16.ofNat units.length)) (padding ++ suffix)
   simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hread
@@ -894,7 +894,7 @@ private theorem decodeWString_arbitrary_units (pre padding suffix : ByteArray)
         (encodeUtf16Units units ++ (padding ++ suffix))))).size - (pre.size + 2 + 2) := by
     simp only [ByteArray.size_append, uint16BE_size, encodeUtf16Units_size]
     omega
-  simp only [Cursor.readBytes, Cursor.remaining, havailable, if_true]
+  simp only [Cursor.readBytes, Cursor.remaining, havailable, ite_true]
   cases decodeUtf16Units units 0 <;> rfl
 
 private theorem encodeUtf16Units_foldr (units : List UInt16) :

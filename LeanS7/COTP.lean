@@ -81,7 +81,7 @@ theorem decodeParametersWithFuel_extent (fuel : Nat) (cursor : Cursor)
     · simp [hr] at h
       subst h
       simp [hr]
-    · simp only [hr, if_false] at h
+    · simp only [hr, ite_false] at h
       repeat' (split at h)
       all_goals first | (simp at h; done) | skip
       rename_i x3 v3 e3 x2 v2 e2 x1 v1 e1 x0 v0 e0
@@ -146,7 +146,7 @@ private theorem decodeParametersWithFuel_canonical (fuel : Nat) (cursor : Cursor
       subst h
       simp only [Cursor.remaining] at hr
       rw [encodeParameters, ByteArray.extract_eq_empty_iff.mpr (by omega)]
-    · simp only [hr, if_false] at h
+    · simp only [hr, ite_false] at h
       repeat' (split at h)
       all_goals first | (simp at h; done) | skip
       rename_i xc vc ec xl vl el xv vv ev xr vr er
@@ -277,7 +277,9 @@ theorem decodeDisconnectRequest_encodeDisconnectRequest
       omega)]
     congr 2 <;> simp [data, encodeDisconnectRequest, bytes]
   change decodeDisconnectRequest data = .ok request
-  rw [decodeDisconnectRequest, hread0]
+  rw [decodeDisconnectRequest]
+  dsimp only
+  rw [hread0]
   change Except.bind (Except.ok (6, ({ data, offset := 1 } : Cursor)))
     (fun headerResult => _) = _
   rw [Except.bind]
@@ -302,7 +304,7 @@ theorem decodeDisconnectRequest_encodeDisconnectRequest
     (fun reasonResult => _) = _
   rw [Except.bind]
   have hfinish : Cursor.finish ({ data, offset := 7 } : Cursor) = .ok () := by
-    rw [Cursor.finish, if_pos (by
+    rw [Cursor.finish, ite_eq_left (by
       dsimp only [Cursor.offset, Cursor.data]
       rw [hsize])]
   rw [hfinish]
@@ -521,7 +523,7 @@ theorem validateConnectionConfirm_rejects_destination (request : ConnectionReque
     (hreference : confirmation.destinationReference ≠ request.sourceReference) :
     validateConnectionConfirm request confirmation = .error (.invalidField 2
       s!"expected COTP destination reference {request.sourceReference}, got {confirmation.destinationReference}") := by
-  rw [validateConnectionConfirm, if_pos (by simpa using hreference)]
+  rw [validateConnectionConfirm, ite_eq_left (by simpa using hreference)]
   rfl
 
 /-- A successfully validated confirmation is correlated to the initiating
@@ -544,8 +546,8 @@ theorem validateConnectionConfirm_class_eq (request : ConnectionRequest)
   by_cases hclass : confirmation.classOption = request.classOption
   · exact hclass
   · have hreference := validateConnectionConfirm_destination_eq request confirmation h
-    rw [validateConnectionConfirm, if_neg (by simp [hreference]),
-      if_pos (by simpa using hclass)] at h
+    rw [validateConnectionConfirm, ite_eq_right (by simp [hreference]),
+      ite_eq_left (by simpa using hclass)] at h
     contradiction
 
 /-- Return the selected TPDU size exponent after full confirmation validation.
@@ -713,7 +715,7 @@ theorem decodeData_encodeData (pdu : Data) :
   have hpayloadRead : Cursor.readBytes { data, offset := 3 } payload.size =
       .ok (payload, { data, offset := 3 + payload.size }) := by
     rw [Cursor.readBytes]
-    rw [if_pos (by simp [Cursor.remaining, hsize])]
+    rw [ite_eq_left (by simp [Cursor.remaining, hsize])]
     have hextract : data.extract 3 (3 + payload.size) = payload := by
       dsimp only [data]
       apply ByteArray.extract_append_eq_right
@@ -728,9 +730,11 @@ theorem decodeData_encodeData (pdu : Data) :
   have hremaining : ({ data, offset := 3 } : Cursor).remaining = payload.size := by
     simp [Cursor.remaining, hsize]
   have hfinish : Cursor.finish ({ data, offset := 3 + payload.size } : Cursor) = .ok () := by
-    rw [Cursor.finish, if_pos (by dsimp; rw [hsize])]
+    rw [Cursor.finish, ite_eq_left (by dsimp; rw [hsize])]
   change decodeData data = .ok { payload, endOfTransmission }
-  rw [decodeData, hread0]
+  rw [decodeData]
+  dsimp only
+  rw [hread0]
   change Except.bind (Except.ok (2, ({ data, offset := 1 } : Cursor)))
     (fun headerResult => _) = _
   rw [Except.bind]

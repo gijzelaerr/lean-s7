@@ -62,8 +62,8 @@ theorem encodeJob_succeeds (job : S7.Job)
     uint16BE job.reference ++ uint16BE (UInt16.ofNat job.parameters.size) ++
     uint16BE (UInt16.ofNat job.data.size) ++ job.parameters ++ job.data
   have hs7 : S7.encodeJob job = .ok s7 := by
-    rw [S7.encodeJob, if_neg (Nat.not_lt.mpr hparameters),
-      if_neg (Nat.not_lt.mpr hdata)]
+    rw [S7.encodeJob, ite_eq_right (Nat.not_lt.mpr hparameters),
+      ite_eq_right (Nat.not_lt.mpr hdata)]
     rfl
   let frame : TPKT.Frame := { payload := COTP.encodeData { payload := s7 } }
   have hs7Size : s7.size = S7.jobHeaderSize + job.parameters.size + job.data.size :=
@@ -95,8 +95,8 @@ theorem decodeJob_encodeJob (job : S7.Job) (packet : ByteArray)
     uint16BE job.reference ++ uint16BE (UInt16.ofNat job.parameters.size) ++
     uint16BE (UInt16.ofNat job.data.size) ++ job.parameters ++ job.data
   have hs7 : S7.encodeJob job = .ok s7 := by
-    rw [S7.encodeJob, if_neg (Nat.not_lt.mpr hparameters),
-      if_neg (Nat.not_lt.mpr hdata)]
+    rw [S7.encodeJob, ite_eq_right (Nat.not_lt.mpr hparameters),
+      ite_eq_right (Nat.not_lt.mpr hdata)]
     rfl
   let cotp : COTP.Data := { payload := s7 }
   let frame : TPKT.Frame := { payload := COTP.encodeData cotp }
@@ -148,8 +148,8 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
     uint16BE reference ++ uint16BE (UInt16.ofNat parameters.size) ++
     uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0] ++ parameters ++ data
   have hs7 : S7.encodeAckData reference parameters data = .ok s7 := by
-    rw [S7.encodeAckData, if_neg (Nat.not_lt.mpr hparameters),
-      if_neg (Nat.not_lt.mpr hdata)]
+    rw [S7.encodeAckData, ite_eq_right (Nat.not_lt.mpr hparameters),
+      ite_eq_right (Nat.not_lt.mpr hdata)]
     rfl
   let cotp : COTP.Data := { payload := s7 }
   let frame : TPKT.Frame := { payload := COTP.encodeData cotp }
@@ -229,7 +229,7 @@ private theorem reframe (packet s7 : ByteArray)
   have hlen : TPKT.headerSize + (COTP.encodeData { payload := s7 }).size = packet.size := by
     rw [COTP.encodedData_size]; show 4 + (3 + s7.size) = packet.size; omega
   simp only [TPKT.encode]
-  rw [if_pos (by rw [hlen]; exact hmin), if_pos (by rw [hlen]; exact hmax), hlen, ← hword,
+  rw [ite_eq_left (by rw [hlen]; exact hmin), ite_eq_left (by rw [hlen]; exact hmax), hlen, ← hword,
     ← ByteArray.extract_append_extract_of_le packet (i := 2) (j := 4) (k := 7) (by omega) (by omega),
     hcotpHeader]
   simp only [COTP.encodeData, ite_true, ByteArray.append_assoc]

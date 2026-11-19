@@ -427,7 +427,7 @@ theorem Cursor.readBytes_append (pre value suffix : ByteArray) :
       offset := pre.size + value.size
     }) := by
   let data := pre ++ (value ++ suffix)
-  rw [Cursor.readBytes, if_pos (by simp [Cursor.remaining])]
+  rw [Cursor.readBytes, ite_eq_left (by simp [Cursor.remaining])]
   have hextract : data.extract pre.size (pre.size + value.size) = value := by
     dsimp only [data]
     rw [show (pre ++ (value ++ suffix)).extract pre.size

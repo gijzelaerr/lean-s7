@@ -170,7 +170,7 @@ theorem decodeAreaRead_canonical (reference : UInt16) (area : Area) (expectedSiz
       by_cases hc : vt.fst = area.dataTransportSize
       · exact .inl hc
       · right; simpa [hc] using hts
-    · rw [hdata, hret, readItemLength, if_neg (by simpa using hoct), hsize,
+    · rw [hdata, hret, readItemLength, ite_eq_right (by simpa using hoct), hsize,
         Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hmod), UInt16.ofNat_toNat]
 
 /-- Canonical form of a DB read response: data blocks have a single transport size,

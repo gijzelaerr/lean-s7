@@ -168,14 +168,16 @@ theorem decode_encode (frame : Frame) (packet : ByteArray)
         change 4 + frame.payload.size = 2 + 2 + frame.payload.size
         omega
     rw [Cursor.readBytes]
-    rw [if_pos (by simp [Cursor.remaining, hdataSize, headerSize])]
+    rw [ite_eq_left (by simp [Cursor.remaining, hdataSize, headerSize])]
     change Except.ok
       (data.extract 4 (4 + frame.payload.size),
         ({ data, offset := 4 + frame.payload.size } : Cursor)) =
       Except.ok
         (frame.payload, { data, offset := 4 + frame.payload.size })
     rw [hextract]
-  rw [decode, hversionRead]
+  rw [decode]
+  dsimp only
+  rw [hversionRead]
   change Except.bind (Except.ok (version, ({ data, offset := 1 } : Cursor)))
     (fun versionResult => _) = .ok frame
   rw [Except.bind]
@@ -193,7 +195,7 @@ theorem decode_encode (frame : Frame) (packet : ByteArray)
   rw [Except.bind]
   simp [hdataSize, Nat.mod_eq_of_lt hlengthLt4, headerSize,
     minFrameSize]
-  rw [if_neg (by simpa [headerSize, minFrameSize] using Nat.not_lt.mpr hmin)]
+  rw [ite_eq_right (by simpa [headerSize, minFrameSize] using Nat.not_lt.mpr hmin)]
   rw [hpayloadRead]
   change Except.bind (Except.ok
       (frame.payload, ({ data, offset := 4 + frame.payload.size } : Cursor)))
@@ -253,7 +255,7 @@ theorem decode_canonical (data : ByteArray) (frame : Frame)
     simp only [headerSize, minFrameSize, Nat.min_self] at hmin ⊢
     omega
   simp only [encode]
-  rw [if_pos (by rw [hlength]; exact hmin), if_pos (by rw [hlength]; exact hmax),
+  rw [ite_eq_left (by rw [hlength]; exact hmin), ite_eq_left (by rw [hlength]; exact hmax),
     hlength, ← hword, hpayload, ByteArray.append_assoc, headerSize,
     ByteArray.extract_append_extract_of_le data (by omega)
       (by simp only [minFrameSize] at hmin; omega)]
