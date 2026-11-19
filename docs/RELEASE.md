@@ -15,7 +15,7 @@ in every USER_DATA follow-up and rejects multi-request counter/timer transfers; 
 gates. S7comm Plus, optimized symbolic access, a native server, and python-snap7
 API parity are not release requirements for this profile.
 
-- Toolchain: exactly the checked-in `lean-toolchain` (Lean 4.33.1).
+- Toolchain: exactly the checked-in `lean-toolchain` (Lean 4.37.0-rc1).
 - Runtime: Lean/native networking; Python is only needed for test harnesses.
 - Endpoint: IPv4, IPv6 or hostname; classic ISO-on-TCP with configured rack/slot
   or explicit TSAP. Connection negotiation must satisfy both S7 and COTP limits.

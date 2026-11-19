@@ -15,11 +15,11 @@ def counts (total maximum : Nat) : List Nat :=
     exactly. Sequential consumers therefore have neither gaps nor overlap. -/
 theorem counts_sum (total maximum : Nat) (hmaximum : maximum ≠ 0) :
     (counts total maximum).sum = total := by
-  rw [counts, if_neg hmaximum, List.sum_append]
+  rw [counts, ite_eq_right hmaximum, List.sum_append]
   by_cases hremainder : total % maximum = 0
-  · rw [if_pos hremainder]
+  · rw [ite_eq_left hremainder]
     simpa [hremainder, Nat.mul_comm] using Nat.div_add_mod total maximum
-  · rw [if_neg hremainder]
+  · rw [ite_eq_right hremainder]
     simp
     simpa [Nat.mul_comm] using Nat.div_add_mod total maximum
 
@@ -27,7 +27,7 @@ theorem counts_sum (total maximum : Nat) (hmaximum : maximum ≠ 0) :
 theorem counts_single (total maximum : Nat) (hpositive : 0 < total) (hfits : total ≤ maximum) :
     counts total maximum = [total] := by
   have hmaximum : maximum ≠ 0 := by omega
-  rw [counts, if_neg hmaximum]
+  rw [counts, ite_eq_right hmaximum]
   by_cases heq : total = maximum
   · subst heq
     simp [Nat.div_self hpositive]
@@ -41,7 +41,7 @@ theorem counts_single (total maximum : Nat) (hpositive : 0 < total) (hfits : tot
 theorem counts_bounds (total maximum chunk : Nat) (hmaximum : maximum ≠ 0)
     (hchunk : chunk ∈ counts total maximum) :
     0 < chunk ∧ chunk ≤ maximum := by
-  rw [counts, if_neg hmaximum] at hchunk
+  rw [counts, ite_eq_right hmaximum] at hchunk
   simp only [List.mem_append, List.mem_replicate] at hchunk
   rcases hchunk with hfull | hremainder
   · rcases hfull with ⟨_, hchunkEq⟩

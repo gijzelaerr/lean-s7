@@ -78,15 +78,15 @@ theorem encodedJob_size (job : Job) (packet : ByteArray)
     packet.size = jobHeaderSize + job.parameters.size + job.data.size := by
   by_cases hp : job.parameters.size ≤ maxSectionSize
   · by_cases hd : job.data.size ≤ maxSectionSize
-    · rw [encodeJob, if_neg (Nat.not_lt.mpr hp), if_neg (Nat.not_lt.mpr hd)] at h
+    · rw [encodeJob, ite_eq_right (Nat.not_lt.mpr hp), ite_eq_right (Nat.not_lt.mpr hd)] at h
       injection h with hpacket
       subst packet
       simp [bytes, uint16BE, jobHeaderSize]
       change 4 + 2 + 2 + 2 = 10
       rfl
-    · rw [encodeJob, if_neg (Nat.not_lt.mpr hp), if_pos (Nat.lt_of_not_ge hd)] at h
+    · rw [encodeJob, ite_eq_right (Nat.not_lt.mpr hp), ite_eq_left (Nat.lt_of_not_ge hd)] at h
       contradiction
-  · rw [encodeJob, if_pos (Nat.lt_of_not_ge hp)] at h
+  · rw [encodeJob, ite_eq_left (Nat.lt_of_not_ge hp)] at h
     contradiction
 
 /-- Encoding and then decoding an S7 job returns its reference and sections. -/
@@ -101,8 +101,8 @@ theorem decodeJob_encodeJob (job : Job) (packet : ByteArray)
     uint16BE (UInt16.ofNat data.size)
   let pdu := header ++ parameters ++ data
   have hpacket : packet = pdu := by
-    rw [encodeJob, if_neg (Nat.not_lt.mpr hparameters),
-      if_neg (Nat.not_lt.mpr hdata)] at hencode
+    rw [encodeJob, ite_eq_right (Nat.not_lt.mpr hparameters),
+      ite_eq_right (Nat.not_lt.mpr hdata)] at hencode
     exact Except.ok.inj hencode.symm
   rw [hpacket]
   have hpLt : parameters.size < 65536 := by
@@ -171,7 +171,9 @@ theorem decodeJob_encodeJob (job : Job) (packet : ByteArray)
     have hheaderSize : header.size = 10 := by
       simp [header]
     simpa [hheaderSize] using h
-  rw [decodeJob, hread0]
+  rw [decodeJob]
+  dsimp only
+  rw [hread0]
   change Except.bind (Except.ok
       (protocolId, ({ data := pdu, offset := 1 } : Cursor)))
     (fun protocolResult => _) = _
@@ -217,7 +219,7 @@ theorem decodeJob_encodeJob (job : Job) (packet : ByteArray)
   have hfinish : Cursor.finish
       ({ data := pdu, offset := 10 + parameters.size + data.size } : Cursor) =
       .ok () := by
-    rw [Cursor.finish, if_pos (by
+    rw [Cursor.finish, ite_eq_left (by
       dsimp only [Cursor.offset, Cursor.data]
       rw [hpduSize]
       simp [jobHeaderSize])]
@@ -256,8 +258,8 @@ theorem encodeSetupCommunication_size (reference : UInt16)
     let packet := bytes #[protocolId, jobType, 0, 0] ++
       uint16BE reference ++ uint16BE 8 ++ uint16BE 0 ++ setup.parameters
     refine ⟨packet, ?_⟩
-    rw [encodeJob, if_neg (by simp [job, maxSectionSize]),
-      if_neg (by simp [job])]
+    rw [encodeJob, ite_eq_right (by simp [job, maxSectionSize]),
+      ite_eq_right (by simp [job])]
     rfl
   obtain ⟨packet, hpacket⟩ := hsucceeds
   refine ⟨packet, hencode.trans hpacket, ?_⟩
@@ -326,15 +328,15 @@ theorem encodedResponse_size (response : Response) (packet : ByteArray)
     packet.size = responseHeaderSize + response.parameters.size + response.data.size := by
   by_cases hp : response.parameters.size ≤ maxSectionSize
   · by_cases hd : response.data.size ≤ maxSectionSize
-    · rw [encodeResponse, if_neg (Nat.not_lt.mpr hp),
-        if_neg (Nat.not_lt.mpr hd)] at h
+    · rw [encodeResponse, ite_eq_right (Nat.not_lt.mpr hp),
+        ite_eq_right (Nat.not_lt.mpr hd)] at h
       injection h with hpacket
       subst packet
       simp [responseHeaderSize]
-    · rw [encodeResponse, if_neg (Nat.not_lt.mpr hp),
-        if_pos (Nat.lt_of_not_ge hd)] at h
+    · rw [encodeResponse, ite_eq_right (Nat.not_lt.mpr hp),
+        ite_eq_left (Nat.lt_of_not_ge hd)] at h
       contradiction
-  · rw [encodeResponse, if_pos (Nat.lt_of_not_ge hp)] at h
+  · rw [encodeResponse, ite_eq_left (Nat.lt_of_not_ge hp)] at h
     contradiction
 
 /-- A successful ACK_DATA encoding has exactly the response header and section
@@ -344,15 +346,15 @@ theorem encodedAckData_size (reference : UInt16) (parameters data packet : ByteA
     packet.size = responseHeaderSize + parameters.size + data.size := by
   by_cases hp : parameters.size ≤ maxSectionSize
   · by_cases hd : data.size ≤ maxSectionSize
-    · rw [encodeAckData, if_neg (Nat.not_lt.mpr hp),
-        if_neg (Nat.not_lt.mpr hd)] at h
+    · rw [encodeAckData, ite_eq_right (Nat.not_lt.mpr hp),
+        ite_eq_right (Nat.not_lt.mpr hd)] at h
       injection h with hpacket
       subst packet
       simp [responseHeaderSize]
-    · rw [encodeAckData, if_neg (Nat.not_lt.mpr hp),
-        if_pos (Nat.lt_of_not_ge hd)] at h
+    · rw [encodeAckData, ite_eq_right (Nat.not_lt.mpr hp),
+        ite_eq_left (Nat.lt_of_not_ge hd)] at h
       contradiction
-  · rw [encodeAckData, if_pos (Nat.lt_of_not_ge hp)] at h
+  · rw [encodeAckData, ite_eq_left (Nat.lt_of_not_ge hp)] at h
     contradiction
 
 def decodeResponse (pdu : ByteArray) : Except DecodeError Response := do
@@ -397,8 +399,8 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
     uint16BE (UInt16.ofNat data.size) ++ bytes #[0, 0]
   let pdu := header ++ parameters ++ data
   have hpacket : packet = pdu := by
-    rw [encodeAckData, if_neg (Nat.not_lt.mpr hparameters),
-      if_neg (Nat.not_lt.mpr hdata)] at hencode
+    rw [encodeAckData, ite_eq_right (Nat.not_lt.mpr hparameters),
+      ite_eq_right (Nat.not_lt.mpr hdata)] at hencode
     exact Except.ok.inj hencode.symm
   rw [hpacket]
   have hpLt : parameters.size < 65536 := by
@@ -474,7 +476,9 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
     rw [show header ++ parameters ++ data = pdu by rfl] at h
     have hheaderSize : header.size = 12 := by simp [header]
     simpa [hheaderSize] using h
-  rw [decodeResponse, hread0]
+  rw [decodeResponse]
+  dsimp only
+  rw [hread0]
   change Except.bind (Except.ok
       (protocolId, ({ data := pdu, offset := 1 } : Cursor)))
     (fun protocolResult => _) = _
@@ -524,7 +528,7 @@ theorem decodeResponse_encodeAckData (reference : UInt16)
   have hfinish : Cursor.finish
       ({ data := pdu, offset := 12 + parameters.size + data.size } : Cursor) =
       .ok () := by
-    rw [Cursor.finish, if_pos (by
+    rw [Cursor.finish, ite_eq_left (by
       dsimp only [Cursor.offset, Cursor.data]
       rw [hpduSize]
       simp [responseHeaderSize])]
@@ -579,7 +583,7 @@ theorem decodeJob_canonical (pdu : ByteArray) (job : Job) (h : decodeJob pdu = .
   have hdlen : uint16BE (UInt16.ofNat vk.fst.size) = pdu.extract 8 10 := by
     rw [hksize, UInt16.ofNat_toNat, df, ← ByteArray.extract_two_uint16BE pdu 8 (by omega)]
   simp only [encodeJob]
-  rw [if_neg (by rw [hgsize, maxSectionSize]; omega), if_neg (by rw [hksize, maxSectionSize]; omega)]
+  rw [ite_eq_right (by rw [hgsize, maxSectionSize]; omega), ite_eq_right (by rw [hksize, maxSectionSize]; omega)]
   simp only [pure, Except.pure]
   rw [href, hplen, hdlen, pg, pk]
   simp only [ByteArray.append_assoc]
@@ -646,7 +650,7 @@ theorem decodeResponse_canonical (pdu : ByteArray) (response : Response)
     rw [← dg, ← dh, ByteArray.extract_two pdu 10 (by omega)]
     rfl
   simp only [encodeResponse]
-  rw [if_neg (by rw [hisize, maxSectionSize]; omega), if_neg (by rw [hksize, maxSectionSize]; omega)]
+  rw [ite_eq_right (by rw [hisize, maxSectionSize]; omega), ite_eq_right (by rw [hksize, maxSectionSize]; omega)]
   simp only [pure, Except.pure]
   rw [href, hplen, hdlen, herror, pi, pk]
   simp only [ByteArray.append_assoc]
@@ -673,7 +677,7 @@ theorem validateResponse_rejects_reference (response : Response)
     (hreference : response.reference ≠ reference) :
     validateResponse response reference function = .error
       (.invalidField 4 s!"expected PDU reference {reference}, got {response.reference}") := by
-  rw [validateResponse, if_pos (by simpa using hreference)]
+  rw [validateResponse, ite_eq_left (by simpa using hreference)]
   rfl
 
 /-- Successful response validation proves request/response correlation. -/
@@ -697,17 +701,17 @@ theorem validateResponse_error_free (response : Response)
   constructor
   · by_cases hclass : response.errorClass = 0
     · exact hclass
-    · rw [validateResponse, if_neg (by simp [hreference]),
-        if_pos (by simp [hclass])] at hvalidate
+    · rw [validateResponse, ite_eq_right (by simp [hreference]),
+        ite_eq_left (by simp [hclass])] at hvalidate
       contradiction
   · by_cases hcode : response.errorCode = 0
     · exact hcode
     · by_cases hclass : response.errorClass = 0
-      · rw [validateResponse, if_neg (by simp [hreference]),
-          if_pos (by simp [hclass, hcode])] at hvalidate
+      · rw [validateResponse, ite_eq_right (by simp [hreference]),
+          ite_eq_left (by simp [hclass, hcode])] at hvalidate
         contradiction
-      · rw [validateResponse, if_neg (by simp [hreference]),
-          if_pos (by simp [hclass])] at hvalidate
+      · rw [validateResponse, ite_eq_right (by simp [hreference]),
+          ite_eq_left (by simp [hclass])] at hvalidate
         contradiction
 
 /-- Successful response validation proves that the first parameter byte is the
@@ -719,8 +723,8 @@ theorem validateResponse_function_eq (response : Response)
       .ok (function, cursor) := by
   have hreference := validateResponse_reference_eq response reference function hvalidate
   have herrors := validateResponse_error_free response reference function hvalidate
-  rw [validateResponse, if_neg (by simp [hreference]),
-    if_neg (by simp [herrors.1, herrors.2])] at hvalidate
+  rw [validateResponse, ite_eq_right (by simp [hreference]),
+    ite_eq_right (by simp [herrors.1, herrors.2])] at hvalidate
   cases hread : Cursor.readUInt8 { data := response.parameters } with
   | error error =>
       rw [hread] at hvalidate
@@ -734,7 +738,7 @@ theorem validateResponse_function_eq (response : Response)
       · change (if actualFunction != function then
           Except.error (DecodeError.invalidField responseHeaderSize
             "unexpected S7 response function") else .ok ()) = .ok () at hvalidate
-        rw [if_pos (by simpa using hfunction)] at hvalidate
+        rw [ite_eq_left (by simpa using hfunction)] at hvalidate
         contradiction
 
 /-- A validated response answers the request's reference with a clear error class
@@ -761,7 +765,7 @@ theorem validateSetupPduLength_lower_bound (pduLength : UInt16)
     (hvalidate : validateSetupPduLength pduLength = .ok ()) :
     240 ≤ pduLength.toNat := by
   by_cases hsmall : pduLength < 240
-  · rw [validateSetupPduLength, if_pos hsmall] at hvalidate
+  · rw [validateSetupPduLength, ite_eq_left hsmall] at hvalidate
     contradiction
   · have hnotlt : ¬pduLength.toNat < 240 := by
       simpa [UInt16.lt_iff_toNat_lt] using hsmall
@@ -1399,7 +1403,7 @@ private theorem readItems_step (range : MemoryRange) (rest : List MemoryRange)
       by_cases hoct : transport = octetTransportSize
       · simp [hoct, UInt16.ofNat_toNat]
       · have hne : (transport == octetTransportSize) = false := by simpa using hoct
-        rw [hne, if_neg (by simp), if_neg (by simp),
+        rw [hne, ite_eq_right (by simp), ite_eq_right (by simp),
           Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero (haligned hoct)), UInt16.ofNat_toNat]
     rw [hlength]
   · exact ⟨transport, encodedLength, payload, _, hcode, by rw [hsize, hcount], haligned,
@@ -1467,7 +1471,7 @@ private theorem decodeReadItems_bytes (ranges : List MemoryRange)
       obtain ⟨hpd, hpo, hpl⟩ := Cursor.readUInt8_ok _ _ _ ep
       exact readItems_step range rest cursor c₁ c₂ c₃ c₄ vp.snd vr.snd code transport
         encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
-        ⟨hpd, by rw [if_pos hcond, hpo], by omega⟩
+        ⟨hpd, by rw [ite_eq_left hcond, hpo], by omega⟩
         (.inl ⟨by simpa using hcode, transport_ok hts, rfl⟩) (ih _ _ _ er)
     · -- Padding byte, failed item.
       rename_i hcond xp vp ep hcode xr vr er
@@ -1476,7 +1480,7 @@ private theorem decodeReadItems_bytes (ranges : List MemoryRange)
       obtain ⟨hpd, hpo, hpl⟩ := Cursor.readUInt8_ok _ _ _ ep
       exact readItems_step range rest cursor c₁ c₂ c₃ c₄ vp.snd vr.snd code transport
         encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
-        ⟨hpd, by rw [if_pos hcond, hpo], by omega⟩
+        ⟨hpd, by rw [ite_eq_left hcond, hpo], by omega⟩
         (.inr ⟨by simpa using hcode, rfl⟩) (ih _ _ _ er)
     · -- No padding, successful item.
       rename_i hcond hcode hts hsz xr vr er
@@ -1484,7 +1488,7 @@ private theorem decodeReadItems_bytes (ranges : List MemoryRange)
       obtain ⟨rfl, rfl⟩ := h
       exact readItems_step range rest cursor c₁ c₂ c₃ c₄ c₄ vr.snd code transport
         encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
-        ⟨rfl, by rw [if_neg hcond]; rfl, hbound⟩
+        ⟨rfl, by rw [ite_eq_right hcond]; rfl, hbound⟩
         (.inl ⟨by simpa using hcode, transport_ok hts, rfl⟩) (ih _ _ _ er)
     · -- No padding, failed item.
       rename_i hcond hcode xr vr er
@@ -1492,7 +1496,7 @@ private theorem decodeReadItems_bytes (ranges : List MemoryRange)
       obtain ⟨rfl, rfl⟩ := h
       exact readItems_step range rest cursor c₁ c₂ c₃ c₄ c₄ vr.snd code transport
         encodedLength count payload _ vr.fst e₁ e₂ e₃ e₄ hp.1 hp.2
-        ⟨rfl, by rw [if_neg hcond]; rfl, hbound⟩
+        ⟨rfl, by rw [ite_eq_right hcond]; rfl, hbound⟩
         (.inr ⟨by simpa using hcode, rfl⟩) (ih _ _ _ er)
 
 def decodeAreaReadMany (reference : UInt16) (ranges : Array MemoryRange)

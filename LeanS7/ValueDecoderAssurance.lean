@@ -49,7 +49,7 @@ theorem decodeString_invalid_capacity (pre body : ByteArray) (maximum current : 
   rw [hsingle] at hsecond
   rw [hsecond]
   change (if maximum.toNat > maxStringLength then _ else _) = _
-  rw [if_pos hmax]
+  rw [ite_eq_left hmax]
   rfl
 
 theorem decodeString_invalid_current (pre body : ByteArray) (maximum current : UInt8)
@@ -67,9 +67,9 @@ theorem decodeString_invalid_current (pre body : ByteArray) (maximum current : U
   rw [hsingle] at hsecond
   rw [hsecond]
   change (if maximum.toNat > maxStringLength then _ else _) = _
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   change (if current > maximum then _ else _) = _
-  rw [if_pos hcurrent]
+  rw [ite_eq_left hcurrent]
   rfl
 
 theorem decodeWString_invalid_capacity (pre body : ByteArray) (maximum current : UInt16)
@@ -84,7 +84,7 @@ theorem decodeWString_invalid_capacity (pre body : ByteArray) (maximum current :
   simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hsecond
   rw [hsecond]
   change (if maximum.toNat > maxWStringLength then _ else _) = _
-  rw [if_pos hmax]
+  rw [ite_eq_left hmax]
   rfl
 
 theorem decodeWString_invalid_current (pre body : ByteArray) (maximum current : UInt16)
@@ -99,9 +99,9 @@ theorem decodeWString_invalid_current (pre body : ByteArray) (maximum current : 
   simp only [ByteArray.size_append, uint16BE_size, ByteArray.append_assoc] at hsecond
   rw [hsecond]
   change (if maximum.toNat > maxWStringLength then _ else _) = _
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   change (if current > maximum then _ else _) = _
-  rw [if_pos hcurrent]
+  rw [ite_eq_left hcurrent]
   rfl
 
 /-- Acceptance of arbitrary untrusted STRING data implies valid header values
@@ -250,18 +250,18 @@ theorem decodeString_incomplete_allocation (pre body : ByteArray) (maximum curre
   rw [hsingle] at hsecond
   rw [hsecond]
   change (if maximum.toNat > maxStringLength then _ else _) = _
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   change (if current > maximum then _ else _) = _
   have hactive : ¬ current > maximum := by
     simp only [UInt8.le_iff_toNat_le, UInt8.lt_iff_toNat_lt] at *
     omega
-  rw [if_neg hactive]
+  rw [ite_eq_right hactive]
   change ((Cursor.readBytes { data := pre ++ (bytes #[maximum] ++ (bytes #[current] ++ body)), offset := pre.size + 1 + 1 } maximum.toNat).mapError Error.decode >>= _) = _
   have hremaining : Cursor.remaining { data := pre ++ (bytes #[maximum] ++ (bytes #[current] ++ body)), offset := pre.size + 1 + 1 } = body.size := by
     simp only [Cursor.remaining, ByteArray.size_append, bytes_size]
     change pre.size + (1 + (1 + body.size)) - (pre.size + 1 + 1) = body.size
     omega
-  rw [Cursor.readBytes, hremaining, if_neg (by omega)]
+  rw [Cursor.readBytes, hremaining, ite_eq_right (by omega)]
   have hoffset : pre.size + 1 + 1 = pre.size + 2 := by omega
   rw [hoffset]
   rfl

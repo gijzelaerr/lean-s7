@@ -96,15 +96,15 @@ theorem encodedUserDataHeader_size (reference : UInt16)
     packet.size = jobHeaderSize + parameters.size + data.size := by
   by_cases hp : parameters.size ≤ maxSectionSize
   · by_cases hd : data.size ≤ maxSectionSize
-    · rw [encodeUserDataHeader, if_neg (Nat.not_lt.mpr hp),
-        if_neg (Nat.not_lt.mpr hd)] at hencode
+    · rw [encodeUserDataHeader, ite_eq_right (Nat.not_lt.mpr hp),
+        ite_eq_right (Nat.not_lt.mpr hd)] at hencode
       injection hencode with hpacket
       subst packet
       simp [jobHeaderSize]
-    · rw [encodeUserDataHeader, if_neg (Nat.not_lt.mpr hp),
-        if_pos (Nat.lt_of_not_ge hd)] at hencode
+    · rw [encodeUserDataHeader, ite_eq_right (Nat.not_lt.mpr hp),
+        ite_eq_left (Nat.lt_of_not_ge hd)] at hencode
       contradiction
-  · rw [encodeUserDataHeader, if_pos (Nat.lt_of_not_ge hp)] at hencode
+  · rw [encodeUserDataHeader, ite_eq_left (Nat.lt_of_not_ge hp)] at hencode
     contradiction
 
 def userDataParameters (group subfunction sequence : UInt8)
@@ -296,7 +296,9 @@ theorem decodePduReference_header (kind : UInt8) (reference : UInt16)
       Cursor.readUInt16BE_append_uint16BE
         (bytes #[protocolId, kind, 0, 0]) suffix reference
   change decodePduReference pdu = .ok reference
-  rw [decodePduReference, hread0]
+  rw [decodePduReference]
+  dsimp only
+  rw [hread0]
   change Except.bind (Except.ok
       (protocolId, ({ data := pdu, offset := 1 } : Cursor)))
     (fun protocolResult => _) = _
@@ -321,8 +323,8 @@ theorem decodePduReference_encodeUserDataHeader (reference : UInt16)
     (hdata : data.size ≤ maxSectionSize)
     (hencode : encodeUserDataHeader reference parameters data = .ok packet) :
     decodePduReference packet = .ok reference := by
-  rw [encodeUserDataHeader, if_neg (Nat.not_lt.mpr hparameters),
-    if_neg (Nat.not_lt.mpr hdata)] at hencode
+  rw [encodeUserDataHeader, ite_eq_right (Nat.not_lt.mpr hparameters),
+    ite_eq_right (Nat.not_lt.mpr hdata)] at hencode
   injection hencode with hpacket
   subst packet
   simpa [ByteArray.append_assoc] using
@@ -337,8 +339,8 @@ theorem decodePduReference_encodeJob (job : Job) (packet : ByteArray)
     (hdata : job.data.size ≤ maxSectionSize)
     (hencode : encodeJob job = .ok packet) :
     decodePduReference packet = .ok job.reference := by
-  rw [encodeJob, if_neg (Nat.not_lt.mpr hparameters),
-    if_neg (Nat.not_lt.mpr hdata)] at hencode
+  rw [encodeJob, ite_eq_right (Nat.not_lt.mpr hparameters),
+    ite_eq_right (Nat.not_lt.mpr hdata)] at hencode
   injection hencode with hpacket
   subst packet
   simpa [ByteArray.append_assoc] using decodePduReference_header jobType job.reference
@@ -353,8 +355,8 @@ theorem decodePduReference_encodeAckData (reference : UInt16)
     (hdata : data.size ≤ maxSectionSize)
     (hencode : encodeAckData reference parameters data = .ok packet) :
     decodePduReference packet = .ok reference := by
-  rw [encodeAckData, if_neg (Nat.not_lt.mpr hparameters),
-    if_neg (Nat.not_lt.mpr hdata)] at hencode
+  rw [encodeAckData, ite_eq_right (Nat.not_lt.mpr hparameters),
+    ite_eq_right (Nat.not_lt.mpr hdata)] at hencode
   injection hencode with hpacket
   subst packet
   simpa [ByteArray.append_assoc] using decodePduReference_header ackDataType reference
@@ -747,8 +749,8 @@ theorem decodePlcDateTime_canonical (payload : ByteArray) (value : PlcDateTime)
     subst h
     have hvalid := ev
     first
-      | rw [if_pos hyear] at hvalid
-      | rw [if_neg hyear] at hvalid
+      | rw [ite_eq_left hyear] at hvalid
+      | rw [ite_eq_right hyear] at hvalid
     cases vv
     simp only [encodePlcDateTime, hvalid, bind, Except.bind, pure, Except.pure, Except.ok.injEq]
     have hlow := v9.fst.toNat_lt

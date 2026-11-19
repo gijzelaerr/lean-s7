@@ -1,9 +1,9 @@
 {
   "manifest_version": 1,
   "corpus": "lean-s7-conformance",
-  "corpus_version": "1.1.1",
+  "corpus_version": "1.1.2",
   "lean_s7_version": "0.3.0",
-  "lean_toolchain": "leanprover/lean4:v4.33.1",
+  "lean_toolchain": "leanprover/lean4:v4.37.0-rc1",
   "files": [
     {
       "name": "conversations.json",

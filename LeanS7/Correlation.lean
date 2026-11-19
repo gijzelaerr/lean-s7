@@ -35,7 +35,7 @@ theorem step_deliver_iff (waiting : Waiting) (incoming : UInt16) :
   · simp [h]
   · have hb : (incoming == waiting.expected) = false := by simpa using h
     rw [hb]
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     split <;> simp [h]
 
 /-- A mismatching reply never completes the request. -/
